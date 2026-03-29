@@ -9,7 +9,7 @@ interface StreamdownMarkdownProps {
 
 export function StreamdownMarkdown({ content, className = '' }: StreamdownMarkdownProps) {
   return (
-    <div className={`streamdown-markdown ${className}`}>
+    <div className={`streamdown-markdown ${className} break-words overflow-hidden`}>
       <Streamdown>{content}</Streamdown>
     </div>
   )
