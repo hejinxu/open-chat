@@ -24,18 +24,12 @@
   border-radius: 50%;
 }
 
-.answer::before,
 .question::before {
   content: '';
   position: absolute;
   top: 0;
   width: 8px;
   height: 12px;
-}
-
-.answer::before {
-  left: 0;
-  background: url(./icons/answer.svg) no-repeat;
 }
 
 .answerWrap .itemOperation {

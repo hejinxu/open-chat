@@ -171,7 +171,7 @@ const Chat: FC<IChatProps> = ({
       {
         !isHideSendInput && (
           <div className='absolute z-10 bottom-0 left-0 right-0 pc:w-[794px] max-w-full mx-auto px-3.5'>
-            <div className='p-[5.5px] max-h-[150px] bg-white border-[1.5px] border-gray-200 rounded-xl overflow-y-auto'>
+            <div className='p-[5.5px] max-h-[150px] bg-white dark:bg-gray-800 border-[1.5px] border-gray-200 dark:border-gray-700 rounded-xl overflow-y-auto'>
               {
                 visionConfig?.enabled && (
                   <>
@@ -181,7 +181,7 @@ const Chat: FC<IChatProps> = ({
                         onUpload={onUpload}
                         disabled={files.length >= visionConfig.number_limits}
                       />
-                      <div className='mx-1 w-[1px] h-4 bg-black/5' />
+                      <div className='mx-1 w-[1px] h-4 bg-black/5 dark:bg-white/10' />
                     </div>
                     <div className='pl-[52px]'>
                       <ImageList
@@ -208,7 +208,7 @@ const Chat: FC<IChatProps> = ({
               }
               <Textarea
                 className={`
-                  block w-full px-2 pr-[118px] py-[7px] leading-5 max-h-none text-base text-gray-700 outline-none appearance-none resize-none
+                  block w-full px-2 pr-[118px] py-[7px] leading-5 max-h-none text-base text-gray-700 dark:text-gray-300 outline-none appearance-none resize-none bg-transparent
                   ${visionConfig?.enabled && 'pl-12'}
                 `}
                 value={query}
@@ -218,7 +218,7 @@ const Chat: FC<IChatProps> = ({
                 autoSize
               />
               <div className="absolute bottom-2 right-6 flex items-center h-8">
-                <div className={`${s.count} mr-3 h-5 leading-5 text-sm bg-gray-50 text-gray-500 px-2 rounded`}>{query.trim().length}</div>
+                <div className={`${s.count} mr-3 h-5 leading-5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 rounded`}>{query.trim().length}</div>
                 <Tooltip
                   selector='send-tip'
                   htmlContent={

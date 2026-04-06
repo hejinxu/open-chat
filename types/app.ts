@@ -96,7 +96,7 @@ export type ChatItem = IChatItem & {
   workflowProcess?: WorkflowProcess
 }
 
-export interface ResponseHolder {}
+export interface ResponseHolder { }
 
 export interface ConversationItem {
   id: string
@@ -166,6 +166,16 @@ export enum BlockEnum {
   TemplateTransform = 'template-transform',
   HttpRequest = 'http-request',
   VariableAssigner = 'variable-assigner',
+  VariableExtractor = 'variable-extractor',
+  Variable = 'variable',
+  Parameter = 'parameter',
+  ParameterExtractor = 'parameter-extractor',
+  Assigner = 'assigner',
+  Extractor = 'extractor',
+  VariableConfig = 'variable-config',
+  EnvConfig = 'env-config',
+  EnvironmentVariable = 'environment-variable',
+  Env = 'env',
   Tool = 'tool',
 }
 

@@ -5,6 +5,7 @@ import React, { useRef } from 'react'
 import Base from '../editor/base'
 import { CodeLanguage } from '@/types/app'
 import './style.css'
+import { useThemeContext } from '@/app/components/theme-provider'
 
 // load file from local instead of cdn https://github.com/suren-atoyan/monaco-react/issues/482
 loader.config({ paths: { vs: '/vs' } })
@@ -37,22 +38,17 @@ const CodeEditor: FC<Props> = ({
   height,
 }) => {
   const [isFocus, setIsFocus] = React.useState(false)
+  const { resolvedTheme } = useThemeContext()
 
   const handleEditorChange = (value: string | undefined) => {
     onChange(value || '')
   }
 
   const editorRef = useRef(null)
-  const handleEditorDidMount = (editor: any, monaco: any) => {
-    editorRef.current = editor
-    editor.onDidFocusEditorText(() => {
-      setIsFocus(true)
-    })
-    editor.onDidBlurEditorText(() => {
-      setIsFocus(false)
-    })
+  const monacoRef = useRef<any>(null)
 
-    monaco.editor.defineTheme('blur-theme', {
+  const defineThemes = (monaco: any) => {
+    monaco.editor.defineTheme('light-blur-theme', {
       base: 'vs',
       inherit: true,
       rules: [],
@@ -61,7 +57,7 @@ const CodeEditor: FC<Props> = ({
       },
     })
 
-    monaco.editor.defineTheme('focus-theme', {
+    monaco.editor.defineTheme('light-focus-theme', {
       base: 'vs',
       inherit: true,
       rules: [],
@@ -69,6 +65,56 @@ const CodeEditor: FC<Props> = ({
         'editor.background': '#ffffff',
       },
     })
+
+    monaco.editor.defineTheme('dark-blur-theme', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': '#1F2937',
+      },
+    })
+
+    monaco.editor.defineTheme('dark-focus-theme', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': '#111827',
+      },
+    })
+  }
+
+  const handleEditorDidMount = (editor: any, monaco: any) => {
+    editorRef.current = editor
+    monacoRef.current = monaco
+    editor.onDidFocusEditorText(() => {
+      setIsFocus(true)
+    })
+    editor.onDidBlurEditorText(() => {
+      setIsFocus(false)
+    })
+
+    defineThemes(monaco)
+
+    // 禁用开发工具相关的快捷键和命令面板
+    editor.addAction({
+      id: 'editor.action.showCommands',
+      label: 'Show Commands',
+      keybindings: [],
+      run: () => { },
+    })
+
+    // 禁用 F1, F2 等可能打开设置的快捷键
+    editor.addCommand(monaco.KeyCode.F1, () => { })
+    editor.addCommand(monaco.KeyCode.F2, () => { })
+    editor.addCommand(monaco.KeyCode.F9, () => { })
+    editor.addCommand(monaco.KeyCode.F10, () => { })
+    editor.addCommand(monaco.KeyCode.F11, () => { })
+    editor.addCommand(monaco.KeyCode.F12, () => { })
+
+    // 禁用右键菜单
+    editor.addCommand(monaco.KeyCode.ContextMenu, () => { })
   }
 
   const outPutValue = (() => {
@@ -80,6 +126,11 @@ const CodeEditor: FC<Props> = ({
       return value as string
     }
   })()
+
+  const currentTheme = React.useMemo(() => {
+    const prefix = resolvedTheme === 'dark' ? 'dark' : 'light'
+    return isFocus ? `${prefix}-focus-theme` : `${prefix}-blur-theme`
+  }, [isFocus, resolvedTheme])
 
   return (
     <div>
@@ -96,7 +147,7 @@ const CodeEditor: FC<Props> = ({
             className='h-full'
             // language={language === CodeLanguage.javascript ? 'javascript' : 'python'}
             language={languageMap[language] || 'javascript'}
-            theme={isFocus ? 'focus-theme' : 'blur-theme'}
+            theme={currentTheme}
             value={outPutValue}
             onChange={handleEditorChange}
             // https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor.IEditorOptions.html
@@ -107,6 +158,13 @@ const CodeEditor: FC<Props> = ({
               minimap: { enabled: false },
               lineNumbersMinChars: 1, // would change line num width
               wordWrap: 'on', // auto line wrap
+              automaticLayout: true,
+              suggest: { showKeywords: false, showSnippets: false },
+              hover: { enabled: false },
+              parameterHints: { enabled: false },
+              colorDecorators: { enabled: false },
+              renderLineHighlight: 'none',
+              contextmenu: false,
               // lineNumbers: (num) => {
               //   return <div>{num}</div>
               // }
