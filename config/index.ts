@@ -1,6 +1,6 @@
 import type { AppInfo } from '@/types/app'
+export type { ThemeMode } from './theme'
 export {
-  ThemeMode,
   THEME_MODES,
   THEME_STORAGE_KEY,
   DEFAULT_THEME,
