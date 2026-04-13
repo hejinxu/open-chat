@@ -228,11 +228,11 @@ const Answer: FC<IAnswerProps> = ({
                 </div>
               )}
             </div>
-            <div className="absolute top-[-14px] right-[-14px] flex flex-row justify-end gap-1">
-              {!feedbackDisabled && !item.feedbackDisabled && renderItemOperation()}
-              {/* User feedback must be displayed */}
-              {!feedbackDisabled && renderFeedbackRating(feedback?.rating)}
-            </div>
+          </div>
+          <div className="flex justify-start mt-1 gap-1">
+            {!feedbackDisabled && !item.feedbackDisabled && renderItemOperation()}
+            {/* User feedback must be displayed */}
+            {!feedbackDisabled && renderFeedbackRating(feedback?.rating)}
           </div>
         </div>
       </div>
