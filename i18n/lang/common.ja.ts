@@ -16,6 +16,7 @@ const translation = {
     lineBreak: '改行',
     like: 'いいね',
     dislike: 'よくないね',
+    regenerate: '再生成',
     ok: 'OK',
   },
   imageUploader: {

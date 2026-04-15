@@ -16,6 +16,7 @@ const translation = {
     lineBreak: '换行',
     like: '赞同',
     dislike: '反对',
+    regenerate: '重新生成',
     ok: '好的',
   },
   imageUploader: {

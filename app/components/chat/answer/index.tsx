@@ -3,7 +3,7 @@ import type { FC } from 'react'
 import type { FeedbackFunc } from '../type'
 import type { ChatItem, MessageRating, VisionFile } from '@/types/app'
 import type { Emoji } from '@/types/tools'
-import { HandThumbDownIcon, HandThumbUpIcon } from '@heroicons/react/24/outline'
+import { ArrowPathIcon, HandThumbDownIcon, HandThumbUpIcon } from '@heroicons/react/24/outline'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import Button from '@/app/components/base/button'
@@ -38,6 +38,10 @@ const RatingIcon: FC<{ isLike: boolean }> = ({ isLike }) => {
   return isLike ? <HandThumbUpIcon className="w-4 h-4" /> : <HandThumbDownIcon className="w-4 h-4" />
 }
 
+const RegenerateIcon: FC = () => {
+  return <ArrowPathIcon className="w-4 h-4" />
+}
+
 const EditIcon: FC<{ className?: string }> = ({ className }) => {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -67,6 +71,7 @@ interface IAnswerProps {
   item: ChatItem
   feedbackDisabled: boolean
   onFeedback?: FeedbackFunc
+  onRegenerate?: (id: string) => void
   isResponding?: boolean
   allToolIcons?: Record<string, string | Emoji>
   suggestionClick?: (suggestion: string) => void
@@ -77,6 +82,7 @@ const Answer: FC<IAnswerProps> = ({
   item,
   feedbackDisabled = false,
   onFeedback,
+  onRegenerate,
   isResponding,
   allToolIcons,
   suggestionClick = () => { },
@@ -142,6 +148,11 @@ const Answer: FC<IAnswerProps> = ({
     return (
       <div className={`${s.itemOperation} flex gap-2`}>
         {userOperation()}
+        {onRegenerate && (
+          <Tooltip selector={`regenerate-${randomString(16)}`} content={t('common.operation.regenerate') as string}>
+            {OperationBtn({ innerContent: <IconWrapper><RegenerateIcon /></IconWrapper>, onClick: () => onRegenerate(id) })}
+          </Tooltip>
+        )}
       </div>
     )
   }

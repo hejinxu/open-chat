@@ -78,4 +78,19 @@ a {
   text-fill-color: transparent;
 }
 
+/* Streamdown table download dropdown dark mode support */
+.dark [data-streamdown="table-wrapper"] div[class*="bg-white"] {
+  background-color: rgb(31 41 55 / 1); /* bg-gray-800 */
+  border-color: rgb(55 65 81 / 1); /* border-gray-700 */
+}
+
+.dark [data-streamdown="table-wrapper"] div[class*="bg-white"] button {
+  color: rgb(209 213 219 / 1); /* text-gray-300 */
+}
+
+.dark [data-streamdown="table-wrapper"] div[class*="bg-white"] button:hover {
+  background-color: rgb(55 65 81 / 1); /* hover:bg-gray-700 */
+  color: rgb(243 244 246 / 1); /* text-gray-100 */
+}
+
 

@@ -16,6 +16,7 @@ const translation = {
     lineBreak: 'Xuống dòng',
     like: 'thích',
     dislike: 'không thích',
+    regenerate: 'Tái tạo',
     ok: 'OK',
   },
   imageUploader: {

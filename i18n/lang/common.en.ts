@@ -16,6 +16,7 @@ const translation = {
     lineBreak: 'Line break',
     like: 'like',
     dislike: 'dislike',
+    regenerate: 'Regenerate',
     ok: 'OK',
   },
   imageUploader: {

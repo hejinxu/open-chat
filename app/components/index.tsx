@@ -634,6 +634,41 @@ const Main: FC<IMainProps> = () => {
     notify({ type: 'success', message: t('common.api.success') })
   }
 
+  const handleRegenerate = async (id: string) => {
+    if (isResponding) {
+      notify({ type: 'info', message: t('app.errorMessage.waitForResponse') })
+      return
+    }
+
+    // Find the answer item by id
+    const answerIndex = chatList.findIndex(item => item.id === id && item.isAnswer)
+    if (answerIndex === -1) { return }
+
+    // Find the question item that comes before this answer
+    let questionIndex = answerIndex - 1
+    while (questionIndex >= 0 && chatList[questionIndex].isAnswer) {
+      questionIndex--
+    }
+    if (questionIndex < 0) { return }
+
+    const questionItem = chatList[questionIndex]
+    if (questionItem.isAnswer) { return }
+
+    // Remove the answer and question from chat list
+    const newChatList = [...chatList.slice(0, questionIndex)]
+    setChatList(newChatList)
+
+    // Resend the question
+    const files = questionItem.message_files?.map(file => ({
+      type: file.type,
+      transfer_method: file.transfer_method,
+      url: file.url,
+      upload_file_id: file.upload_file_id,
+    })) as VisionFile[] || []
+
+    await handleSend(questionItem.content, files)
+  }
+
   const renderSidebar = () => {
     if (!APP_ID || !APP_INFO || !promptConfig) { return null }
     return (
@@ -689,6 +724,7 @@ const Main: FC<IMainProps> = () => {
                   chatList={chatList}
                   onSend={handleSend}
                   onFeedback={handleFeedback}
+                  onRegenerate={handleRegenerate}
                   isResponding={isResponding}
                   checkCanSend={checkCanSend}
                   visionConfig={visionConfig}
