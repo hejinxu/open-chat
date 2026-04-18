@@ -155,8 +155,8 @@ export function VoiceInput({ onResult, disabled = false }: VoiceInputProps) {
       disabled={disabled}
       className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors ${
         isListening
-          ? 'bg-red-500 hover:bg-red-600 text-white voice-input-listening'
-          : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300'
+          ? 'text-red-500 voice-input-listening'
+          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       title={isListening ? '点击停止录音' : '点击开始语音输入'}
     >
