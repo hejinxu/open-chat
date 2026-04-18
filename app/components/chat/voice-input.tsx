@@ -6,10 +6,11 @@ import { VOICE_INPUT_CONFIG } from '@/config/voice-input'
 
 interface VoiceInputProps {
   onResult: (text: string) => void
+  onAutoSend?: () => void
   disabled?: boolean
 }
 
-export function VoiceInput({ onResult, disabled = false }: VoiceInputProps) {
+export function VoiceInput({ onResult, onAutoSend, disabled = false }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false)
   const [isSupported, setIsSupported] = useState(false)
   const recognitionRef = useRef<any>(null)
@@ -17,10 +18,15 @@ export function VoiceInput({ onResult, disabled = false }: VoiceInputProps) {
   const isActiveRef = useRef(false)
   const timerRef = useRef<any>(null)
   const onResultRef = useRef(onResult)
+  const onAutoSendRef = useRef(onAutoSend)
 
   useEffect(() => {
     onResultRef.current = onResult
   }, [onResult])
+
+  useEffect(() => {
+    onAutoSendRef.current = onAutoSend
+  }, [onAutoSend])
 
   const clearTimer = () => {
     if (timerRef.current) {
@@ -32,11 +38,11 @@ export function VoiceInput({ onResult, disabled = false }: VoiceInputProps) {
   const startTimer = () => {
     clearTimer()
     timerRef.current = globalThis.setTimeout(() => {
-      doStop()
+      doStop(true)
     }, VOICE_INPUT_CONFIG.TIMEOUT_MS)
   }
 
-  const doStop = () => {
+  const doStop = (fromTimeout = false) => {
     if (!isActiveRef.current) { return }
     isActiveRef.current = false
     clearTimer()
@@ -48,6 +54,9 @@ export function VoiceInput({ onResult, disabled = false }: VoiceInputProps) {
     }
     accumulatedRef.current = ''
     setIsListening(false)
+    if (fromTimeout && VOICE_INPUT_CONFIG.AUTO_SEND_ON_TIMEOUT && finalText && onAutoSendRef.current) {
+      onAutoSendRef.current()
+    }
   }
 
   const doStart = () => {

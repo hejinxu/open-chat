@@ -228,6 +228,7 @@ const Chat: FC<IChatProps> = ({
                     setQuery(text)
                     queryRef.current = text
                   }}
+                  onAutoSend={handleSend}
                   disabled={isResponding}
                 />
                 <Tooltip
