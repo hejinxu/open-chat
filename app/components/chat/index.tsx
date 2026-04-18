@@ -18,6 +18,7 @@ import { useImageFiles } from '@/app/components/base/image-uploader/hooks'
 import FileUploaderInAttachmentWrapper from '@/app/components/base/file-uploader-in-attachment'
 import type { FileEntity, FileUpload } from '@/app/components/base/file-uploader-in-attachment/types'
 import { getProcessedFiles } from '@/app/components/base/file-uploader-in-attachment/utils'
+import { VoiceInput } from './voice-input'
 
 export interface IChatProps {
   chatList: ChatItem[]
@@ -220,8 +221,16 @@ const Chat: FC<IChatProps> = ({
                 onKeyDown={handleKeyDown}
                 autoSize
               />
-              <div className="absolute bottom-2 right-6 flex items-center h-8">
-                <div className={`${s.count} mr-3 h-5 leading-5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 rounded`}>{query.trim().length}</div>
+              <div className="absolute bottom-2 right-6 flex items-center h-8 gap-2">
+                <div className={`${s.count} h-5 leading-5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 rounded`}>{query.trim().length}</div>
+                <VoiceInput
+                  onResult={(text) => {
+                    const newQuery = query + text
+                    setQuery(newQuery)
+                    queryRef.current = newQuery
+                  }}
+                  disabled={isResponding}
+                />
                 <Tooltip
                   selector='send-tip'
                   htmlContent={

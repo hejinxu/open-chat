@@ -343,6 +343,20 @@ html.tech-blue [class*="rounded-md"][class*="px-2"]:hover {
   background-color: #2A4D6E !important;
 }
 
+/* Voice input animation */
+@keyframes voice-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.voice-input-listening {
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+
 /* CSS Utils */
 .h1 {
   padding-bottom: 1.5rem;
