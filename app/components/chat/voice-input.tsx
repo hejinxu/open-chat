@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { MicrophoneIcon, StopIcon } from '@heroicons/react/24/solid'
+import { VOICE_INPUT_CONFIG } from '@/config/voice-input'
 
 interface VoiceInputProps {
   onResult: (text: string) => void
@@ -13,17 +14,48 @@ export function VoiceInput({ onResult, disabled = false }: VoiceInputProps) {
   const [isSupported, setIsSupported] = useState(false)
   const recognitionRef = useRef<any>(null)
   const accumulatedRef = useRef('')
-  const onResultRef = useRef(onResult)
   const isActiveRef = useRef(false)
-  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const timerRef = useRef<any>(null)
+  const onResultRef = useRef(onResult)
 
   useEffect(() => {
     onResultRef.current = onResult
   }, [onResult])
 
-  const createRecognition = useCallback(() => {
+  const clearTimer = () => {
+    if (timerRef.current) {
+      globalThis.clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }
+
+  const startTimer = () => {
+    clearTimer()
+    timerRef.current = globalThis.setTimeout(() => {
+      doStop()
+    }, VOICE_INPUT_CONFIG.TIMEOUT_MS)
+  }
+
+  const doStop = () => {
+    if (!isActiveRef.current) { return }
+    isActiveRef.current = false
+    clearTimer()
+    try { recognitionRef.current?.stop() } catch (e) { /* ignore */ }
+    recognitionRef.current = null
+    const finalText = accumulatedRef.current.trim()
+    if (finalText) {
+      onResultRef.current(finalText)
+    }
+    accumulatedRef.current = ''
+    setIsListening(false)
+  }
+
+  const doStart = () => {
     const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) { return null }
+    if (!SpeechRecognition) { return }
+
+    accumulatedRef.current = ''
+    isActiveRef.current = true
 
     const recognition = new SpeechRecognition()
     recognition.continuous = true
@@ -31,12 +63,12 @@ export function VoiceInput({ onResult, disabled = false }: VoiceInputProps) {
     recognition.lang = 'zh-CN'
 
     recognition.onresult = (event: any) => {
-      let finalText = ''
+      if (!isActiveRef.current) { return }
 
+      let finalText = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const item = event.results[i]
-        if (item.isFinal) {
-          finalText += item[0].transcript
+        if (event.results[i].isFinal) {
+          finalText += event.results[i][0].transcript
         }
       }
 
@@ -47,100 +79,59 @@ export function VoiceInput({ onResult, disabled = false }: VoiceInputProps) {
           accumulatedRef.current = finalText.trim()
         }
         onResultRef.current(accumulatedRef.current)
+        startTimer()
       }
     }
 
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error)
-      if (isActiveRef.current) {
-        restartRecognition()
+      if (!isActiveRef.current) { return }
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        doStop()
       }
     }
 
     recognition.onend = () => {
       if (isActiveRef.current) {
-        restartRecognition()
-      } else {
-        setIsListening(false)
-      }
-    }
-
-    return recognition
-  }, [])
-
-  const restartRecognition = useCallback(() => {
-    if (!isActiveRef.current) { return }
-
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current)
-    }
-
-    restartTimeoutRef.current = setTimeout(() => {
-      if (!isActiveRef.current) { return }
-      try {
-        const newRecognition = createRecognition()
-        if (newRecognition) {
-          recognitionRef.current = newRecognition
-          newRecognition.start()
+        try {
+          recognition.start()
+        } catch (e) {
+          doStop()
         }
-      } catch (error) {
-        console.error('Failed to restart recognition:', error)
-        setIsListening(false)
-        isActiveRef.current = false
       }
-    }, 100)
-  }, [createRecognition])
+    }
+
+    recognitionRef.current = recognition
+
+    try {
+      recognition.start()
+      setIsListening(true)
+    } catch (error) {
+      console.error('Failed to start speech recognition:', error)
+      isActiveRef.current = false
+    }
+  }
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      setIsSupported(false)
-      return
-    }
-
-    setIsSupported(true)
-    recognitionRef.current = createRecognition()
+    setIsSupported(!!SpeechRecognition)
 
     return () => {
       isActiveRef.current = false
-      if (restartTimeoutRef.current) {
-        clearTimeout(restartTimeoutRef.current)
-      }
+      clearTimer()
       if (recognitionRef.current) {
-        recognitionRef.current.stop()
+        try { recognitionRef.current.stop() } catch (e) { /* ignore */ }
       }
     }
-  }, [createRecognition])
+  }, [])
 
   const toggleListening = () => {
-    if (!recognitionRef.current || disabled) { return }
+    if (disabled) { return }
 
     if (isListening) {
-      isActiveRef.current = false
-      if (restartTimeoutRef.current) {
-        clearTimeout(restartTimeoutRef.current)
-      }
-      try {
-        recognitionRef.current.stop()
-      } catch (e) {
-        console.error('Error stopping recognition:', e)
-      }
-      const finalText = accumulatedRef.current.trim()
-      if (finalText) {
-        onResult(finalText)
-      }
-      accumulatedRef.current = ''
-      setIsListening(false)
+      doStop()
     } else {
-      accumulatedRef.current = ''
-      isActiveRef.current = true
-      try {
-        recognitionRef.current.start()
-        setIsListening(true)
-      } catch (error) {
-        console.error('Failed to start speech recognition:', error)
-        isActiveRef.current = false
-      }
+      doStart()
     }
   }
 
