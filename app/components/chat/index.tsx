@@ -65,10 +65,51 @@ const Chat: FC<IChatProps> = ({
 
   const [query, setQuery] = React.useState('')
   const queryRef = useRef('')
-  const [autoStopOnTimeout, setAutoStopOnTimeout] = React.useState(true)
-  const [autoSendOnTimeout, setAutoSendOnTimeout] = React.useState(VOICE_INPUT_CONFIG.AUTO_SEND_ON_TIMEOUT)
-  const [autoReadAloud, setAutoReadAloud] = React.useState(VOICE_INPUT_CONFIG.AUTO_READ_ALOUD)
-  const [timeoutMs, setTimeoutMs] = React.useState(VOICE_INPUT_CONFIG.TIMEOUT_MS)
+  const [autoStopOnTimeout, setAutoStopOnTimeout] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('voice-auto-stop')
+      return saved !== null ? saved === 'true' : true
+    }
+    return true
+  })
+  const [autoSendOnTimeout, setAutoSendOnTimeout] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('voice-auto-send')
+      return saved !== null ? saved === 'true' : VOICE_INPUT_CONFIG.AUTO_SEND_ON_TIMEOUT
+    }
+    return VOICE_INPUT_CONFIG.AUTO_SEND_ON_TIMEOUT
+  })
+  const [autoReadAloud, setAutoReadAloud] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('voice-auto-read')
+      return saved !== null ? saved === 'true' : VOICE_INPUT_CONFIG.AUTO_READ_ALOUD
+    }
+    return VOICE_INPUT_CONFIG.AUTO_READ_ALOUD
+  })
+  const [timeoutMs, setTimeoutMs] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('voice-timeout-ms')
+      return saved !== null ? Number(saved) : VOICE_INPUT_CONFIG.TIMEOUT_MS
+    }
+    return VOICE_INPUT_CONFIG.TIMEOUT_MS
+  })
+
+  const handleAutoStopChange = (val: boolean) => {
+    setAutoStopOnTimeout(val)
+    localStorage.setItem('voice-auto-stop', String(val))
+  }
+  const handleAutoSendChange = (val: boolean) => {
+    setAutoSendOnTimeout(val)
+    localStorage.setItem('voice-auto-send', String(val))
+  }
+  const handleAutoReadAloudChange = (val: boolean) => {
+    setAutoReadAloud(val)
+    localStorage.setItem('voice-auto-read', String(val))
+  }
+  const handleTimeoutChange = (val: number) => {
+    setTimeoutMs(val)
+    localStorage.setItem('voice-timeout-ms', String(val))
+  }
   const voiceInputRef = React.useRef<{ stop: () => void }>(null)
 
   const prevIsRespondingRef = useRef(false)
@@ -262,13 +303,13 @@ const Chat: FC<IChatProps> = ({
                   />
                   <VoiceSettings
                     autoStopOnTimeout={autoStopOnTimeout}
-                    onAutoStopChange={setAutoStopOnTimeout}
+                    onAutoStopChange={handleAutoStopChange}
                     autoSendOnTimeout={autoSendOnTimeout}
-                    onAutoSendChange={setAutoSendOnTimeout}
+                    onAutoSendChange={handleAutoSendChange}
                     autoReadAloud={autoReadAloud}
-                    onAutoReadAloudChange={setAutoReadAloud}
+                    onAutoReadAloudChange={handleAutoReadAloudChange}
                     timeoutMs={timeoutMs}
-                    onTimeoutChange={setTimeoutMs}
+                    onTimeoutChange={handleTimeoutChange}
                   />
                   {query.trim().length > 0 && <div className={`${s.count} text-sm bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 rounded`}>{query.trim().length}</div>}
                 </div>
