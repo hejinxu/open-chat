@@ -13,7 +13,6 @@ import { TransferMethod } from '@/types/app'
 import Tooltip from '@/app/components/base/tooltip'
 import Toast from '@/app/components/base/toast'
 import ChatImageUploader from '@/app/components/base/image-uploader/chat-image-uploader'
-import ImageList from '@/app/components/base/image-uploader/image-list'
 import { useImageFiles } from '@/app/components/base/image-uploader/hooks'
 import FileUploaderInAttachmentWrapper from '@/app/components/base/file-uploader-in-attachment'
 import type { FileEntity, FileUpload } from '@/app/components/base/file-uploader-in-attachment/types'
@@ -21,6 +20,7 @@ import { getProcessedFiles } from '@/app/components/base/file-uploader-in-attach
 import { VoiceInput } from './voice-input'
 import { setAutoReadPending, triggerAutoReadIfPending } from './text-to-speech'
 import { VOICE_INPUT_CONFIG } from '@/config/voice-input'
+import { VoiceSettings } from './voice-settings'
 
 export interface IChatProps {
   chatList: ChatItem[]
@@ -38,6 +38,7 @@ export interface IChatProps {
   onSend?: (message: string, files: VisionFile[]) => void
   useCurrentUserAvatar?: boolean
   isResponding?: boolean
+  onStopResponding?: () => void
   controlClearQuery?: number
   visionConfig?: VisionSettings
   fileConfig?: FileUpload
@@ -53,6 +54,7 @@ const Chat: FC<IChatProps> = ({
   onSend = () => { },
   useCurrentUserAvatar,
   isResponding,
+  onStopResponding,
   controlClearQuery,
   visionConfig,
   fileConfig,
@@ -60,11 +62,20 @@ const Chat: FC<IChatProps> = ({
   const { t } = useTranslation()
   const { notify } = Toast
   const isUseInputMethod = useRef(false)
+
+  const [query, setQuery] = React.useState('')
+  const queryRef = useRef('')
+  const [autoStopOnTimeout, setAutoStopOnTimeout] = React.useState(true)
+  const [autoSendOnTimeout, setAutoSendOnTimeout] = React.useState(VOICE_INPUT_CONFIG.AUTO_SEND_ON_TIMEOUT)
+  const [autoReadAloud, setAutoReadAloud] = React.useState(VOICE_INPUT_CONFIG.AUTO_READ_ALOUD)
+  const [timeoutMs, setTimeoutMs] = React.useState(VOICE_INPUT_CONFIG.TIMEOUT_MS)
+  const voiceInputRef = React.useRef<{ stop: () => void }>(null)
+
   const prevIsRespondingRef = useRef(false)
   const hasReadAloudRef = useRef(false)
 
   useEffect(() => {
-    if (VOICE_INPUT_CONFIG.AUTO_READ_ALOUD) {
+    if (autoReadAloud) {
       if (prevIsRespondingRef.current && !isResponding) {
         const lastItem = chatList[chatList.length - 1]
         if (lastItem?.isAnswer && lastItem?.content && !hasReadAloudRef.current) {
@@ -77,10 +88,7 @@ const Chat: FC<IChatProps> = ({
       }
     }
     prevIsRespondingRef.current = !!isResponding
-  }, [isResponding, chatList])
-
-  const [query, setQuery] = React.useState('')
-  const queryRef = useRef('')
+  }, [isResponding, chatList, autoReadAloud])
 
   const handleContentChange = (e: any) => {
     const value = e.target.value
@@ -123,6 +131,7 @@ const Chat: FC<IChatProps> = ({
     if (!valid() || (checkCanSend && !checkCanSend())) { return }
     hasReadAloudRef.current = true
     setAutoReadPending(false)
+    voiceInputRef.current?.stop()
     const imageFiles: VisionFile[] = files.filter(file => file.progress !== -1).map(fileItem => ({
       type: 'image',
       transfer_method: fileItem.type,
@@ -197,73 +206,98 @@ const Chat: FC<IChatProps> = ({
       {
         !isHideSendInput && (
           <div className='absolute z-10 bottom-0 left-0 right-0 pc:w-[794px] max-w-full mx-auto px-3.5'>
-            <div className='p-[5.5px] max-h-[150px] bg-white dark:bg-gray-800 border-[1.5px] border-gray-200 dark:border-gray-700 rounded-xl overflow-y-auto'>
-              {
-                visionConfig?.enabled && (
-                  <>
-                    <div className='absolute bottom-2 left-2 flex items-center'>
-                      <ChatImageUploader
-                        settings={visionConfig}
-                        onUpload={onUpload}
-                        disabled={files.length >= visionConfig.number_limits}
+            <div className='bg-white dark:bg-gray-800 border-[1.5px] border-gray-200 dark:border-gray-700 rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.25)] dark:shadow-[0_0_15px_rgba(59,130,246,0.15)]'>
+              <div className='px-2 py-[7px] min-h-[44px]'>
+                {
+                  visionConfig?.enabled && (
+                    <>
+                      <div className='absolute bottom-[46px] left-[14px] flex items-center'>
+                        <ChatImageUploader
+                          settings={visionConfig}
+                          onUpload={onUpload}
+                          disabled={files.length >= visionConfig.number_limits}
+                        />
+                        <div className='mx-1 w-[1px] h-4 bg-black/5 dark:bg-white/10' />
+                      </div>
+                    </>
+                  )
+                }
+                {
+                  fileConfig?.enabled && (
+                    <div className={`${visionConfig?.enabled ? 'pl-[52px]' : ''}`}>
+                      <FileUploaderInAttachmentWrapper
+                        fileConfig={fileConfig}
+                        value={attachmentFiles}
+                        onChange={setAttachmentFiles}
                       />
-                      <div className='mx-1 w-[1px] h-4 bg-black/5 dark:bg-white/10' />
                     </div>
-                    <div className='pl-[52px]'>
-                      <ImageList
-                        list={files}
-                        onRemove={onRemove}
-                        onReUpload={onReUpload}
-                        onImageLinkLoadSuccess={onImageLinkLoadSuccess}
-                        onImageLinkLoadError={onImageLinkLoadError}
-                      />
-                    </div>
-                  </>
-                )
-              }
-              {
-                fileConfig?.enabled && (
-                  <div className={`${visionConfig?.enabled ? 'pl-[52px]' : ''} mb-1`}>
-                    <FileUploaderInAttachmentWrapper
-                      fileConfig={fileConfig}
-                      value={attachmentFiles}
-                      onChange={setAttachmentFiles}
-                    />
-                  </div>
-                )
-              }
-              <Textarea
-                className={`
-                  block w-full px-2 pr-[118px] py-[7px] leading-5 max-h-none text-base text-gray-700 dark:text-gray-300 outline-none appearance-none resize-none bg-transparent
-                  ${visionConfig?.enabled && 'pl-12'}
-                `}
-                value={query}
-                onChange={handleContentChange}
-                onKeyUp={handleKeyUp}
-                onKeyDown={handleKeyDown}
-                autoSize
-              />
-              <div className="absolute bottom-2 right-6 flex items-center h-8 gap-2">
-                <div className={`${s.count} h-5 leading-5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 rounded`}>{query.trim().length}</div>
-                <VoiceInput
-                  onResult={(text) => {
-                    setQuery(text)
-                    queryRef.current = text
-                  }}
-                  onAutoSend={handleSend}
-                  disabled={isResponding}
+                  )
+                }
+                <Textarea
+                  className={`
+                    block w-full px-2 leading-5 max-h-none text-base text-gray-700 dark:text-gray-300 outline-none appearance-none resize-none bg-transparent
+                    ${visionConfig?.enabled && 'pl-12'}
+                  `}
+                  value={query}
+                  onChange={handleContentChange}
+                  onKeyUp={handleKeyUp}
+                  onKeyDown={handleKeyDown}
+                  autoSize
                 />
-                <Tooltip
-                  selector='send-tip'
-                  htmlContent={
-                    <div>
-                      <div>{t('common.operation.send')} Enter</div>
-                      <div>{t('common.operation.lineBreak')} Shift Enter</div>
+              </div>
+              <div className="flex items-center justify-between px-2 py-1">
+                <div className="flex items-center gap-1">
+                  <VoiceInput
+                    ref={voiceInputRef}
+                    onResult={(text) => {
+                      setQuery(text)
+                      queryRef.current = text
+                    }}
+                    onAutoSend={handleSend}
+                    disabled={isResponding}
+                    autoStopOnTimeout={autoStopOnTimeout}
+                    timeoutMs={timeoutMs}
+                    autoSendOnTimeout={autoSendOnTimeout}
+                    autoReadAloud={autoReadAloud}
+                  />
+                  <VoiceSettings
+                    autoStopOnTimeout={autoStopOnTimeout}
+                    onAutoStopChange={setAutoStopOnTimeout}
+                    autoSendOnTimeout={autoSendOnTimeout}
+                    onAutoSendChange={setAutoSendOnTimeout}
+                    autoReadAloud={autoReadAloud}
+                    onAutoReadAloudChange={setAutoReadAloud}
+                    timeoutMs={timeoutMs}
+                    onTimeoutChange={setTimeoutMs}
+                  />
+                  {query.trim().length > 0 && <div className={`${s.count} text-sm bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 rounded`}>{query.trim().length}</div>}
+                </div>
+                {isResponding && onStopResponding
+                  ? (
+                    <div
+                      className="flex items-center justify-center w-8 h-8 cursor-pointer rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      onClick={onStopResponding}
+                      title="停止响应"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                        <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM3.75 12a8.25 8.25 0 1116.5 0 8.25 8.25 0 01-16.5 0z" clipRule="evenodd" />
+                        <rect x="8.5" y="8.5" width="7" height="7" rx="1" />
+                      </svg>
                     </div>
-                  }
-                >
-                  <div className={`${s.sendBtn} w-8 h-8 cursor-pointer rounded-md`} onClick={handleSend}></div>
-                </Tooltip>
+                  )
+                  : (
+                    <Tooltip
+                      selector='send-tip'
+                      htmlContent={
+                        <div>
+                          <div>{t('common.operation.send')} Enter</div>
+                          <div>{t('common.operation.lineBreak')} Shift Enter</div>
+                        </div>
+                      }
+                    >
+                      <div className={`${s.sendBtn} w-8 h-8 cursor-pointer rounded-md`} onClick={handleSend}></div>
+                    </Tooltip>
+                  )}
               </div>
             </div>
           </div>

@@ -9,7 +9,7 @@ import Toast from '@/app/components/base/toast'
 import Sidebar from '@/app/components/sidebar'
 import ConfigSence from '@/app/components/config-scence'
 import Header from '@/app/components/header'
-import { fetchAppParams, fetchChatList, fetchConversations, generationConversationName, sendChatMessage, updateFeedback } from '@/service'
+import { fetchAppParams, fetchChatList, fetchConversations, generationConversationName, sendChatMessage, stopChatMessage, updateFeedback } from '@/service'
 import type { ChatItem, ConversationItem, Feedbacktype, PromptConfig, VisionFile, VisionSettings } from '@/types/app'
 import type { FileUpload } from '@/app/components/base/file-uploader-in-attachment/types'
 import { Resolution, TransferMethod, WorkflowRunningStatus } from '@/types/app'
@@ -320,6 +320,32 @@ const Main: FC<IMainProps> = () => {
   const [messageTaskId, setMessageTaskId] = useState('')
   const [hasStopResponded, setHasStopResponded, getHasStopResponded] = useGetState(false)
   const [isRespondingConIsCurrCon, setIsRespondingConCurrCon, getIsRespondingConIsCurrCon] = useGetState(true)
+
+  const handleStopResponding = async () => {
+    if (!messageTaskId) {
+      if (abortController) {
+        abortController.abort()
+      }
+      setRespondingFalse()
+      return
+    }
+    setHasStopResponded(true)
+    try {
+      await stopChatMessage(messageTaskId)
+    } catch (e) {
+      console.error('Failed to stop responding:', e)
+    }
+    if (abortController) {
+      abortController.abort()
+    }
+    setChatList(produce(getChatList(), (draft) => {
+      const lastItem = draft[draft.length - 1]
+      if (lastItem?.isAnswer && lastItem.workflowProcess && lastItem.workflowProcess.status === WorkflowRunningStatus.Running) {
+        lastItem.workflowProcess.status = WorkflowRunningStatus.Stopped
+      }
+    }))
+    setRespondingFalse()
+  }
   const [userQuery, setUserQuery] = useState('')
 
   const updateCurrentQA = ({
@@ -424,6 +450,7 @@ const Main: FC<IMainProps> = () => {
     let tempNewConversationId = ''
 
     setRespondingTrue()
+    setHasStopResponded(false)
     sendChatMessage(data, {
       getAbortController: (abortController) => {
         setAbortController(abortController)
@@ -726,6 +753,7 @@ const Main: FC<IMainProps> = () => {
                   onFeedback={handleFeedback}
                   onRegenerate={handleRegenerate}
                   isResponding={isResponding}
+                  onStopResponding={handleStopResponding}
                   checkCanSend={checkCanSend}
                   visionConfig={visionConfig}
                   fileConfig={fileConfig}

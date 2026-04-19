@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
 import { MicrophoneIcon, StopIcon } from '@heroicons/react/24/solid'
 import { VOICE_INPUT_CONFIG } from '@/config/voice-input'
 import { setAutoReadPending, stopReadAloud } from './text-to-speech'
@@ -9,9 +9,13 @@ interface VoiceInputProps {
   onResult: (text: string) => void
   onAutoSend?: () => void
   disabled?: boolean
+  autoStopOnTimeout?: boolean
+  timeoutMs?: number
+  autoSendOnTimeout?: boolean
+  autoReadAloud?: boolean
 }
 
-export function VoiceInput({ onResult, onAutoSend, disabled = false }: VoiceInputProps) {
+export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, autoStopOnTimeout = true, timeoutMs = VOICE_INPUT_CONFIG.TIMEOUT_MS, autoSendOnTimeout = VOICE_INPUT_CONFIG.AUTO_SEND_ON_TIMEOUT, autoReadAloud = VOICE_INPUT_CONFIG.AUTO_READ_ALOUD }: VoiceInputProps, ref: React.Ref<{ stop: () => void }>) => {
   const [isListening, setIsListening] = useState(false)
   const [isSupported, setIsSupported] = useState(false)
   const recognitionRef = useRef<any>(null)
@@ -20,6 +24,10 @@ export function VoiceInput({ onResult, onAutoSend, disabled = false }: VoiceInpu
   const timerRef = useRef<any>(null)
   const onResultRef = useRef(onResult)
   const onAutoSendRef = useRef(onAutoSend)
+  const autoStopOnTimeoutRef = useRef(autoStopOnTimeout)
+  const timeoutMsRef = useRef(timeoutMs)
+  const autoSendOnTimeoutRef = useRef(autoSendOnTimeout)
+  const autoReadAloudRef = useRef(autoReadAloud)
 
   useEffect(() => {
     onResultRef.current = onResult
@@ -28,6 +36,22 @@ export function VoiceInput({ onResult, onAutoSend, disabled = false }: VoiceInpu
   useEffect(() => {
     onAutoSendRef.current = onAutoSend
   }, [onAutoSend])
+
+  useEffect(() => {
+    autoStopOnTimeoutRef.current = autoStopOnTimeout
+  }, [autoStopOnTimeout])
+
+  useEffect(() => {
+    timeoutMsRef.current = timeoutMs
+  }, [timeoutMs])
+
+  useEffect(() => {
+    autoSendOnTimeoutRef.current = autoSendOnTimeout
+  }, [autoSendOnTimeout])
+
+  useEffect(() => {
+    autoReadAloudRef.current = autoReadAloud
+  }, [autoReadAloud])
 
   const clearTimer = () => {
     if (timerRef.current) {
@@ -38,9 +62,10 @@ export function VoiceInput({ onResult, onAutoSend, disabled = false }: VoiceInpu
 
   const startTimer = () => {
     clearTimer()
+    if (!autoStopOnTimeoutRef.current) { return }
     timerRef.current = globalThis.setTimeout(() => {
       doStop(true)
-    }, VOICE_INPUT_CONFIG.TIMEOUT_MS)
+    }, timeoutMsRef.current)
   }
 
   const doStop = (fromTimeout = false) => {
@@ -55,8 +80,8 @@ export function VoiceInput({ onResult, onAutoSend, disabled = false }: VoiceInpu
     }
     accumulatedRef.current = ''
     setIsListening(false)
-    if (fromTimeout && VOICE_INPUT_CONFIG.AUTO_SEND_ON_TIMEOUT && finalText && onAutoSendRef.current) {
-      if (VOICE_INPUT_CONFIG.AUTO_READ_ALOUD) {
+    if (fromTimeout && autoSendOnTimeoutRef.current && finalText && onAutoSendRef.current) {
+      if (autoReadAloudRef.current) {
         setAutoReadPending(true)
       }
       onAutoSendRef.current()
@@ -140,14 +165,16 @@ export function VoiceInput({ onResult, onAutoSend, disabled = false }: VoiceInpu
   }, [])
 
   const toggleListening = () => {
-    if (disabled) { return }
-
     if (isListening) {
       doStop()
-    } else {
+    } else if (!disabled) {
       doStart()
     }
   }
+
+  useImperativeHandle(ref, () => ({
+    stop: doStop,
+  }), [])
 
   if (!isSupported) {
     return null
@@ -157,12 +184,11 @@ export function VoiceInput({ onResult, onAutoSend, disabled = false }: VoiceInpu
     <button
       type="button"
       onClick={toggleListening}
-      disabled={disabled}
-      className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors ${
+      className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors cursor-pointer ${
         isListening
           ? 'text-red-500 voice-input-listening'
-          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          : (disabled ? 'text-gray-300 dark:text-gray-600' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200')
+      }`}
       title={isListening ? '点击停止录音' : '点击开始语音输入'}
     >
       {isListening
@@ -174,4 +200,4 @@ export function VoiceInput({ onResult, onAutoSend, disabled = false }: VoiceInpu
         )}
     </button>
   )
-}
+})

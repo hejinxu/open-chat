@@ -368,10 +368,16 @@ export const ssePost = (
     onNodeStarted,
     onNodeFinished,
     onError,
+    getAbortController,
   }: IOtherOptions,
 ) => {
+  const abortController = new AbortController()
+  if (getAbortController) {
+    getAbortController(abortController)
+  }
   const options = Object.assign({}, baseOptions, {
     method: 'POST',
+    signal: abortController.signal,
   }, fetchOptions)
 
   const urlPrefix = API_PREFIX

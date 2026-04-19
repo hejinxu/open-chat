@@ -57,6 +57,10 @@ export const updateFeedback = async ({ url, body }: { url: string, body: Feedbac
   return post(url, { body })
 }
 
+export const stopChatMessage = async (taskId: string) => {
+  return post(`chat-messages/${taskId}/stop`)
+}
+
 export const generationConversationName = async (id: string) => {
   return post(`conversations/${id}/name`, { body: { auto_generate: true } })
 }
