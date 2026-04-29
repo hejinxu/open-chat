@@ -1,80 +1,139 @@
-# Conversation Web App Template
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Conversation Web App
 
-## Config App
-Create a file named `.env.local` in the current directory and copy the contents from `.env.example`. Setting the following content:
-```
-# APP ID: This is the unique identifier for your app. You can find it in the app's detail page URL. 
-# For example, in the URL `https://cloud.dify.ai/app/xxx/workflow`, the value `xxx` is your APP ID.
-NEXT_PUBLIC_APP_ID=
+基于 Next.js 15 + React 19 的 Dify AI 对话 Web 应用，支持流式对话、语音输入、工作流可视化和多语言。
 
-# APP API Key: This is the key used to authenticate your app's API requests. 
-# You can generate it on the app's "API Access" page by clicking the "API Key" button in the top-right corner.
-NEXT_PUBLIC_APP_KEY=
+## 技术栈
 
-# APP URL: This is the API's base URL. If you're using the Dify cloud service, set it to: https://api.dify.ai/v1.
-NEXT_PUBLIC_API_URL=
-```
+- **框架**: Next.js 15 (App Router) + React 19
+- **语言**: TypeScript 5.9
+- **样式**: Tailwind CSS 3 + SCSS
+- **状态管理**: Zustand + Immer
+- **国际化**: i18next（支持中文、英文、日文、法文、西班牙文、越南语）
+- **语音识别**: Web Speech API (浏览器端) / Whisper (服务端)
+- **代码规范**: @antfu/eslint-config（无分号、单引号、2 空格缩进）
 
-Config more in `config/index.ts` file:   
-```js
-export const APP_INFO: AppInfo = {
-  title: 'Chat APP',
-  description: '',
-  copyright: '',
-  privacy_policy: '',
-  default_language: 'zh-Hans'
-}
+## 功能特性
 
-export const isShowPrompt = true
-export const promptTemplate = ''
-```
+- 流式对话（SSE Streaming）
+- Markdown 渲染（代码高亮、数学公式 KaTeX）
+- 工作流可视化（Mermaid 图表）
+- 语音输入（浏览器 Speech Recognition + Whisper）
+- 语音输入自动停止 & 自动发送
+- 繁体/简体中文转换（opencc-js）
+- 多语言 i18n
+- Docker 部署
 
-## Getting Started
-First, install dependencies:
+## 前置要求
+
+- Node.js >= 18
+- pnpm（根目录）
+- npm（speech-server/ 子目录）
+
+## 快速开始
+
+### 1. 安装依赖
+
 ```bash
-npm install
-# or
-yarn
-# or
 pnpm install
+cd speech-server && npm install && cd ..
 ```
 
-Then, run the development server:
+### 2. 配置环境变量
+
+创建 `.env.local` 文件：
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Dify App ID（从应用详情页 URL 获取）
+NEXT_PUBLIC_APP_ID=your_app_id
+
+# Dify API Key（从 "API Access" 页面生成）
+NEXT_PUBLIC_APP_KEY=your_api_key
+
+# Dify API 地址
+NEXT_PUBLIC_API_URL=https://api.dify.ai/v1
+
+# 默认主题
+NEXT_PUBLIC_DEFAULT_THEME=tech-blue
+```
+
+### 3. 启动开发服务器
+
+```bash
 pnpm dev
 ```
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Using Docker
+访问 http://localhost:3000
+
+## 语音识别服务
+
+语音识别是独立的 WebSocket 服务，需要单独启动。
+
+### 下载 Whisper 模型
+
+```bash
+pnpm download-whisper
+```
+
+### 启动语音服务
+
+```bash
+pnpm speech-server
+```
+
+服务运行在 `ws://localhost:8787`，启动时会自动加载全部 Whisper 模型（tiny、base、small）。
+
+支持的语音引擎：
+- **browser**: 浏览器内置 Speech Recognition（仅 Chrome 支持）
+- **whisper-tiny / whisper-base / whisper-small**: Whisper 本地模型
+- **funasr-paraformer-zh / funasr-sensevoice**: FunASR 中文模型
+
+## Docker 部署
+
+```bash
+docker build . -t webapp-conversation:latest
+docker run -p 3000:3000 webapp-conversation:latest
+```
+
+## 项目结构
 
 ```
-docker build . -t <DOCKER_HUB_REPO>/webapp-conversation:latest
-# now you can access it in port 3000
-docker run -p 3000:3000 <DOCKER_HUB_REPO>/webapp-conversation:latest
+├── app/                          # Next.js App Router
+│   ├── api/                      # API 路由（代理 Dify 后端）
+│   ├── components/               # UI 组件
+│   │   └── chat/
+│   │       ├── voice-input.tsx   # 语音输入核心组件
+│   │       ├── voice-settings.tsx # 语音设置 UI
+│   │       └── voice-recognition/ # 语音识别引擎
+│   │           ├── browser-recognition.ts
+│   │           └── whisper-recognition.ts
+│   └── i18n/                     # 国际化配置
+├── config/                       # 应用配置
+│   ├── index.ts                  # App ID、API Key、API URL
+│   └── voice-input.ts            # 语音配置常量
+├── i18n/                         # 多语言文件
+├── service/                      # API 服务层
+├── speech-server/                # 语音识别 WebSocket 服务
+│   ├── server.mjs                # 服务端（音频处理、静音检测、opencc）
+│   └── package.json
+├── stores/                       # Zustand 状态管理
+├── docs/                         # 文档
+└── scripts/                      # 工具脚本
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 常用命令
 
-## Learn More
+| 命令 | 说明 |
+|------|------|
+| `pnpm dev` | 启动 Next.js 开发服务器（端口 3000） |
+| `pnpm build` | 生产构建 |
+| `pnpm lint` | 代码检查 |
+| `pnpm fix` | 自动修复 lint 问题 |
+| `pnpm speech-server` | 启动语音识别服务（端口 8787） |
+| `pnpm download-whisper` | 下载 Whisper 模型文件 |
 
-To learn more about Next.js, take a look at the following resources:
+## 注意事项
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-> ⚠️ If you are using [Vercel Hobby](https://vercel.com/pricing), your message will be truncated due to the limitation of vercel.
-
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+- ESLint 和 TypeScript 错误在构建时被忽略（`next.config.js` 配置）
+- 语音服务使用 npm 管理依赖（有 `package-lock.json`），根目录使用 pnpm
+- Whisper 模型首次加载需要下载，请确保网络通畅
+- 繁体转简体使用 opencc-js，API：`Converter({ from: 'tw', to: 'cn' })`
