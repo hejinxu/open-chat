@@ -8,7 +8,7 @@ Next.js 15 + React 19 conversation webapp for Dify AI platform. Connects to a Di
 - `pnpm build` — Production build (uses `next build`)
 - `pnpm lint` — Run ESLint
 - `pnpm fix` — Auto-fix lint issues
-- `pnpm speech-server` — Start WebSocket speech recognition server (port 8787)
+- `pnpm ws-server` — Start WebSocket service server (port 8787)
 - `pnpm download-whisper` — Download Whisper model files
 
 Pre-commit hook runs `pnpm lint-staged` (ESLint on staged `.ts`/`.tsx` files).
@@ -19,13 +19,20 @@ Pre-commit hook runs `pnpm lint-staged` (ESLint on staged `.ts`/`.tsx` files).
 - **Client streaming**: `service/base.ts` exports `ssePost` for SSE streaming; `service/index.ts` wraps domain calls (`sendChatMessage`, `fetchConversations`, etc.)
 - **State**: Zustand + immer for state management; ahooks for utility hooks
 - **Config**: `config/index.ts` holds `APP_ID`, `API_KEY`, `API_URL` from env vars
-- **Speech server**: Standalone Node.js WebSocket server in `speech-server/` — runs separately from Next.js
+- **WS Server**: Standalone Node.js Socket.IO server in `ws-server/` — runs separately from Next.js
+
+### WS Server Architecture
+- **Framework**: Socket.IO（选择理由：命名空间隔离多服务、房间机制支持精准推送、自动重连、中间件支持）
+- **Handler 注册**：`handlers/` 目录下的 `.mjs` 文件自动加载注册，每个 Handler 实现 `{ name, namespace, init?, onConnection, disconnect }` 接口
+- **命名空间**：`/speech`（语音识别）、`/push`（后端推送，预留）
+- **扩展方式**：在 `handlers/` 目录创建新 `.mjs` 文件，导出符合接口的对象即可自动注册
+- **环境变量**：`WS_PORT`（默认 8787）
 
 ## Voice Recognition
 
 Two engines in `app/components/chat/voice-recognition/`:
 - **browser** (`browser-recognition.ts`): Uses Web Speech API (`SpeechRecognition`). Hardcoded `lang: 'zh-CN'`. Triggers callback on both `isFinal` and `isInterim` results. Auto-restarts on `onend`. Check browser support: `window.SpeechRecognition || window.webkitSpeechRecognition`.
-- **whisper** (`whisper-recognition.ts`): Connects to speech-server via WebSocket. Supports models: whisper-tiny/base/small, funasr-paraformer-zh, funasr-sensevoice.
+- **whisper** (`whisper-recognition.ts`): Connects to WS Server via Socket.IO (namespace: `/speech`). Supports models: whisper-tiny/base/small, funasr-paraformer-zh, funasr-sensevoice.
 
 Engine switching: `voice-settings.tsx` → `VoiceInput` component in `voice-input.tsx`.
 
@@ -33,7 +40,7 @@ Engine switching: `voice-settings.tsx` → `VoiceInput` component in `voice-inpu
 - **`voice-input.tsx`**: Core orchestrator — owns `isActive`, `isListening`, engine callbacks, timers, countdown, pending send logic.
 - **`index.tsx`**: Parent — manages state, per-engine localStorage, prop passing to `VoiceInput`.
 - **`voice-settings.tsx`**: Settings UI — engine selector, timeout input, checkboxes.
-- **Speech server** (`speech-server/server.mjs`): Standalone Node.js WebSocket server (port 8787). Audio processing, silence detection, opencc Traditional→Simplified conversion.
+- **WS Server** (`ws-server/server.mjs`): Socket.IO server with handler registration. Audio processing, silence detection, opencc Traditional→Simplified conversion.
 
 ### Text Accumulation
 - **Browser**: Appends segments with comma separator → `accumulatedRef`
@@ -58,11 +65,12 @@ Engine switching: `voice-settings.tsx` → `VoiceInput` component in `voice-inpu
 - **`processBuffer`**: Transcribes audio, returns result, does NOT clear buffer (buffer grows until `stop` message)
 - **`processTimeout`** (`PROCESS_INTERVAL_MS=1500ms`): Timer that fires periodically, can send transcription results
 - **Silence detection**: `SILENCE_THRESHOLD=0.03` (RMS amplitude). Results below threshold are skipped in both `processBuffer` and `processTimeout`.
-- **Buffer clearing**: Only happens on `stop` message from client, via `lastProcessedLength` tracking
+- **Result dedup**: Only sends result to client if text differs from `lastResult`. Prevents duplicate results from resetting client auto-stop timer.
+- **Buffer clearing**: Only happens on `stop` message from client.
 - **Model preloading**: All three Whisper models (tiny, base, small) loaded in parallel at startup via `Promise.all`
 
 ### Key Gotchas & Requirements
-1. **DO NOT add `text !== state.lastResult` dedup check**: Prevents server from sending results, blocks timer reset. Server sends all results; client decides what to display.
+1. **Server `text !== lastResult` dedup is required**: Prevents duplicate results from repeatedly resetting client auto-stop timer. Only new/changed text is sent to client.
 2. **DO NOT trim audio buffer on silence**: Causes fragmented transcriptions. Buffer grows ~64KB/s at 16kHz. Cleared only on `stop`.
 3. **Speech timer must reset on ALL results** (both final and interim): Timer starts once, resets on every callback. Never create new timers.
 4. **Countdown resets on each result**: `clearCountdown` + `startCountdown` before each timeout.
@@ -72,6 +80,7 @@ Engine switching: `voice-settings.tsx` → `VoiceInput` component in `voice-inpu
 8. **opencc-js API**: Use `Converter({ from: 'tw', to: 'cn' })` — NOT `createConverter`.
 9. **Server `processBuffer` with `force=true`**: Bypasses silence check. Used by `stop` handler to get final transcription.
 10. **`SEND_DELAY_MS = 5000`**: Debounce delay before auto-sending after timeout.
+11. **`SEND_DELAY_MS = 5000`**: Debounce delay before auto-sending after timeout.
 
 ### Related Files
 - `config/voice-input.ts`: Voice config constants (per-engine timeouts, engine types)
@@ -79,9 +88,12 @@ Engine switching: `voice-settings.tsx` → `VoiceInput` component in `voice-inpu
 - `app/components/chat/index.tsx`: Parent component (state, per-engine localStorage)
 - `app/components/chat/voice-settings.tsx`: Settings UI
 - `app/components/chat/voice-recognition/browser-recognition.ts`: Browser SpeechRecognition wrapper
-- `app/components/chat/voice-recognition/whisper-recognition.ts`: Whisper WebSocket client
-- `speech-server/server.mjs`: Speech server (audio processing, silence detection, opencc)
-- `speech-server/package.json`: Speech server dependencies (opencc-js)
+- `app/components/chat/voice-recognition/whisper-recognition.ts`: Whisper Socket.IO client
+- `ws-server/server.mjs`: WS Server entry (Socket.IO + handler registration)
+- `ws-server/handlers/speech.mjs`: Speech recognition handler
+- `ws-server/lib/model-loader.mjs`: Whisper model loading
+- `ws-server/lib/funasr.mjs`: FunASR sidecar
+- `ws-server/lib/audio-utils.mjs`: Audio utilities (silence detection, hallucination filter)
 - `docs/语音识别引擎系统.md`: Voice system documentation
 
 ## Conventions

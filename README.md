@@ -10,6 +10,7 @@
 - **状态管理**: Zustand + Immer
 - **国际化**: i18next（支持中文、英文、日文、法文、西班牙文、越南语）
 - **语音识别**: Web Speech API (浏览器端) / Whisper (服务端)
+- **实时通信**: Socket.IO（语音识别、后端推送）
 - **代码规范**: @antfu/eslint-config（无分号、单引号、2 空格缩进）
 
 ## 功能特性
@@ -27,7 +28,7 @@
 
 - Node.js >= 18
 - pnpm（根目录）
-- npm（speech-server/ 子目录）
+- npm（ws-server/ 子目录）
 
 ## 快速开始
 
@@ -35,7 +36,7 @@
 
 ```bash
 pnpm install
-cd speech-server && npm install && cd ..
+cd ws-server && npm install && cd ..
 ```
 
 ### 2. 配置环境变量
@@ -66,7 +67,7 @@ pnpm dev
 
 ## 语音识别服务
 
-语音识别是独立的 WebSocket 服务，需要单独启动。
+语音识别是独立的 Socket.IO 服务，需要单独启动。
 
 ### 下载 Whisper 模型
 
@@ -77,10 +78,17 @@ pnpm download-whisper
 ### 启动语音服务
 
 ```bash
-pnpm speech-server
+pnpm ws-server
 ```
 
-服务运行在 `ws://localhost:8787`，启动时会自动加载全部 Whisper 模型（tiny、base、small）。
+服务运行在 `ws://localhost:8787/speech`，启动时会自动加载全部 Whisper 模型（tiny、base、small）。
+
+### 处理机制
+
+- **完整 buffer 转写**：保留完整音频上下文供 Whisper 识别，避免碎片化
+- **结果去重**：只在转写结果与上次不同时才发送，避免重复结果重置客户端 timer
+- **静音检测**：RMS 阈值 0.03，低于阈值的音频段跳过转写
+- **自动停止**：用户停止说话后，转写结果不变 → 不发送 → 客户端 timer 正常触发自动停止
 
 支持的语音引擎：
 - **browser**: 浏览器内置 Speech Recognition（仅 Chrome 支持）
@@ -112,8 +120,15 @@ docker run -p 3000:3000 webapp-conversation:latest
 │   └── voice-input.ts            # 语音配置常量
 ├── i18n/                         # 多语言文件
 ├── service/                      # API 服务层
-├── speech-server/                # 语音识别 WebSocket 服务
-│   ├── server.mjs                # 服务端（音频处理、静音检测、opencc）
+├── ws-server/                    # WebSocket 服务（Socket.IO）
+│   ├── server.mjs                # 入口（Socket.IO + Handler 注册）
+│   ├── handlers/                 # 服务 Handler
+│   │   ├── speech.mjs            # 语音识别
+│   │   └── push.mjs              # 后端推送（预留）
+│   ├── lib/                      # 公共库
+│   │   ├── model-loader.mjs      # Whisper 模型加载
+│   │   ├── funasr.mjs            # FunASR sidecar
+│   │   └── audio-utils.mjs       # 音频工具
 │   └── package.json
 ├── stores/                       # Zustand 状态管理
 ├── docs/                         # 文档
@@ -128,7 +143,7 @@ docker run -p 3000:3000 webapp-conversation:latest
 | `pnpm build` | 生产构建 |
 | `pnpm lint` | 代码检查 |
 | `pnpm fix` | 自动修复 lint 问题 |
-| `pnpm speech-server` | 启动语音识别服务（端口 8787） |
+| `pnpm ws-server` | 启动 WebSocket 服务（端口 8787） |
 | `pnpm download-whisper` | 下载 Whisper 模型文件 |
 
 ## 注意事项

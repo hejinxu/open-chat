@@ -8,7 +8,7 @@
  *
  * Models: whisper-tiny, whisper-base, whisper-small (default: all)
  *
- * Model files are saved to speech-server/models/onnx-community/<model>/
+ * Model files are saved to ws-server/models/onnx-community/<model>/
  */
 
 const https = require('https')
@@ -159,7 +159,7 @@ async function tryDownloadFromMirrors(modelId, file, outputDir) {
 
 async function downloadModel(modelName) {
   const model = MODELS[modelName]
-  const outputDir = path.join(__dirname, '..', 'speech-server', 'models', 'onnx-community', modelName)
+  const outputDir = path.join(__dirname, '..', 'ws-server', 'models', 'onnx-community', modelName)
 
   console.log(`\n=== Downloading ${modelName} (${model.id}) ===\n`)
 
@@ -198,7 +198,7 @@ async function main() {
   } else {
     console.log('✓ All models downloaded successfully!')
   }
-  console.log('\nModel files location: speech-server/models/onnx-community/')
+  console.log('\nModel files location: ws-server/models/onnx-community/')
 }
 
 main().catch(console.error)

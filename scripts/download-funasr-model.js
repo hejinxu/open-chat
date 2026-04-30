@@ -6,7 +6,7 @@
  * Usage:
  *   node scripts/download-funasr-model.js
  *
- * Model files are saved to speech-server/models/iic/
+ * Model files are saved to ws-server/models/iic/
  */
 
 const https = require('https')
@@ -39,7 +39,7 @@ const MODELS = {
   },
 }
 
-const OUTPUT_BASE = path.join(__dirname, '..', 'speech-server', 'models', 'iic')
+const OUTPUT_BASE = path.join(__dirname, '..', 'ws-server', 'models', 'iic')
 
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
@@ -176,7 +176,7 @@ async function main() {
   } else {
     console.log('✓ All FunASR models downloaded successfully!')
   }
-  console.log('\nModel files location: speech-server/models/iic/')
+  console.log('\nModel files location: ws-server/models/iic/')
 }
 
 main().catch(console.error)

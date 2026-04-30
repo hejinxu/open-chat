@@ -3,6 +3,7 @@
 .idea
 
 speech-server/models/
+ws-server/models/
 
 # dependencies
 node_modules

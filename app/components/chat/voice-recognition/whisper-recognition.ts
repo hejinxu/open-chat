@@ -1,4 +1,5 @@
 import type { VoiceRecognitionResult } from './types'
+import { io as socketIo } from 'socket.io-client'
 
 type WhisperCallback = (result: VoiceRecognitionResult) => void
 
@@ -7,7 +8,7 @@ export type WhisperModel = 'whisper-tiny' | 'whisper-base' | 'whisper-small' | '
 function getWhisperWsUrl(): string {
   if (typeof window === 'undefined') { return '' }
   const port = (window as any).__WHISPER_PORT__ || '8787'
-  return `ws://${window.location.hostname}:${port}`
+  return `http://${window.location.hostname}:${port}`
 }
 
 export class WhisperRecognition {
@@ -15,7 +16,7 @@ export class WhisperRecognition {
   private callback: WhisperCallback | null = null
   private audioContext: AudioContext | null = null
   private stream: MediaStream | null = null
-  private ws: WebSocket | null = null
+  private socket: any = null
   private modelName: WhisperModel
 
   constructor(callback: WhisperCallback, modelName: WhisperModel = 'whisper-tiny') {
@@ -26,7 +27,6 @@ export class WhisperRecognition {
   isSupported(): boolean {
     return typeof window !== 'undefined'
       && !!navigator.mediaDevices?.getUserMedia
-      && typeof WebSocket !== 'undefined'
   }
 
   isListening(): boolean {
@@ -60,19 +60,15 @@ export class WhisperRecognition {
       const source = this.audioContext.createMediaStreamSource(this.stream)
       const processor = this.audioContext.createScriptProcessor(4096, 1, 1)
 
-      await this.connectWebSocket()
+      await this.connectSocket()
 
       this.isActive = true
 
       processor.onaudioprocess = (e) => {
-        if (!this.isActive || !this.ws || this.ws.readyState !== WebSocket.OPEN) { return }
+        if (!this.isActive || !this.socket?.connected) { return }
 
         const inputData = e.inputBuffer.getChannelData(0)
-
-        this.ws.send(JSON.stringify({
-          type: 'audio',
-          data: Array.from(inputData),
-        }))
+        this.socket.emit('audio', { data: Array.from(inputData) })
       }
 
       source.connect(processor)
@@ -84,65 +80,70 @@ export class WhisperRecognition {
     }
   }
 
-  private connectWebSocket(): Promise<void> {
+  private async connectSocket(): Promise<void> {
+    const url = getWhisperWsUrl()
+
     return new Promise((resolve, reject) => {
-      const url = getWhisperWsUrl()
-      this.ws = new WebSocket(url)
+      this.socket = socketIo(`${url}/speech`, {
+        transports: ['websocket'],
+        reconnection: false,
+      })
 
       const timeout = setTimeout(() => {
-        if (this.ws?.readyState !== WebSocket.OPEN) {
-          this.ws?.close()
+        if (!this.socket?.connected) {
+          this.socket?.disconnect()
           reject(new Error('WebSocket connection timeout'))
         }
       }, 5000)
 
-      this.ws.onopen = () => {
+      this.socket.on('connect', () => {
         clearTimeout(timeout)
-        console.log('[WhisperRecognition] WebSocket connected')
-        this.ws?.send(JSON.stringify({ type: 'config', model: this.modelName }))
+        console.log('[WhisperRecognition] Socket connected')
+        this.socket.emit('config', { model: this.modelName })
         resolve()
-      }
+      })
 
-      this.ws.onerror = () => {
+      this.socket.on('connect_error', () => {
         clearTimeout(timeout)
         reject(new Error('WebSocket connection failed'))
-      }
+      })
 
-      this.ws.onclose = () => {
-        console.log('[WhisperRecognition] WebSocket closed')
+      this.socket.on('disconnect', () => {
+        console.log('[WhisperRecognition] Socket disconnected')
         this.cleanup()
-      }
+      })
 
-      this.ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data)
-          if (msg.type === 'result' && msg.text && this.callback) {
-            this.callback({ text: msg.text, isFinal: true })
-          } else if (msg.type === 'config_ok') {
-            console.log(`[WhisperRecognition] Server using model: ${msg.model}`)
-          } else if (msg.type === 'error') {
-            console.warn('[WhisperRecognition] Server error:', msg.message)
-          }
-        } catch {}
-      }
+      this.socket.on('result', (msg: any) => {
+        if (msg.text && this.callback) {
+          this.callback({ text: msg.text, isFinal: true })
+        }
+      })
+
+      this.socket.on('config_ok', (msg: any) => {
+        console.log(`[WhisperRecognition] Server using model: ${msg.model}`)
+      })
+
+      this.socket.on('error', (msg: any) => {
+        console.warn('[WhisperRecognition] Server error:', msg.message)
+      })
     })
   }
 
   stop(): void {
     this.isActive = false
 
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if (this.socket?.connected) {
       try {
-        this.ws.send(JSON.stringify({ type: 'stop' }))
+        this.socket.emit('stop')
       } catch {}
     }
   }
 
   private cleanup(): void {
-    if (this.ws) {
-      const ws = this.ws
-      this.ws = null
-      try { ws.close() } catch {}
+    if (this.socket) {
+      const socket = this.socket
+      this.socket = null
+      try { socket.disconnect() } catch {}
     }
 
     if (this.stream) {

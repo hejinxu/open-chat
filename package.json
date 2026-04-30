@@ -12,7 +12,7 @@
     "lint-staged": "lint-staged",
     "prepare": "husky",
     "download-whisper": "node scripts/download-whisper-model.js",
-    "speech-server": "cd speech-server && pnpm start"
+    "ws-server": "cd ws-server && npm start"
   },
   "dependencies": {
     "@floating-ui/react": "^0.26.25",
@@ -61,6 +61,7 @@
     "sass": "^1.61.0",
     "scheduler": "^0.23.0",
     "server-only": "^0.0.1",
+    "socket.io-client": "^4.8.3",
     "streamdown": "^1.2.0",
     "swr": "^2.3.0",
     "tailwind-merge": "^3.2.0",
