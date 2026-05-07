@@ -6,7 +6,7 @@
 
 - **框架**: Next.js 15 (App Router) + React 19
 - **语言**: TypeScript 5.9
-- **样式**: Tailwind CSS 3 + SCSS
+- **样式**: Tailwind CSS 3 + SCSS + CSS Custom Properties（多主题）
 - **状态管理**: Zustand + Immer
 - **国际化**: i18next（支持中文、英文、日文、法文、西班牙文、越南语）
 - **语音识别**: Web Speech API (浏览器端) / Whisper (服务端)
@@ -21,6 +21,7 @@
 - 语音输入（浏览器 Speech Recognition + Whisper）
 - 语音输入自动停止 & 自动发送
 - 繁体/简体中文转换（opencc-js）
+- 多主题支持（浅色 / 深色 / 科技蓝）
 - 多语言 i18n
 - Docker 部署
 
@@ -114,9 +115,17 @@ docker run -p 3000:3000 webapp-conversation:latest
 │   │       └── voice-recognition/ # 语音识别引擎
 │   │           ├── browser-recognition.ts
 │   │           └── whisper-recognition.ts
-│   └── i18n/                     # 国际化配置
+│   ├── i18n/                     # 国际化配置
+│   └── styles/
+│       ├── globals.css           # 全局样式（导入主题文件）
+│       ├── themes/               # 主题 CSS 变量
+│       │   ├── light.css         # 浅色主题
+│       │   ├── dark.css          # 深色主题
+│       │   └── tech-blue.css     # 科技蓝主题
+│       └── markdown.scss         # Markdown 样式
 ├── config/                       # 应用配置
 │   ├── index.ts                  # App ID、API Key、API URL
+│   ├── theme.ts                  # 主题配置
 │   └── voice-input.ts            # 语音配置常量
 ├── i18n/                         # 多语言文件
 ├── service/                      # API 服务层
@@ -152,3 +161,20 @@ docker run -p 3000:3000 webapp-conversation:latest
 - 语音服务使用 npm 管理依赖（有 `package-lock.json`），根目录使用 pnpm
 - Whisper 模型首次加载需要下载，请确保网络通畅
 - 繁体转简体使用 opencc-js，API：`Converter({ from: 'tw', to: 'cn' })`
+
+## 主题系统
+
+采用 CSS Custom Properties 方案，每个主题定义一套 CSS 变量：
+
+- `app/styles/themes/light.css` — 浅色主题
+- `app/styles/themes/dark.css` — 深色主题
+- `app/styles/themes/tech-blue.css` — 科技蓝主题
+
+添加新主题步骤：
+1. 在 `app/styles/themes/` 创建新 CSS 文件（如 `ocean.css`），定义 `.ocean { --xxx: ... }`
+2. 在 `globals.css` 添加 `@import './themes/ocean.css'`
+3. 在 `config/theme.ts` 添加 `OCEAN: 'ocean'`
+4. 在 `hooks/use-theme.ts` 的 `toggleTheme` 循环中添加
+5. 在 `app/components/theme-toggle-button/index.tsx` 添加选项
+
+详细文档见 `docs/添加新主题开发指南.md`

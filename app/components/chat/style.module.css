@@ -24,23 +24,8 @@
   border-radius: 50%;
 }
 
-.question::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  width: 8px;
-  height: 12px;
-}
-
 .answerWrap .itemOperation {
   display: flex;
-}
-
-.question::before {
-  right: 0;
-  background-color: var(--user-bubble);
-  -webkit-mask: url(./icons/question.svg) no-repeat;
-  mask: url(./icons/question.svg) no-repeat;
 }
 
 .textArea {

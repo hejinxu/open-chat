@@ -1,7 +1,6 @@
 'use client'
 import type { FC } from 'react'
 import React, { useEffect, useRef } from 'react'
-import cn from 'classnames'
 import { useTranslation } from 'react-i18next'
 import Textarea from 'rc-textarea'
 import s from './style.module.css'
@@ -252,37 +251,39 @@ const Chat: FC<IChatProps> = ({
   }
 
   return (
-    <div className={cn(!feedbackDisabled && 'px-3.5', 'h-full')}>
-      {/* Chat List */}
-      <div className="h-full space-y-[30px]">
-        {chatList.map((item) => {
-          if (item.isAnswer) {
-            const isLast = item.id === chatList[chatList.length - 1].id
-            return <Answer
-              key={item.id}
-              item={item}
-              feedbackDisabled={feedbackDisabled}
-              onFeedback={onFeedback}
-              onRegenerate={onRegenerate}
-              isResponding={isResponding && isLast}
-              suggestionClick={suggestionClick}
-            />
-          }
-          return (
-            <Question
-              key={item.id}
-              id={item.id}
-              content={item.content}
-              useCurrentUserAvatar={useCurrentUserAvatar}
-              imgSrcs={(item.message_files && item.message_files?.length > 0) ? item.message_files.map(item => item.url) : []}
-            />
-          )
-        })}
+    <div className='flex flex-col grow overflow-hidden'>
+      {/* Chat List - scrollbar at screen edge */}
+      <div className="flex flex-col grow overflow-y-auto">
+        <div className="pc:w-[794px] max-w-full mobile:w-full mx-auto space-y-[30px] pb-4 px-3.5">
+          {chatList.map((item) => {
+            if (item.isAnswer) {
+              const isLast = item.id === chatList[chatList.length - 1].id
+              return <Answer
+                key={item.id}
+                item={item}
+                feedbackDisabled={feedbackDisabled}
+                onFeedback={onFeedback}
+                onRegenerate={onRegenerate}
+                isResponding={isResponding && isLast}
+                suggestionClick={suggestionClick}
+              />
+            }
+            return (
+              <Question
+                key={item.id}
+                id={item.id}
+                content={item.content}
+                useCurrentUserAvatar={useCurrentUserAvatar}
+                imgSrcs={(item.message_files && item.message_files?.length > 0) ? item.message_files.map(item => item.url) : []}
+              />
+            )
+          })}
+        </div>
       </div>
       {
         !isHideSendInput && (
-          <div className='absolute z-10 bottom-0 left-0 right-0 pc:w-[794px] max-w-full mx-auto px-3.5'>
-            <div className='bg-surface border-[1.5px] border-border rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.25)]'>
+          <div className='shrink-0 px-3.5 bg-surface pb-3 pt-2'>
+            <div className='pc:w-[794px] max-w-full mx-auto border-[1.5px] border-border rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.25)]'>
               <div className='px-2 py-[7px] min-h-[44px]'>
                 {
                   visionConfig?.enabled && (

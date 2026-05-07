@@ -123,6 +123,7 @@ Engine switching: `voice-settings.tsx` → `VoiceInput` component in `voice-inpu
 - **Components**: `'use client'` required for client components. Server components are the default in App Router.
 - **Styling**: Tailwind-first. SCSS only for markdown/code. `classnames` or `tailwind-merge` for conditional classes.
 - **Theme classes**: Use semantic classes (`bg-surface`, `text-content`, `border-border`). Never use `dark:` prefix or hardcoded colors.
+- **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom of content area. Chat list uses `overflow-y-auto` with scrollbar at screen edge. Content width constrained to `pc:w-[794px] max-w-full mx-auto`.
 - **Build**: `next.config.js` disables ESLint and TypeScript errors during build (`ignoreDuringBuilds: true`).
 - **Docker**: `docker build . -t <repo>/webapp-conversation:latest` then `docker run -p 3000:3000` — uses standalone output mode.
 - **After coding**: 每次编写完代码后，主动询问用户是否需要将相关业务规则、设计决策或注意事项更新到 AGENTS.md，以便后续会话保持上下文一致。
