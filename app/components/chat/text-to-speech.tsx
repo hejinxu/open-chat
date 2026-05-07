@@ -79,7 +79,7 @@ export function TextToSpeech({ text, disabled = false }: TextToSpeechProps) {
 
   return (
     <div
-      className={`relative box-border flex items-center justify-center h-7 w-7 p-0.5 rounded-lg bg-white dark:bg-gray-700 cursor-pointer text-gray-500 dark:text-gray-400 hover:bg-gray-50 hover:text-gray-800 dark:hover:bg-gray-600 dark:hover:text-gray-200 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      className={`relative box-border flex items-center justify-center h-7 w-7 p-0.5 rounded-lg bg-surface cursor-pointer text-content-tertiary hover:bg-surface-hover hover:text-content ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       style={{ boxShadow: '0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -2px rgba(0, 0, 0, 0.05)' }}
       onClick={disabled ? undefined : toggle}
       title={isSpeaking ? '停止朗读' : '语音朗读'}

@@ -12,8 +12,8 @@
   align-items: center;
   width: 16px;
   height: 16px;
-  background: #FFFFFF;
-  box-shadow: 0px 1px 2px rgba(16, 24, 40, 0.05);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
   border-radius: 16px;
 }
 
@@ -38,7 +38,9 @@
 
 .question::before {
   right: 0;
-  background: url(./icons/question.svg) no-repeat;
+  background-color: var(--user-bubble);
+  -webkit-mask: url(./icons/question.svg) no-repeat;
+  mask: url(./icons/question.svg) no-repeat;
 }
 
 .textArea {
@@ -47,11 +49,11 @@
   padding-right: 90px;
   border-radius: 12px;
   line-height: 20px;
-  background-color: #fff;
+  background-color: var(--surface);
 }
 
 .textArea:hover {
-  background-color: #fff;
+  background-color: var(--surface);
 }
 
 /* .textArea:focus {
@@ -69,7 +71,7 @@
 
 .sendBtn:hover {
   background-image: url(./icons/send-active.svg);
-  background-color: #EBF5FF;
+  background-color: var(--accent-bg);
 }
 
 .textArea:focus+div .count {

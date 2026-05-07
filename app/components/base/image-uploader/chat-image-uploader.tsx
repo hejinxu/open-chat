@@ -29,9 +29,9 @@ const UploadOnlyFromLocal: FC<UploadOnlyFromLocalProps> = ({
         hovering => (
           <div className={`
             relative flex items-center justify-center w-8 h-8 rounded-lg cursor-pointer
-            ${hovering && 'bg-gray-100'}
+            ${hovering && 'bg-surface-hover'}
           `}>
-            <ImagePlus className='w-4 h-4 text-gray-500' />
+            <ImagePlus className='w-4 h-4 text-content-tertiary' />
           </div>
         )
       }
@@ -75,20 +75,20 @@ const UploaderButton: FC<UploaderButtonProps> = ({
     >
       <PortalToFollowElemTrigger onClick={handleToggle}>
         <div className={`
-          relative flex items-center justify-center w-8 h-8 hover:bg-gray-100 rounded-lg
+          relative flex items-center justify-center w-8 h-8 hover:bg-surface-hover rounded-lg
           ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
         `}>
-          <ImagePlus className='w-4 h-4 text-gray-500' />
+          <ImagePlus className='w-4 h-4 text-content-tertiary' />
         </div>
       </PortalToFollowElemTrigger>
       <PortalToFollowElemContent className='z-50'>
-        <div className='p-2 w-[260px] bg-white rounded-lg border-[0.5px] border-gray-200 shadow-lg'>
+        <div className='p-2 w-[260px] bg-surface-elevated rounded-lg border-[0.5px] border shadow-lg'>
           <ImageLinkInput onUpload={handleUpload} />
           {
             hasUploadFromLocal && (
               <>
-                <div className='flex items-center mt-2 px-2 text-xs font-medium text-gray-400'>
-                  <div className='mr-3 w-[93px] h-[1px] bg-gradient-to-l from-[#F3F4F6]' />
+                <div className='flex items-center mt-2 px-2 text-xs font-medium text-content-quaternary'>
+                  <div className='mr-3 w-[93px] h-[1px] bg-gradient-to-l from-border-subtle' />
                   OR
                   <div className='ml-3 w-[93px] h-[1px] bg-gradient-to-r from-[#F3F4F6]' />
                 </div>

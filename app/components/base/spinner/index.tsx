@@ -10,7 +10,7 @@ interface Props {
 const Spinner: FC<Props> = ({ loading = false, children, className }) => {
   return (
     <div
-      className={`inline-block text-gray-200 h-4 w-4 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] ${loading ? 'motion-reduce:animate-[spin_1.5s_linear_infinite]' : 'hidden'} ${className ?? ''}`}
+      className={`inline-block text-border h-4 w-4 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] ${loading ? 'motion-reduce:animate-[spin_1.5s_linear_infinite]' : 'hidden'} ${className ?? ''}`}
       role="status"
     >
       <span

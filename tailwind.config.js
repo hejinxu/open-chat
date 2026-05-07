@@ -63,6 +63,45 @@ module.exports = {
           900: '#002433',
           glow: 'rgba(0, 212, 255, 0.3)',
         },
+        // Semantic theme colors (CSS variables)
+        surface: {
+          DEFAULT: 'var(--surface)',
+          secondary: 'var(--surface-secondary)',
+          tertiary: 'var(--surface-tertiary)',
+          hover: 'var(--surface-hover)',
+          active: 'var(--surface-active)',
+          elevated: 'var(--surface-elevated)',
+        },
+        content: {
+          DEFAULT: 'var(--text)',
+          secondary: 'var(--text-secondary)',
+          tertiary: 'var(--text-tertiary)',
+          quaternary: 'var(--text-quaternary)',
+          accent: 'var(--text-accent)',
+          'on-accent': 'var(--text-on-accent)',
+        },
+        border: {
+          DEFAULT: 'var(--border)',
+          subtle: 'var(--border-subtle)',
+          strong: 'var(--border-strong)',
+          accent: 'var(--accent)',
+          'accent-hover': 'var(--accent-hover)',
+        },
+        accent: {
+          DEFAULT: 'var(--accent)',
+          hover: 'var(--accent-hover)',
+          bg: 'var(--accent-bg)',
+          'bg-hover': 'var(--accent-bg-hover)',
+        },
+        'user-bubble': {
+          DEFAULT: 'var(--user-bubble)',
+          text: 'var(--user-bubble-text)',
+        },
+        fill: {
+          DEFAULT: 'var(--fill)',
+          light: 'var(--fill-light)',
+          'on-accent': 'var(--fill-on-accent)',
+        },
       },
       screens: {
         mobile: '100px',

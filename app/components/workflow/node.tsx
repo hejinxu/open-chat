@@ -35,7 +35,7 @@ const NodePanel: FC<Props> = ({ nodeInfo, hideInfo = false }) => {
 
   return (
     <div className={cn('px-4 py-1', hideInfo && '!p-0')}>
-      <div className={cn('group transition-all bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-xs hover:shadow-md', hideInfo && '!rounded-lg')}>
+      <div className={cn('group transition-all bg-surface border border-border-subtle rounded-2xl shadow-xs hover:shadow-md', hideInfo && '!rounded-lg')}>
         <div
           className={cn(
             'flex items-center pl-[6px] pr-3 cursor-pointer',
@@ -46,11 +46,11 @@ const NodePanel: FC<Props> = ({ nodeInfo, hideInfo = false }) => {
         >
           <BlockIcon size={hideInfo ? 'xs' : 'sm'} className={cn('shrink-0 mr-2', hideInfo && '!mr-1')} type={nodeInfo.node_type} toolIcon={nodeInfo.extras?.icon || nodeInfo.extras} />
           <div className={cn(
-            'grow text-gray-700 dark:text-gray-200 text-[13px] leading-[16px] font-semibold truncate',
+            'grow text-content-secondary text-[13px] leading-[16px] font-semibold truncate',
             hideInfo && '!text-xs',
           )} title={nodeInfo.title}>{nodeInfo.title}</div>
           {nodeInfo.status !== 'running' && !hideInfo && (
-            <div className='shrink-0 text-gray-500 dark:text-gray-400 text-xs leading-[18px]'>{`${getTime(nodeInfo.elapsed_time || 0)} · ${getTokenCount(nodeInfo.execution_metadata?.total_tokens || 0)} tokens`}</div>
+            <div className='shrink-0 text-content-tertiary text-xs leading-[18px]'>{`${getTime(nodeInfo.elapsed_time || 0)} · ${getTokenCount(nodeInfo.execution_metadata?.total_tokens || 0)} tokens`}</div>
           )}
           {nodeInfo.status === 'succeeded' && (
             <CheckCircle className='shrink-0 ml-2 w-3.5 h-3.5 text-[#12B76A]' />

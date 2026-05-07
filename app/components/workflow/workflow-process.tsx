@@ -47,18 +47,26 @@ const WorkflowProcessItem = ({
     if (failed && !collapse) { return 'linear-gradient(180deg, #7F1D1D 0%, #991B1B 100%)' }
   }, [running, succeeded, failed, collapse])
 
+  const techBlueBackground = useMemo(() => {
+    if (running && !collapse) { return 'linear-gradient(180deg, rgba(42, 77, 110, 0.8) 0%, rgba(30, 53, 84, 0.85) 100%)' }
+
+    if (succeeded && !collapse) { return 'linear-gradient(180deg, rgba(6, 78, 59, 0.6) 0%, rgba(6, 95, 70, 0.6) 100%)' }
+
+    if (failed && !collapse) { return 'linear-gradient(180deg, rgba(127, 29, 29, 0.6) 0%, rgba(153, 27, 27, 0.6) 100%)' }
+  }, [running, succeeded, failed, collapse])
+
   useEffect(() => {
     setCollapse(!expand)
   }, [expand])
 
-  const currentBackground = resolvedTheme === 'dark' ? darkBackground : lightBackground
+  const currentBackground = resolvedTheme === 'dark' ? darkBackground : resolvedTheme === 'tech-blue' ? techBlueBackground : lightBackground
 
   return (
     <div
       className={cn(
-        'mb-2 rounded-xl border-[0.5px] border-black/[0.08] dark:border-gray-700',
+        'mb-2 rounded-xl border-[0.5px] border-border-subtle',
         collapse ? 'py-[7px]' : hideInfo ? 'pt-2 pb-1' : 'py-2',
-        collapse && (!grayBg ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900'),
+        collapse && (!grayBg ? 'bg-surface' : 'bg-surface'),
         hideInfo ? 'mx-1 px-1' : 'w-full px-3',
       )}
       style={{
@@ -74,7 +82,7 @@ const WorkflowProcessItem = ({
       >
         {
           running && (
-            <Loading02 className='shrink-0 mr-1 w-3 h-3 text-[#667085] dark:text-gray-400 animate-spin' />
+            <Loading02 className='shrink-0 mr-1 w-3 h-3 text-[#667085] text-content-tertiary animate-spin' />
           )
         }
         {
@@ -87,8 +95,8 @@ const WorkflowProcessItem = ({
             <AlertCircle className='shrink-0 mr-1 w-3 h-3 text-[#F04438]' />
           )
         }
-        <div className='grow text-xs font-medium text-gray-700 dark:text-gray-200 leading-[18px]'>Workflow Process</div>
-        <ChevronRight className={`'ml-1 w-3 h-3 text-gray-500 dark:text-gray-400' ${collapse ? '' : 'rotate-90'}`} />
+        <div className='grow text-xs font-medium text-content-secondary leading-[18px]'>Workflow Process</div>
+        <ChevronRight className={`'ml-1 w-3 h-3 text-content-tertiary' ${collapse ? '' : 'rotate-90'}`} />
       </div>
       {
         !collapse && (

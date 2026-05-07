@@ -311,7 +311,7 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
           className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors cursor-pointer ${
             isListening
               ? 'text-red-500 voice-input-listening'
-              : (disabled ? 'text-gray-300 dark:text-gray-600' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200')
+              : (disabled ? 'text-content-quaternary' : 'text-content-tertiary hover:text-content-secondary')
           }`}
         >
           {isListening
@@ -321,7 +321,7 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
         </button>
       </div>
       {isWaitingForResult && (
-        <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap animate-pulse">
+        <span className="text-xs text-content-quaternary whitespace-nowrap animate-pulse">
           等待结果 {countdown.toFixed(1)}s
         </span>
       )}

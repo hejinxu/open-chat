@@ -23,23 +23,23 @@
 
 @keyframes dot-flashing {
   0% {
-    background-color: #667085;
+    background-color: var(--dot-color);
   }
 
   50%,
   100% {
-    background-color: rgba(102, 112, 133, 0.3);
+    background-color: var(--dot-color-faded);
   }
 }
 
 @keyframes dot-flashing-avatar {
   0% {
-    background-color: #155EEF;
+    background-color: var(--avatar-color);
   }
 
   50%,
   100% {
-    background-color: rgba(21, 94, 239, 0.3);
+    background-color: var(--avatar-color-faded);
   }
 }
 
@@ -49,8 +49,8 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background-color: #667085;
-  color: #667085;
+  background-color: var(--dot-color);
+  color: var(--dot-color);
   animation-name: dot-flashing;
 }
 
@@ -68,8 +68,8 @@
   width: 2px;
   height: 2px;
   border-radius: 50%;
-  background-color: #155EEF;
-  color: #155EEF;
+  background-color: var(--avatar-color);
+  color: var(--avatar-color);
   animation-name: dot-flashing-avatar;
 }
 

@@ -4,12 +4,12 @@
 
 @source "../../node_modules/streamdown/dist/index.js";
 
-:root {
-  --max-width: 1100px;
-  --border-radius: 12px;
-  --font-mono: ui-monospace, Menlo, Monaco, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", "Oxygen Mono", "Ubuntu Monospace", "Source Code Pro", "Fira Mono", "Droid Sans Mono", "Courier New", monospace;
-}
+/* Theme CSS Variables */
+@import './themes/light.css';
+@import './themes/dark.css';
+@import './themes/tech-blue.css';
 
+/* Base Styles */
 * {
   box-sizing: border-box;
   padding: 0;
@@ -27,329 +27,46 @@ a {
   text-decoration: none;
 }
 
-/* Theme styles - must be after Tailwind to override */
 body {
-  color: #111928 !important;
-  background-color: #FFFFFF !important;
+  background-color: var(--body-bg);
+  color: var(--body-text);
 }
 
-.dark body,
-html.dark body {
-  color: #F9FAFB !important;
-  background-color: #111928 !important;
+/* Utility Classes */
+.h1 {
+  padding-bottom: 1.5rem;
+  line-height: 1.5;
+  font-size: 1.125rem;
+  color: var(--text);
 }
 
-.tech-blue body,
-html.tech-blue body {
-  color: #E0F2FF !important;
-  background-color: rgba(36, 62, 92, 0.85) !important;
+.h2 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.5;
 }
 
-/* Tech Blue theme - override bg-white elements */
-.tech-blue .bg-white,
-html.tech-blue .bg-white {
-  background-color: rgba(26, 48, 73, 0.9) !important;
+.link {
+  color: var(--link);
+  cursor: pointer;
+  transition: opacity 0.2s ease-in-out;
 }
 
-.tech-blue .bg-gray-50,
-html.tech-blue .bg-gray-50 {
-  background-color: rgba(30, 53, 84, 0.85) !important;
+.link:hover {
+  opacity: 0.8;
+  color: var(--link-hover);
 }
 
-.tech-blue .bg-gray-100,
-html.tech-blue .bg-gray-100 {
-  background-color: rgba(30, 53, 84, 0.85) !important;
+.text-gradient {
+  background: linear-gradient(91.58deg, var(--gradient-start) -29.55%, var(--gradient-end) 75.22%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-fill-color: transparent;
 }
 
-.tech-blue .bg-gray-700,
-html.tech-blue .bg-gray-700 {
-  background-color: rgba(22, 45, 74, 0.9) !important;
-}
-
-.tech-blue .bg-gray-800,
-html.tech-blue .bg-gray-800 {
-  background-color: rgba(26, 48, 73, 0.9) !important;
-}
-
-.tech-blue .bg-primary-50,
-html.tech-blue .bg-primary-50 {
-  background-color: rgba(0, 150, 255, 0.2) !important;
-}
-
-.tech-blue .bg-primary-900\/30,
-html.tech-blue .bg-primary-900\/30 {
-  background-color: rgba(0, 150, 255, 0.2) !important;
-}
-
-.tech-blue .text-gray-900,
-html.tech-blue .text-gray-900 {
-  color: #E0F2FF !important;
-}
-
-.tech-blue .text-gray-700,
-html.tech-blue .text-gray-700 {
-  color: #B0D4FF !important;
-}
-
-.tech-blue .text-gray-500,
-html.tech-blue .text-gray-500 {
-  color: #80B8E6 !important;
-}
-
-.tech-blue .text-gray-400,
-html.tech-blue .text-gray-400 {
-  color: #6090B8 !important;
-}
-
-.tech-blue .text-gray-300,
-html.tech-blue .text-gray-300 {
-  color: #4A7A9E !important;
-}
-
-.tech-blue .text-gray-200,
-html.tech-blue .text-gray-200 {
-  color: #3D6A8A !important;
-}
-
-.tech-blue .text-primary-600,
-html.tech-blue .text-primary-600 {
-  color: #00B4FF !important;
-}
-
-.tech-blue .text-primary-400,
-html.tech-blue .text-primary-400 {
-  color: #00B4FF !important;
-}
-
-.tech-blue .border-gray-100,
-html.tech-blue .border-gray-100 {
-  border-color: #2A4D6E !important;
-}
-
-.tech-blue .border-gray-200,
-html.tech-blue .border-gray-200 {
-  border-color: #2A4D6E !important;
-}
-
-.tech-blue .border-gray-700,
-html.tech-blue .border-gray-700 {
-  border-color: #1E3554 !important;
-}
-
-.tech-blue .border-gray-600,
-html.tech-blue .border-gray-600 {
-  border-color: #2A4D6E !important;
-}
-
-/* Tech Blue - Message bubbles */
-.tech-blue .bg-blue-500,
-html.tech-blue .bg-blue-500 {
-  background-color: #007ACC !important;
-}
-
-.tech-blue .fill-gray-100,
-html.tech-blue .fill-gray-100 {
-  fill: #1E3554 !important;
-}
-
-.tech-blue .fill-gray-700,
-html.tech-blue .fill-gray-700 {
-  fill: #162D4A !important;
-}
-
-/* Tech Blue - Hover states */
-.tech-blue .hover\:bg-gray-50:hover,
-html.tech-blue .hover\:bg-gray-50:hover {
-  background-color: #1E3554 !important;
-}
-
-.tech-blue .hover\:bg-gray-100:hover,
-html.tech-blue .hover\:bg-gray-100:hover {
-  background-color: #1E3554 !important;
-}
-
-.tech-blue .hover\:bg-gray-600:hover,
-html.tech-blue .hover\:bg-gray-600:hover {
-  background-color: #2A4D6E !important;
-}
-
-.tech-blue .hover\:bg-gray-700:hover,
-html.tech-blue .hover\:bg-gray-700:hover {
-  background-color: #162D4A !important;
-}
-
-.tech-blue .hover\:text-gray-800:hover,
-html.tech-blue .hover\:text-gray-800:hover {
-  color: #B0D4FF !important;
-}
-
-.tech-blue .hover\:text-gray-200:hover,
-html.tech-blue .hover\:text-gray-200:hover {
-  color: #E0F2FF !important;
-}
-
-/* Dark theme - Session list selected state */
-.dark .dark\:bg-primary-900\/30,
-.dark .bg-primary-50 {
-  background-color: rgba(28, 100, 242, 0.2) !important;
-}
-
-.dark .dark\:text-primary-400,
-.dark .text-primary-600 {
-  color: #60A5FA !important;
-}
-
-/* Dark theme - New Chat and session list hover */
-.dark button:hover,
-.dark [class*="hover:bg-"]:hover,
-.dark .space-y-1 > div:hover,
-.dark .space-y-1 div:hover,
-.dark .rounded-md.px-2.py-2:hover,
-.dark [class*="rounded-md"][class*="px-2"]:hover {
-  background-color: #374151 !important;
-}
-
-/* Tech Blue - Session list selected state */
-.tech-blue .dark\:bg-primary-900\/30,
-.tech-blue .bg-primary-50 {
-  background-color: rgba(0, 180, 255, 0.25) !important;
-}
-
-.tech-blue .dark\:text-primary-400,
-.tech-blue .text-primary-600 {
-  color: #00B4FF !important;
-}
-
-/* Tech Blue - Indigo text */
-.tech-blue .text-indigo-600,
-html.tech-blue .text-indigo-600 {
-  color: #00B4FF !important;
-}
-
-/* Tech Blue - Welcome component */
-.tech-blue .text-gray-700,
-.tech-blue .dark\:text-gray-200,
-.tech-blue .dark\:text-gray-300,
-.tech-blue .text-gray-900,
-.tech-blue .dark\:text-gray-100,
-.tech-blue .text-gray-800,
-html.tech-blue .text-gray-700,
-html.tech-blue .dark\.text-gray-200,
-html.tech-blue .dark\.text-gray-300,
-html.tech-blue .text-gray-900,
-html.tech-blue .dark\.text-gray-100,
-html.tech-blue .text-gray-800 {
-  color: #B0D4FF !important;
-}
-
-.tech-blue .text-gray-500,
-.tech-blue .dark\:text-gray-400,
-html.tech-blue .text-gray-500,
-html.tech-blue .dark\.text-gray-400 {
-  color: #80B8E6 !important;
-}
-
-/* Tech Blue - Input labels */
-.tech-blue input::-webkit-input-placeholder,
-.tech-blue textarea::-webkit-input-placeholder {
-  color: #6090B8 !important;
-}
-
-/* Tech Blue - TemplateVarPanel */
-.tech-blue .bg-white,
-.tech-blue .dark\:bg-gray-800,
-.tech-blue .rounded-xl,
-html.tech-blue .bg-white,
-html.tech-blue .dark\.bg-gray-800,
-html.tech-blue .rounded-xl {
-  background-color: rgba(26, 48, 73, 0.9) !important;
-}
-
-.tech-blue .bg-indigo-25,
-.tech-blue .dark\:bg-indigo-900\/30,
-html.tech-blue .bg-indigo-25,
-html.tech-blue .dark\.bg-indigo-900\/30 {
-  background-color: rgba(74, 122, 158, 0.2) !important;
-}
-
-/* Tech Blue - Input fields */
-.tech-blue .bg-gray-50,
-.tech-blue .dark\:bg-gray-700,
-html.tech-blue .bg-gray-50,
-html.tech-blue .dark\.bg-gray-700 {
-  background-color: rgba(22, 45, 74, 0.9) !important;
-}
-
-/* Tech Blue - Theme dropdown */
-.tech-blue .theme-dropdown,
-html.tech-blue .theme-dropdown {
-  background-color: rgba(26, 48, 73, 0.95) !important;
-}
-
-/* Tech Blue - Sidebar */
-.tech-blue .border-r,
-html.tech-blue .border-r {
-  border-color: rgba(42, 77, 110, 0.5) !important;
-}
-
-.tech-blue .bg-indigo-25,
-.tech-blue .dark\:bg-indigo-900\/30,
-html.tech-blue .bg-indigo-25,
-html.tech-blue .dark\.bg-indigo-900\/30 {
-  background-color: rgba(74, 122, 158, 0.3) !important;
-}
-
-/* Tech Blue - Input fields */
-.tech-blue .bg-gray-50,
-.tech-blue .dark\:bg-gray-700,
-html.tech-blue .bg-gray-50,
-html.tech-blue .dark\.bg-gray-700 {
-  background-color: #162D4A !important;
-}
-
-/* Tech Blue - Global hover override using attribute selector */
-.tech-blue button:hover,
-.tech-blue [class*="hover:"]:hover,
-html.tech-blue button:hover,
-html.tech-blue [class*="hover:"]:hover {
-  background-color: #2A4D6E !important;
-}
-
-/* Tech Blue - Sidebar New Chat button specific */
-.tech-blue .shrink-0 button:hover,
-.tech-blue button[type="button"]:hover,
-.tech-blue button[class*="cursor-pointer"]:hover,
-html.tech-blue .shrink-0 button:hover,
-html.tech-blue button[type="button"]:hover,
-html.tech-blue button[class*="cursor-pointer"]:hover {
-  background-color: #2A4D6E !important;
-}
-
-/* Tech Blue - Sidebar session item hover */
-.tech-blue .space-y-1 > div:hover,
-.tech-blue .space-y-1 div:hover,
-.tech-blue .rounded-md.px-2.py-2:hover,
-.tech-blue [class*="rounded-md"][class*="px-2"]:hover,
-html.tech-blue .space-y-1 > div:hover,
-html.tech-blue .space-y-1 div:hover,
-html.tech-blue .rounded-md.px-2.py-2:hover,
-html.tech-blue [class*="rounded-md"][class*="px-2"]:hover {
-  background-color: #2A4D6E !important;
-}
-
-/* Tech Blue - Force hover override */
-.tech-blue div[onclick]:hover,
-.tech-blue [role="button"]:hover,
-.tech-blue .hover-bg-override:hover {
-  background-color: #2A4D6E !important;
-}
-
-/* Tech Blue - Catch all for elements with hover classes */
-.tech-blue [class*="hover:bg-"]:hover {
-  background-color: #2A4D6E !important;
-}
-
-/* Voice input animation */
+/* Voice Input Animation */
 @keyframes voice-pulse {
   0%, 100% {
     opacity: 1;
@@ -363,189 +80,31 @@ html.tech-blue [class*="rounded-md"][class*="px-2"]:hover {
   animation: voice-pulse 1s ease-in-out infinite;
 }
 
-/* CSS Utils */
-.h1 {
-  padding-bottom: 1.5rem;
-  line-height: 1.5;
-  font-size: 1.125rem;
-  color: #111928;
-}
-
-html.dark .h1,
-.dark .h1 {
-  color: #F9FAFB;
-}
-
-html.tech-blue .h1,
-.tech-blue .h1 {
-  color: #E0F2FF;
-}
-
-.h2 {
-  font-size: 14px;
-  font-weight: 500;
-  color: #111928;
-  line-height: 1.5;
-}
-
-html.dark .h2,
-.dark .h2 {
-  color: #F9FAFB;
-}
-
-html.tech-blue .h2,
-.tech-blue .h2 {
-  color: #B0D4FF;
-}
-
-.link {
-  @apply text-blue-600 cursor-pointer hover:opacity-80 transition-opacity duration-200 ease-in-out;
-}
-
-html.dark .link,
-.dark .link {
-  @apply text-blue-400;
-}
-
-html.tech-blue .link,
-.tech-blue .link {
-  color: #00D4FF !important;
-  text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
-}
-
-.text-gradient {
-  background: linear-gradient(91.58deg, #2250F2 -29.55%, #0EBCF3 75.22%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-fill-color: transparent;
-}
-
-html.tech-blue .text-gradient,
-.tech-blue .text-gradient {
-  background: linear-gradient(91.58deg, #0066FF -29.55%, #00D4FF 75.22%, #00FFE0 100%) !important;
-  -webkit-background-clip: text !important;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-fill-color: transparent;
-}
-
-/* Streamdown table download dropdown dark mode support */
+/* Streamdown Table Overrides */
 html.dark [data-streamdown="table-wrapper"] div[class*="bg-white"] {
-  background-color: rgb(31 41 55 / 1); /* bg-gray-800 */
-  border-color: rgb(55 65 81 / 1); /* border-gray-700 */
+  background-color: var(--surface);
+  border-color: var(--border);
 }
 
 html.dark [data-streamdown="table-wrapper"] div[class*="bg-white"] button {
-  color: rgb(209 213 219 / 1); /* text-gray-300 */
+  color: var(--text-secondary);
 }
 
 html.dark [data-streamdown="table-wrapper"] div[class*="bg-white"] button:hover {
-  background-color: rgb(55 65 81 / 1); /* hover:bg-gray-700 */
-  color: rgb(243 244 246 / 1); /* text-gray-100 */
+  background-color: var(--surface-hover);
+  color: var(--text);
 }
 
-/* Tech Blue theme streamdown support */
 html.tech-blue [data-streamdown="table-wrapper"] div[class*="bg-white"] {
-  background-color: rgb(15 25 50 / 0.9);
-  border-color: rgba(0, 212, 255, 0.2);
+  background-color: var(--surface);
+  border-color: var(--border);
 }
 
 html.tech-blue [data-streamdown="table-wrapper"] div[class*="bg-white"] button {
-  color: rgb(176 212 255 / 1);
+  color: var(--text-secondary);
 }
 
 html.tech-blue [data-streamdown="table-wrapper"] div[class*="bg-white"] button:hover {
-  background-color: rgba(0, 212, 255, 0.2);
-  color: rgb(224 242 255 / 1);
+  background-color: var(--surface-hover);
+  color: var(--text);
 }
-
-/* Theme toggle button styles */
-.theme-toggle-btn {
-  background-color: #E5E7EB;
-}
-
-.theme-toggle-btn:hover {
-  background-color: #D1D5DB;
-}
-
-html.dark .theme-toggle-btn {
-  background-color: #374151;
-}
-
-html.dark .theme-toggle-btn:hover {
-  background-color: #4B5563;
-}
-
-html.tech-blue .theme-toggle-btn {
-  background-color: rgba(0, 119, 153, 0.5);
-}
-
-html.tech-blue .theme-toggle-btn:hover {
-  background-color: rgba(0, 119, 153, 0.7);
-}
-
-/* Theme dropdown styles */
-.theme-dropdown {
-  background-color: #FFFFFF;
-  border: 1px solid #E5E7EB;
-}
-
-html.dark .theme-dropdown {
-  background-color: #1F2A37;
-  border-color: #374151;
-}
-
-html.tech-blue .theme-dropdown {
-  background-color: #0A1628;
-  border-color: rgba(0, 212, 255, 0.3);
-}
-
-/* Theme button styles */
-.theme-btn {
-  color: #374151;
-}
-
-.theme-btn:hover {
-  background-color: #F3F4F6;
-}
-
-html.dark .theme-btn {
-  color: #D1D5DB;
-}
-
-html.dark .theme-btn:hover {
-  background-color: #374151;
-}
-
-html.tech-blue .theme-btn {
-  color: #80DCFF;
-}
-
-html.tech-blue .theme-btn:hover {
-  background-color: rgba(0, 119, 153, 0.3);
-}
-
-/* Active theme button styles */
-.theme-btn-active {
-  background-color: #EBF5FF;
-  color: #1C64F2;
-}
-
-html.dark .theme-btn-active {
-  background-color: rgba(28, 100, 242, 0.2);
-  color: #60A5FA;
-}
-
-html.tech-blue .theme-btn-active {
-  background-color: rgba(0, 119, 153, 0.3);
-  color: #80DCFF;
-}
-
-.theme-btn-active-tech-blue {
-  background-color: rgba(0, 119, 153, 0.3);
-  color: #00D4FF;
-  text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
-}
-
-

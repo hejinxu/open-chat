@@ -71,7 +71,7 @@ export function ThemeToggleButton() {
           {getThemeIcon()}
         </button>
         {isDropdownOpen && (
-          <div className="absolute right-0 mt-2 w-36 theme-dropdown rounded-lg shadow-lg z-50">
+          <div className="absolute right-0 mt-2 w-36 bg-surface-elevated rounded-lg shadow-lg z-50 border border-border">
             <div className="py-1">
               <button
                 onClick={() => handleDropdownItemClick(THEME_MODES.LIGHT)}

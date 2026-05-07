@@ -20,7 +20,7 @@ import { TextToSpeech } from '../text-to-speech'
 function OperationBtn({ innerContent, onClick, className }: { innerContent: React.ReactNode, onClick?: () => void, className?: string }) {
   return (
     <div
-      className={`relative box-border flex items-center justify-center h-7 w-7 p-0.5 rounded-lg bg-white dark:bg-gray-700 cursor-pointer text-gray-500 dark:text-gray-400 hover:bg-gray-50 hover:text-gray-800 dark:hover:bg-gray-600 dark:hover:text-gray-200 ${className ?? ''}`}
+      className={`relative box-border flex items-center justify-center h-7 w-7 p-0.5 rounded-lg bg-surface cursor-pointer text-content-tertiary hover:bg-surface-hover hover:text-content ${className ?? ''}`}
       style={{ boxShadow: '0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -2px rgba(0, 0, 0, 0.05)' }}
       onClick={onClick && onClick}
     >
@@ -62,7 +62,7 @@ export const EditIconSolid: FC<{ className?: string }> = ({ className }) => {
 
 const IconWrapper: FC<{ children: React.ReactNode | string }> = ({ children }) => {
   return (
-    <div className="rounded-lg h-6 w-6 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-600">
+    <div className="rounded-lg h-6 w-6 flex items-center justify-center hover:bg-surface-hover">
       {children}
     </div>
   )
@@ -112,7 +112,7 @@ const Answer: FC<IAnswerProps> = ({
         content={isLike ? '取消赞同' : '取消反对'}
       >
         <div
-          className="relative box-border flex items-center justify-center h-7 w-7 p-0.5 rounded-lg bg-white cursor-pointer text-gray-500 hover:text-gray-800"
+          className="relative box-border flex items-center justify-center h-7 w-7 p-0.5 rounded-lg bg-surface cursor-pointer text-content-tertiary hover:text-content"
           style={{ boxShadow: '0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -2px rgba(0, 0, 0, 0.05)' }}
           onClick={async () => {
             await onFeedback?.(id, { rating: null })
@@ -201,7 +201,7 @@ const Answer: FC<IAnswerProps> = ({
             )}
         </div>
         <div className={`${s.answerWrap} max-w-[calc(100%-3rem)]`}>
-          <div className={`${s.answer} relative text-sm text-gray-900 dark:text-gray-100`}>
+          <div className={`${s.answer} relative text-sm text-content`}>
             <svg
               className="absolute left-0 top-0 w-2 h-3"
               viewBox="0 0 8 12"
@@ -211,10 +211,10 @@ const Answer: FC<IAnswerProps> = ({
             >
               <path
                 d="M1.03647 1.5547C0.59343 0.890144 1.06982 0 1.86852 0H8V12L1.03647 1.5547Z"
-                className="fill-gray-100 dark:fill-gray-700"
+                className="fill-light"
               />
             </svg>
-            <div className='ml-2 py-3 px-4 bg-gray-100 dark:bg-gray-700 rounded-tr-2xl rounded-b-2xl'>
+            <div className='ml-2 py-3 px-4 bg-surface-tertiary rounded-tr-2xl rounded-b-2xl'>
               {workflowProcess && (
                 <WorkflowProcess data={workflowProcess} hideInfo />
               )}

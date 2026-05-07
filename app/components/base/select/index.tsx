@@ -36,7 +36,7 @@ const Select: FC<ISelectProps> = ({
   disabled = false,
   onSelect,
   allowSearch = true,
-  bgClassName = 'bg-gray-100',
+  bgClassName = 'bg-surface-hover',
 }) => {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -71,10 +71,10 @@ const Select: FC<ISelectProps> = ({
         }
       }}>
       <div className={classNames('relative')}>
-        <div className='group text-gray-800'>
+        <div className='group text-content'>
           {allowSearch
             ? <Combobox.Input
-              className={`w-full rounded-lg border-0 ${bgClassName} py-1.5 pl-3 pr-10 shadow-sm sm:text-sm sm:leading-6 focus-visible:outline-none focus-visible:bg-gray-200 group-hover:bg-gray-200 cursor-not-allowed`}
+              className={`w-full rounded-lg border-0 ${bgClassName} py-1.5 pl-3 pr-10 shadow-sm sm:text-sm sm:leading-6 focus-visible:outline-none focus-visible:bg-surface-hover group-hover:bg-surface-hover cursor-not-allowed`}
               onChange={(event) => {
                 if (!disabled) { setQuery(event.target.value) }
               }}
@@ -84,10 +84,10 @@ const Select: FC<ISelectProps> = ({
               () => {
                 if (!disabled) { setOpen(!open) }
               }
-            } className={`flex items-center h-9 w-full rounded-lg border-0 ${bgClassName} py-1.5 pl-3 pr-10 shadow-sm sm:text-sm sm:leading-6 focus-visible:outline-none focus-visible:bg-gray-200 group-hover:bg-gray-200`}>
+            } className={`flex items-center h-9 w-full rounded-lg border-0 ${bgClassName} py-1.5 pl-3 pr-10 shadow-sm sm:text-sm sm:leading-6 focus-visible:outline-none focus-visible:bg-surface-hover group-hover:bg-surface-hover`}>
               {selectedItem?.name}
             </Combobox.Button>}
-          <Combobox.Button className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-2 focus:outline-none group-hover:bg-gray-200" onClick={
+          <Combobox.Button className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-2 focus:outline-none group-hover:bg-surface-hover" onClick={
             () => {
               if (!disabled) { setOpen(!open) }
             }
@@ -97,15 +97,15 @@ const Select: FC<ISelectProps> = ({
         </div>
 
         {filteredItems.length > 0 && (
-          <Combobox.Options className="absolute z-10 mt-1 px-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg border-gray-200 border-[0.5px] focus:outline-none sm:text-sm">
+          <Combobox.Options className="absolute z-10 mt-1 px-1 max-h-60 w-full overflow-auto rounded-md bg-surface-elevated py-1 text-base shadow-lg border border-[0.5px] focus:outline-none sm:text-sm">
             {filteredItems.map((item: Item) => (
               <Combobox.Option
                 key={item.value}
                 value={item}
                 className={({ active }: { active: boolean }) =>
                   classNames(
-                    'relative cursor-default select-none py-2 pl-3 pr-9 rounded-lg hover:bg-gray-100 text-gray-700',
-                    active ? 'bg-gray-100' : '',
+                    'relative cursor-default select-none py-2 pl-3 pr-9 rounded-lg hover:bg-surface-hover text-content-secondary',
+                    active ? 'bg-surface-hover' : '',
                   )
                 }
               >
@@ -115,7 +115,7 @@ const Select: FC<ISelectProps> = ({
                     {selected && (
                       <span
                         className={classNames(
-                          'absolute inset-y-0 right-0 flex items-center pr-4 text-gray-700',
+                          'absolute inset-y-0 right-0 flex items-center pr-4 text-content-secondary',
                         )}
                       >
                         <CheckIcon className="h-5 w-5" aria-hidden="true" />
@@ -159,11 +159,11 @@ const SimpleSelect: FC<ISelectProps> = ({
       }}
     >
       <div className="relative h-9">
-        <Listbox.Button className={`w-full h-full rounded-lg border-0 bg-gray-100 py-1.5 pl-3 pr-10 shadow-sm sm:text-sm sm:leading-6 focus-visible:outline-none focus-visible:bg-gray-200 group-hover:bg-gray-200 cursor-pointer ${className}`}>
+        <Listbox.Button className={`w-full h-full rounded-lg border-0 bg-surface-hover py-1.5 pl-3 pr-10 shadow-sm sm:text-sm sm:leading-6 focus-visible:outline-none focus-visible:bg-surface-hover group-hover:bg-surface-hover cursor-pointer ${className}`}>
           <span className="block truncate text-left">{selectedItem?.name}</span>
           <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
             <ChevronDownIcon
-              className="h-5 w-5 text-gray-400"
+              className="h-5 w-5 text-content-quaternary"
               aria-hidden="true"
             />
           </span>
@@ -174,12 +174,12 @@ const SimpleSelect: FC<ISelectProps> = ({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <Listbox.Options className="absolute z-10 mt-1 px-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg border-gray-200 border-[0.5px] focus:outline-none sm:text-sm">
+          <Listbox.Options className="absolute z-10 mt-1 px-1 max-h-60 w-full overflow-auto rounded-md bg-surface-elevated py-1 text-base shadow-lg border border-[0.5px] focus:outline-none sm:text-sm">
             {items.map((item: Item) => (
               <Listbox.Option
                 key={item.value}
                 className={({ active }) =>
-                  `relative cursor-pointer select-none py-2 pl-3 pr-9 rounded-lg hover:bg-gray-100 text-gray-700 ${active ? 'bg-gray-100' : ''
+                  `relative cursor-pointer select-none py-2 pl-3 pr-9 rounded-lg hover:bg-surface-hover text-content-secondary ${active ? 'bg-surface-hover' : ''
                   }`
                 }
                 value={item}
@@ -191,7 +191,7 @@ const SimpleSelect: FC<ISelectProps> = ({
                     {selected && (
                       <span
                         className={classNames(
-                          'absolute inset-y-0 right-0 flex items-center pr-4 text-gray-700',
+                          'absolute inset-y-0 right-0 flex items-center pr-4 text-content-secondary',
                         )}
                       >
                         <CheckIcon className="h-5 w-5" aria-hidden="true" />

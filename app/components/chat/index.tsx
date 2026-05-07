@@ -282,7 +282,7 @@ const Chat: FC<IChatProps> = ({
       {
         !isHideSendInput && (
           <div className='absolute z-10 bottom-0 left-0 right-0 pc:w-[794px] max-w-full mx-auto px-3.5'>
-            <div className='bg-white dark:bg-gray-800 border-[1.5px] border-gray-200 dark:border-gray-700 rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.25)] dark:shadow-[0_0_15px_rgba(59,130,246,0.15)]'>
+            <div className='bg-surface border-[1.5px] border-border rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.25)]'>
               <div className='px-2 py-[7px] min-h-[44px]'>
                 {
                   visionConfig?.enabled && (
@@ -293,7 +293,7 @@ const Chat: FC<IChatProps> = ({
                           onUpload={onUpload}
                           disabled={files.length >= visionConfig.number_limits}
                         />
-                        <div className='mx-1 w-[1px] h-4 bg-black/5 dark:bg-white/10' />
+                        <div className='mx-1 w-[1px] h-4 bg-border-subtle' />
                       </div>
                     </>
                   )
@@ -311,7 +311,7 @@ const Chat: FC<IChatProps> = ({
                 }
                 <Textarea
                   className={`
-                    block w-full px-2 leading-5 max-h-none text-base text-gray-700 dark:text-gray-300 outline-none appearance-none resize-none bg-transparent
+                    block w-full px-2 leading-5 max-h-none text-base text-content-tertiary outline-none appearance-none resize-none bg-transparent
                     ${visionConfig?.enabled && 'pl-12'}
                   `}
                   value={query}
@@ -352,12 +352,12 @@ const Chat: FC<IChatProps> = ({
                     whisperModel={whisperModel}
                     onWhisperModelChange={handleWhisperModelChange}
                   />
-                  {query.trim().length > 0 && <div className={`${s.count} text-sm bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 rounded`}>{query.trim().length}</div>}
+                  {query.trim().length > 0 && <div className={`${s.count} text-sm bg-surface-tertiary text-content-tertiary px-2 rounded`}>{query.trim().length}</div>}
                 </div>
                 {isResponding && onStopResponding
                   ? (
                     <div
-                      className="flex items-center justify-center w-8 h-8 cursor-pointer rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      className="flex items-center justify-center w-8 h-8 cursor-pointer rounded-md text-red-500 hover:bg-red-50 transition-colors"
                       onClick={onStopResponding}
                       title="停止响应"
                     >

@@ -53,13 +53,13 @@ const Tool: FC<Props> = ({
   const icon = getIcon(toolName, allToolIcons) as any
   return (
     <div>
-      <div className={cn(!isShowDetail && 'shadow-sm', !isShowDetail && 'inline-block', 'max-w-full overflow-x-auto bg-white rounded-md')}>
+      <div className={cn(!isShowDetail && 'shadow-sm', !isShowDetail && 'inline-block', 'max-w-full overflow-x-auto bg-surface rounded-md')}>
         <div
           className={cn('flex items-center h-7 px-2 cursor-pointer')}
           onClick={() => setIsShowDetail(!isShowDetail)}
         >
           {!isFinished && (
-            <Loading02 className='w-3 h-3 text-gray-500 animate-spin shrink-0' />
+            <Loading02 className='w-3 h-3 text-content-tertiary animate-spin shrink-0' />
           )}
           {isFinished && !isShowDetail && (
             <CheckCircle className='w-3 h-3 text-[#12B76A] shrink-0' />
@@ -67,17 +67,17 @@ const Tool: FC<Props> = ({
           {isFinished && isShowDetail && (
             icon
           )}
-          <span className='mx-1 text-xs font-medium text-gray-500 shrink-0'>
+          <span className='mx-1 text-xs font-medium text-content-tertiary shrink-0'>
             {t(`tools.thought.${isFinished ? 'used' : 'using'}`)}
           </span>
           <span
-            className='text-xs font-medium text-gray-700 truncate'
+            className='text-xs font-medium text-content-secondary truncate'
             title={toolName}
           >
             {toolName}
           </span>
           <ChevronDown
-            className={cn(isShowDetail && 'rotate-180', 'ml-1 w-3 h-3 text-gray-500 select-none cursor-pointer shrink-0')}
+            className={cn(isShowDetail && 'rotate-180', 'ml-1 w-3 h-3 text-content-tertiary select-none cursor-pointer shrink-0')}
           />
         </div>
         {isShowDetail && (

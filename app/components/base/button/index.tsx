@@ -22,13 +22,16 @@ const Button: FC<IButtonProps> = ({
   let style = 'cursor-pointer'
   switch (type) {
     case 'link':
-      style = disabled ? 'border-solid border border-gray-200 bg-gray-200 cursor-not-allowed text-gray-800' : 'border-solid border border-gray-200 cursor-pointer text-blue-600 bg-white hover:shadow-sm hover:border-gray-300'
+      style = disabled ? 'border-solid border border bg-surface-tertiary cursor-not-allowed text-content-secondary' : 'border-solid border border cursor-pointer text-content-accent bg-surface hover:shadow-sm hover:border-strong'
       break
     case 'primary':
       style = (disabled || loading) ? 'bg-primary-600/75 cursor-not-allowed text-white' : 'bg-primary-600 hover:bg-primary-600/75 hover:shadow-md cursor-pointer text-white hover:shadow-sm'
       break
+    case 'accent':
+      style = disabled ? 'border-solid border border-border-accent bg-surface-tertiary cursor-not-allowed text-content-secondary' : 'border-solid border border-border-accent cursor-pointer text-content-accent bg-surface hover:shadow-sm hover:border-accent-hover'
+      break
     default:
-      style = disabled ? 'border-solid border border-gray-200 bg-gray-200 cursor-not-allowed text-gray-800' : 'border-solid border border-gray-200 cursor-pointer text-gray-500 hover:bg-white hover:shadow-sm hover:border-gray-300'
+      style = disabled ? 'border-solid border border bg-surface-tertiary cursor-not-allowed text-content-secondary' : 'border-solid border border cursor-pointer text-content-tertiary hover:bg-surface hover:shadow-sm hover:border-strong'
       break
   }
 

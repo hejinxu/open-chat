@@ -25,25 +25,6 @@ function getSystemTheme(): 'light' | 'dark' {
   return 'light'
 }
 
-function applyBodyStyles(resolvedTheme: 'light' | 'dark' | 'tech-blue') {
-  const body = document.body
-  if (!body) { return }
-
-  switch (resolvedTheme) {
-    case 'dark':
-      body.style.backgroundColor = '#111928'
-      body.style.color = '#F9FAFB'
-      break
-    case 'tech-blue':
-      body.style.backgroundColor = '#080F23'
-      body.style.color = '#E0F2FF'
-      break
-    default:
-      body.style.backgroundColor = '#FFFFFF'
-      body.style.color = '#111928'
-  }
-}
-
 export function useTheme(): UseThemeReturn {
   const [theme, setThemeState] = useState<ThemeMode>(DEFAULT_THEME)
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark' | 'tech-blue'>(() => {
@@ -92,8 +73,6 @@ export function useTheme(): UseThemeReturn {
       const root = window.document.documentElement
       root.classList.remove('light', 'dark', 'tech-blue')
       root.classList.add(newResolvedTheme)
-
-      applyBodyStyles(newResolvedTheme)
     }
 
     applyTheme()

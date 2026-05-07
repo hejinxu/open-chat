@@ -21,6 +21,27 @@ Pre-commit hook runs `pnpm lint-staged` (ESLint on staged `.ts`/`.tsx` files).
 - **Config**: `config/index.ts` holds `APP_ID`, `API_KEY`, `API_URL` from env vars
 - **WS Server**: Standalone Node.js Socket.IO server in `ws-server/` — runs separately from Next.js
 
+### Theme System (CSS Custom Properties)
+- **方案**: CSS Custom Properties，每个主题一个 CSS 变量文件
+- **目录结构**:
+  ```
+  app/styles/themes/
+  ├── light.css       ← :root 默认变量
+  ├── dark.css        ← .dark 变量覆盖
+  └── tech-blue.css   ← .tech-blue 变量覆盖
+  ```
+- **工作原理**: Tailwind 配置将语义化类名映射到 CSS 变量（`bg-surface` → `var(--surface)`），`useTheme` Hook 切换 `<html>` class 激活对应变量
+- **添加新主题步骤**:
+  1. `app/styles/themes/` 创建新 CSS 文件（如 `ocean.css`），定义 `.ocean { --xxx: ... }`
+  2. `globals.css` 添加 `@import './themes/ocean.css'`
+  3. `config/theme.ts` 添加 `OCEAN: 'ocean'`
+  4. `hooks/use-theme.ts` 的 `toggleTheme` 循环中添加
+  5. `app/components/theme-toggle-button/index.tsx` 添加选项
+- **语义化类名**: `bg-surface`（背景）、`text-content`（文字）、`border-border`（边框）、`accent`（强调色）
+- **弹出层**: 使用 `bg-surface-elevated`（完全不透明），避免半透明 `bg-surface` 导致透视
+- **Focus 样式**: 通过 `--ring` CSS 变量控制，内联 `style={{ '--tw-ring-color': 'var(--ring)' }}`
+- **文档**: `docs/添加新主题开发指南.md`
+
 ### WS Server Architecture
 - **Framework**: Socket.IO（选择理由：命名空间隔离多服务、房间机制支持精准推送、自动重连、中间件支持）
 - **Handler 注册**：`handlers/` 目录下的 `.mjs` 文件自动加载注册，每个 Handler 实现 `{ name, namespace, init?, onConnection, disconnect }` 接口
@@ -101,6 +122,7 @@ Engine switching: `voice-settings.tsx` → `VoiceInput` component in `voice-inpu
 - **Imports**: Use `@/*` alias (maps to project root). Absolute imports preferred.
 - **Components**: `'use client'` required for client components. Server components are the default in App Router.
 - **Styling**: Tailwind-first. SCSS only for markdown/code. `classnames` or `tailwind-merge` for conditional classes.
+- **Theme classes**: Use semantic classes (`bg-surface`, `text-content`, `border-border`). Never use `dark:` prefix or hardcoded colors.
 - **Build**: `next.config.js` disables ESLint and TypeScript errors during build (`ignoreDuringBuilds: true`).
 - **Docker**: `docker build . -t <repo>/webapp-conversation:latest` then `docker run -p 3000:3000` — uses standalone output mode.
 - **After coding**: 每次编写完代码后，主动询问用户是否需要将相关业务规则、设计决策或注意事项更新到 AGENTS.md，以便后续会话保持上下文一致。

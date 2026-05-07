@@ -83,6 +83,24 @@ const CodeEditor: FC<Props> = ({
         'editor.background': '#111827',
       },
     })
+
+    monaco.editor.defineTheme('tech-blue-blur-theme', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': 'rgba(30, 53, 84, 0.85)',
+      },
+    })
+
+    monaco.editor.defineTheme('tech-blue-focus-theme', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': 'rgba(22, 45, 74, 0.9)',
+      },
+    })
   }
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
@@ -128,7 +146,7 @@ const CodeEditor: FC<Props> = ({
   })()
 
   const currentTheme = React.useMemo(() => {
-    const prefix = resolvedTheme === 'dark' ? 'dark' : 'light'
+    const prefix = resolvedTheme === 'dark' ? 'dark' : resolvedTheme === 'tech-blue' ? 'tech-blue' : 'light'
     return isFocus ? `${prefix}-focus-theme` : `${prefix}-blur-theme`
   }, [isFocus, resolvedTheme])
 

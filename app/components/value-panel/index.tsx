@@ -21,10 +21,10 @@ const TemplateVarPanel: FC<ITemplateVarPanelProps> = ({
   isFold,
 }) => {
   return (
-    <div className={cn(isFold ? 'border border-indigo-100 dark:border-indigo-900' : s.boxShodow, className, 'rounded-xl bg-white dark:bg-gray-800')}>
+    <div className={cn(isFold ? 'border border-border-subtle' : s.boxShodow, className, 'rounded-xl bg-surface')}>
       {/* header */}
       <div
-        className={cn(isFold && 'rounded-b-xl', 'rounded-t-xl px-6 py-4 bg-indigo-25 dark:bg-indigo-900/30 text-xs')}
+        className={cn(isFold && 'rounded-b-xl', 'rounded-t-xl px-6 py-4 bg-accent-bg text-xs')}
       >
         {header}
       </div>
