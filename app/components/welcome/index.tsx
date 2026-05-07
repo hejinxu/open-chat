@@ -290,7 +290,7 @@ const Welcome: FC<IWelcomeProps> = ({
             <PromptTemplate html={highLightPromoptTemplate} />
             {isFold && (
               <div className='flex items-center justify-between mt-3 border-t border-indigo-100 pt-4 text-xs text-indigo-600'>
-                <span className='text-gray-700'>{t('app.chat.configStatusDes')}</span>
+                <span>{t('app.chat.configStatusDes')}</span>
                 <EditBtn onClick={() => setIsFold(false)} />
               </div>
             )}
