@@ -704,6 +704,8 @@ const Main: FC<IMainProps> = () => {
         onCurrentIdChange={handleConversationIdChange}
         currentId={currConversationId}
         copyRight={APP_INFO.copyright || APP_INFO.title}
+        isMobile={isMobile}
+        title={APP_INFO.title}
       />
     )
   }
@@ -715,12 +717,11 @@ const Main: FC<IMainProps> = () => {
   return (
     <div className='bg-surface'>
       <Header
-        title={APP_INFO.title}
         isMobile={isMobile}
         onShowSideBar={showSidebar}
         onCreateNewChat={() => handleConversationIdChange('-1')}
       />
-      <div className="flex rounded-t-2xl bg-surface overflow-hidden">
+      <div className="flex bg-surface overflow-hidden">
         {/* sidebar */}
         {!isMobile && renderSidebar()}
         {isMobile && isShowSidebar && (
@@ -731,7 +732,7 @@ const Main: FC<IMainProps> = () => {
           </div>
         )}
         {/* main */}
-        <div className='flex-grow flex flex-col h-[calc(100vh_-_3rem)] overflow-hidden'>
+        <div className='flex-grow flex flex-col h-screen overflow-hidden'>
           <ConfigSence
             conversationName={conversationName}
             hasSetInputs={hasSetInputs}

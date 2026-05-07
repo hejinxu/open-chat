@@ -7,7 +7,8 @@ import {
 } from '@heroicons/react/24/outline'
 import { ChatBubbleOvalLeftEllipsisIcon as ChatBubbleOvalLeftEllipsisSolidIcon } from '@heroicons/react/24/solid'
 import Button from '@/app/components/base/button'
-// import Card from './card'
+import AppIcon from '@/app/components/base/app-icon'
+import { ThemeToggleButton } from '@/app/components/theme-toggle-button'
 import type { ConversationItem } from '@/types/app'
 
 function classNames(...classes: any[]) {
@@ -21,6 +22,8 @@ export interface ISidebarProps {
   currentId: string
   onCurrentIdChange: (id: string) => void
   list: ConversationItem[]
+  isMobile?: boolean
+  title?: string
 }
 
 const Sidebar: FC<ISidebarProps> = ({
@@ -28,12 +31,24 @@ const Sidebar: FC<ISidebarProps> = ({
   currentId,
   onCurrentIdChange,
   list,
+  isMobile,
+  title,
 }) => {
   const { t } = useTranslation()
   return (
     <div
-      className="shrink-0 flex flex-col overflow-y-auto bg-surface pc:w-[244px] tablet:w-[192px] mobile:w-[240px]  border-r border-border-subtle tablet:h-[calc(100vh_-_3rem)] mobile:h-screen"
+      className="shrink-0 flex flex-col overflow-y-auto bg-surface pc:w-[244px] tablet:w-[192px] mobile:w-[240px] border-r border-border-subtle h-screen"
     >
+      {!isMobile && (
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <div className="flex items-center space-x-2">
+            <AppIcon size="small" />
+            <div className="text-sm text-content font-bold">{title}</div>
+          </div>
+          <ThemeToggleButton />
+        </div>
+      )}
+
       {list.length < MAX_CONVERSATION_LENTH && (
         <div className="flex flex-shrink-0 p-4 !pb-0">
           <Button
