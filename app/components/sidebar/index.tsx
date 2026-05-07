@@ -39,15 +39,13 @@ const Sidebar: FC<ISidebarProps> = ({
     <div
       className="shrink-0 flex flex-col overflow-y-auto bg-surface pc:w-[244px] tablet:w-[192px] mobile:w-[240px] border-r border-border-subtle h-screen"
     >
-      {!isMobile && (
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <div className="flex items-center space-x-2">
-            <AppIcon size="small" />
-            <div className="text-sm text-content font-bold">{title}</div>
-          </div>
-          <ThemeToggleButton />
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <div className="flex items-center space-x-2">
+          <AppIcon size="small" />
+          <div className="text-sm text-content font-bold">{title}</div>
         </div>
-      )}
+        <ThemeToggleButton />
+      </div>
 
       {list.length < MAX_CONVERSATION_LENTH && (
         <div className="flex flex-shrink-0 p-4 !pb-0">
