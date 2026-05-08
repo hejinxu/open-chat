@@ -16,8 +16,8 @@ const LocaleLayout = async ({
       <body className="h-full" suppressHydrationWarning>
         <DisableDevTools />
         <ThemeProvider>
-          <div className="overflow-x-auto" suppressHydrationWarning>
-            <div className="w-screen h-screen min-w-[300px]">
+          <div className="overflow-x-hidden" suppressHydrationWarning>
+            <div className="w-full h-screen min-w-[300px]">
               {children}
             </div>
           </div>
