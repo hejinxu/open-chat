@@ -60,4 +60,9 @@
   /* Gradient */
   --gradient-start: #2250F2;
   --gradient-end: #0EBCF3;
+
+  /* Scrollbar */
+  --scrollbar-track: #F3F4F6;
+  --scrollbar-thumb: #D1D5DB;
+  --scrollbar-thumb-hover: #9CA3AF;
 }
