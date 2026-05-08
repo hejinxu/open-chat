@@ -1,0 +1,7 @@
+.wrap {
+  background-color: var(--surface);
+}
+
+.wrapHoverEffect:hover{
+  box-shadow: var(--shadow-elevated);
+}

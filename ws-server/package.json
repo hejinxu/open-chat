@@ -1,0 +1,18 @@
+{
+  "name": "ws-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "download-whisper": "node scripts/download-whisper-model.js",
+    "download-funasr": "node scripts/download-funasr-model.js"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "onnxruntime-common": "^1.24.3",
+    "opencc-js": "^1.0.5",
+    "socket.io": "^4.8.3"
+  }
+}

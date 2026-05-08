@@ -1,0 +1,4 @@
+packages:
+  - 'webapp'
+  - 'ws-server'
+  - 'chat-component-*'

@@ -1,0 +1,20 @@
+{
+  "name": "open-chat",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "dev:webapp": "pnpm --filter webapp dev",
+    "dev:ws": "pnpm --filter ws-server dev",
+    "build": "pnpm --filter webapp build",
+    "start": "pnpm --filter webapp start",
+    "lint": "pnpm --parallel -r run lint",
+    "fix": "pnpm --parallel -r run fix",
+    "download-whisper": "pnpm --filter ws-server download-whisper",
+    "download-funasr": "pnpm --filter ws-server download-funasr"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10"
+  }
+}

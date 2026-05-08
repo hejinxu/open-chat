@@ -1,0 +1,68 @@
+/* Dark Theme */
+.dark {
+  /* Backgrounds */
+  --surface: #1F2A37;
+  --surface-secondary: #1F2A37;
+  --surface-tertiary: #374151;
+  --surface-hover: #374151;
+  --surface-active: rgba(28, 100, 242, 0.2);
+  --surface-elevated: #374151;
+
+  /* Text */
+  --text: #F9FAFB;
+  --text-secondary: #D1D5DB;
+  --text-tertiary: #9CA3AF;
+  --text-quaternary: #6B7280;
+  --text-accent: #60A5FA;
+  --text-on-accent: #FFFFFF;
+
+  /* Borders */
+  --border: #4B5563;
+  --border-subtle: #374151;
+  --border-strong: #6B7280;
+
+  /* Accent */
+  --accent: #60A5FA;
+  --accent-hover: #93BBFD;
+  --accent-bg: rgba(28, 100, 242, 0.2);
+  --accent-bg-hover: rgba(28, 100, 242, 0.3);
+
+  /* Focus ring */
+  --ring: #60A5FA;
+
+  /* User message bubble */
+  --user-bubble: #374151;
+  --user-bubble-text: #F9FAFB;
+
+  /* Fill (SVG) */
+  --fill: #9CA3AF;
+  --fill-light: #6B7280;
+  --fill-on-accent: #FFFFFF;
+
+  /* Shadow */
+  --shadow-card: 0px 12px 16px -4px rgba(0, 0, 0, 0.3), 0px 4px 6px -2px rgba(0, 0, 0, 0.2);
+  --shadow-elevated: 0px 4px 6px -1px rgba(0, 0, 0, 0.3), 0px 2px 4px -2px rgba(0, 0, 0, 0.2);
+
+  /* Body */
+  --body-bg: #111928;
+  --body-text: #F9FAFB;
+
+  /* Loading animation */
+  --dot-color: #9CA3AF;
+  --dot-color-faded: rgba(156, 163, 175, 0.3);
+  --avatar-color: #60A5FA;
+  --avatar-color-faded: rgba(96, 165, 250, 0.3);
+
+  /* Link */
+  --link: #60A5FA;
+  --link-hover: #93BBFD;
+
+  /* Gradient */
+  --gradient-start: #60A5FA;
+  --gradient-end: #38BDF8;
+
+  /* Scrollbar */
+  --scrollbar-track: #1F2A37;
+  --scrollbar-thumb: #4B5563;
+  --scrollbar-thumb-hover: #6B7280;
+}

@@ -1,0 +1,31 @@
+.margin-view-overlays {
+  padding-left: 10px;
+}
+
+/* hide readonly tooltip */
+.monaco-editor-overlaymessage {
+  display: none !important;
+}
+
+/* 隐藏 Monaco Editor 的命令面板和快速访问组件 */
+.quick-input-widget,
+.quick-input-widget * {
+  display: none !important;
+  pointer-events: none !important;
+  user-select: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* 隐藏任何开发工具相关的指示器 */
+.devtools-indicator,
+.devtools-indicator * {
+  display: none !important;
+}
+
+/* 隐藏 Monaco Editor 中的任何设置相关的菜单和选项 */
+.monaco-menu-container,
+.monaco-menu,
+.monaco-menu * {
+  display: none !important;
+}

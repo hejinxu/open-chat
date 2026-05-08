@@ -1,0 +1,68 @@
+/* Tech Blue Theme */
+.tech-blue {
+  /* Backgrounds */
+  --surface: rgba(26, 48, 73, 0.9);
+  --surface-secondary: rgba(30, 53, 84, 0.85);
+  --surface-tertiary: rgba(30, 53, 84, 0.95);
+  --surface-hover: #2A4D6E;
+  --surface-active: rgba(0, 150, 255, 0.2);
+  --surface-elevated: #0A1628;
+
+  /* Text */
+  --text: #E0F2FF;
+  --text-secondary: #B0D4FF;
+  --text-tertiary: #80B8E6;
+  --text-quaternary: #6090B8;
+  --text-accent: #00B4FF;
+  --text-on-accent: #FFFFFF;
+
+  /* Borders */
+  --border: #3D6A8A;
+  --border-subtle: #2A4D6E;
+  --border-strong: #5A8AB5;
+
+  /* Accent */
+  --accent: #00B4FF;
+  --accent-hover: #00D4FF;
+  --accent-bg: rgba(0, 150, 255, 0.2);
+  --accent-bg-hover: rgba(0, 180, 255, 0.3);
+
+  /* Focus ring */
+  --ring: #00B4FF;
+
+  /* User message bubble */
+  --user-bubble: rgba(0, 180, 255, 0.2);
+  --user-bubble-text: #E0F2FF;
+
+  /* Fill (SVG) */
+  --fill: #80B8E6;
+  --fill-light: #6090B8;
+  --fill-on-accent: #FFFFFF;
+
+  /* Shadow */
+  --shadow-card: 0px 12px 16px -4px rgba(0, 0, 0, 0.4), 0px 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0px 4px 6px -1px rgba(0, 0, 0, 0.4), 0px 2px 4px -2px rgba(0, 0, 0, 0.3);
+
+  /* Body */
+  --body-bg: rgba(36, 62, 92, 0.85);
+  --body-text: #E0F2FF;
+
+  /* Loading animation */
+  --dot-color: #80B8E6;
+  --dot-color-faded: rgba(128, 184, 230, 0.3);
+  --avatar-color: #00B4FF;
+  --avatar-color-faded: rgba(0, 180, 255, 0.3);
+
+  /* Link */
+  --link: #00D4FF;
+  --link-hover: #00FFE0;
+
+  /* Gradient */
+  --gradient-start: #0066FF;
+  --gradient-end: #00D4FF;
+
+  /* Scrollbar */
+  --scrollbar-track: #0A1628;
+  --scrollbar-thumb: #2A4D6E;
+  --scrollbar-thumb-hover: #3D6A8A;
+}
