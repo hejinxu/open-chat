@@ -129,18 +129,7 @@ docker run -p 3000:3000 webapp-conversation:latest
 │   └── voice-input.ts            # 语音配置常量
 ├── i18n/                         # 多语言文件
 ├── service/                      # API 服务层
-├── ws-server/                    # WebSocket 服务（Socket.IO）
-│   ├── server.mjs                # 入口（Socket.IO + Handler 注册）
-│   ├── handlers/                 # 服务 Handler
-│   │   ├── speech.mjs            # 语音识别
-│   │   └── push.mjs              # 后端推送（预留）
-│   ├── lib/                      # 公共库
-│   │   ├── model-loader.mjs      # Whisper 模型加载
-│   │   ├── funasr.mjs            # FunASR sidecar
-│   │   └── audio-utils.mjs       # 音频工具
-│   └── package.json
 ├── stores/                       # Zustand 状态管理
-├── docs/                         # 文档
 └── scripts/                      # 工具脚本
 ```
 
@@ -177,4 +166,4 @@ docker run -p 3000:3000 webapp-conversation:latest
 4. 在 `hooks/use-theme.ts` 的 `toggleTheme` 循环中添加
 5. 在 `app/components/theme-toggle-button/index.tsx` 添加选项
 
-详细文档见 `docs/添加新主题开发指南.md`
+详细文档见 `../docs/添加新主题开发指南.md`
