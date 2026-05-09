@@ -38,7 +38,7 @@ const Welcome: FC<IWelcomeProps> = ({
   onInputsChange,
 }) => {
   const { t } = useTranslation()
-  const hasVar = promptConfig.prompt_variables.length > 0
+  const hasVar = (promptConfig?.prompt_variables?.length || 0) > 0
   const [isFold, setIsFold] = useState<boolean>(true)
   const [inputs, setInputs] = useState<Record<string, any>>((() => {
     if (hasSetInputs) { return savedInputs }
@@ -53,18 +53,20 @@ const Welcome: FC<IWelcomeProps> = ({
   })())
   useEffect(() => {
     if (!savedInputs) {
-      const res: Record<string, any> = {}
-      if (promptConfig) {
-        promptConfig.prompt_variables.forEach((item) => {
-          res[item.key] = ''
-        })
-      }
-      setInputs(res)
+      setInputs((prev) => {
+        const next: Record<string, any> = {}
+        if (promptConfig) {
+          promptConfig.prompt_variables.forEach((item) => {
+            next[item.key] = prev?.[item.key] ?? ''
+          })
+        }
+        return next
+      })
     }
     else {
       setInputs(savedInputs)
     }
-  }, [savedInputs])
+  }, [savedInputs, promptConfig?.prompt_variables])
 
   const highLightPromoptTemplate = (() => {
     if (!promptConfig) { return '' }
@@ -173,13 +175,16 @@ const Welcome: FC<IWelcomeProps> = ({
   }
 
   const canChat = () => {
-    const inputLens = Object.values(inputs).length
-    const promptVariablesLens = promptConfig.prompt_variables.length
-    const emptyInput = inputLens < promptVariablesLens || Object.entries(inputs).filter(([k, v]) => {
-      const isRequired = promptConfig.prompt_variables.find(item => item.key === k)?.required ?? true
-      return isRequired && v === ''
-    }).length > 0
-    if (emptyInput) {
+    const missingRequired = Object.entries(inputs).filter(([k, v]) => {
+      const variable = promptConfig.prompt_variables.find(item => item.key === k)
+      const isRequired = variable?.required ?? false
+      return isRequired && (!v && v !== 0)
+    })
+    // Also check for required variables not present in inputs
+    const missingKeys = promptConfig.prompt_variables
+      .filter(v => v.required && !(v.key in inputs))
+      .map(v => v.key)
+    if (missingRequired.length > 0 || missingKeys.length > 0) {
       logError(t('app.errorMessage.valueOfVarRequired'))
       return false
     }
@@ -305,7 +310,7 @@ const Welcome: FC<IWelcomeProps> = ({
   }
 
   const renderHasSetInputsPrivate = () => {
-    if (!canEditInputs || !hasVar) { return null }
+    if (!hasVar) { return null }
 
     return (
       <TemplateVarPanel
@@ -328,7 +333,7 @@ const Welcome: FC<IWelcomeProps> = ({
   }
 
   const renderHasSetInputs = () => {
-    if ((!isPublicVersion && !canEditInputs) || !hasVar) { return null }
+    if (!hasVar) { return null }
 
     return (
       <div

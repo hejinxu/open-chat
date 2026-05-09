@@ -61,25 +61,10 @@ export interface MessageMore {
 export interface IChatItem {
   id: string
   content: string
-  /**
-   * Specific message type
-   */
   isAnswer: boolean
-  /**
-   * The user feedback result of this message
-   */
   feedback?: Feedbacktype
-  /**
-   * The admin feedback result of this message
-   */
   adminFeedback?: Feedbacktype
-  /**
-   * Whether to hide the feedback area
-   */
   feedbackDisabled?: boolean
-  /**
-   * More information about this message
-   */
   more?: MessageMore
   annotation?: Annotation
   useCurrentUserAvatar?: boolean
@@ -88,6 +73,8 @@ export interface IChatItem {
   log?: { role: string, text: string }[]
   agent_thoughts?: ThoughtItem[]
   message_files?: VisionFile[]
+  agent_id?: string | null
+  agent_name?: string | null
 }
 
 export type ChatItem = IChatItem & {

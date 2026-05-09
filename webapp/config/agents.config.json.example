@@ -1,0 +1,31 @@
+{
+  "agents": [
+    {
+      "id": "default",
+      "name": "Dify AI 助手",
+      "icon": "🤖",
+      "description": "通用 AI 对话助手（通过 Dify 平台）",
+      "backend_type": "dify",
+      "api_key": "app-xxxxxxxxxxxx",
+      "api_url": "https://api.dify.ai/v1",
+      "is_default": true,
+      "is_enabled": true
+    },
+    {
+      "id": "openai-chat",
+      "name": "GPT-4o 直连",
+      "icon": "🧠",
+      "description": "直连 OpenAI 兼容 API",
+      "backend_type": "direct_llm",
+      "api_key": "sk-xxxxxxxxxxxx",
+      "api_url": "https://api.openai.com/v1",
+      "model": "gpt-4o",
+      "is_default": false,
+      "is_enabled": true,
+      "extra_config": {
+        "temperature": 0.7,
+        "max_tokens": 4096
+      }
+    }
+  ]
+}

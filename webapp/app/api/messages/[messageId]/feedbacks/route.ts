@@ -1,16 +1,29 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { client, getInfo } from '@/app/api/utils/common'
+import { getMessageService } from '@/lib/services/message'
+import { getStorageProvider } from '@/lib/storage'
 
 export async function POST(request: NextRequest, { params }: {
   params: Promise<{ messageId: string }>
 }) {
   const body = await request.json()
-  const {
-    rating,
-  } = body
+  const { rating } = body
   const { messageId } = await params
-  const { user } = getInfo(request)
-  const { data } = await client.messageFeedback(messageId, rating, user)
-  return NextResponse.json(data)
+  try {
+    const storage = getStorageProvider()
+    const conversations = await storage.getConversations()
+    for (const conv of conversations) {
+      const messages = await storage.getMessages(conv.id)
+      const target = messages.find(m => m.id === messageId)
+      if (target) {
+        target.feedback = { rating }
+        await storage.saveMessage(target)
+        return NextResponse.json({ success: true })
+      }
+    }
+    return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+  }
+  catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }

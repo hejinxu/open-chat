@@ -88,7 +88,7 @@ const Answer: FC<IAnswerProps> = ({
   allToolIcons,
   suggestionClick = () => { },
 }) => {
-  const { id, content, feedback, agent_thoughts, workflowProcess, suggestedQuestions = [] } = item
+  const { id, content, feedback, agent_thoughts, workflowProcess, suggestedQuestions = [], agent_name } = item
   const isAgentMode = !!agent_thoughts && agent_thoughts.length > 0
 
   const { t } = useTranslation()
@@ -215,6 +215,12 @@ const Answer: FC<IAnswerProps> = ({
               />
             </svg>
             <div className='ml-2 py-3 px-4 bg-surface-tertiary rounded-tr-2xl rounded-b-2xl'>
+              {agent_name && (
+                <div className="flex items-center gap-1 mb-1.5 text-xs text-content-quaternary">
+                  <span className="opacity-70">🤖</span>
+                  <span>{agent_name}</span>
+                </div>
+              )}
               {workflowProcess && (
                 <WorkflowProcess data={workflowProcess} hideInfo />
               )}

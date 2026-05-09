@@ -1,12 +1,15 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { client, getInfo, setSession } from '@/app/api/utils/common'
+import { getInfo, setSession } from '@/app/api/utils/common'
+import { getConversationService } from '@/lib/services/conversation'
 
 export async function GET(request: NextRequest) {
-  const { sessionId, user } = getInfo(request)
+  const { sessionId } = getInfo(request)
   try {
-    const { data }: any = await client.getConversations(user)
-    return NextResponse.json(data, {
+    const conversations = await getConversationService().getAllConversations()
+    return NextResponse.json({
+      data: conversations.map(c => ({ ...c, inputs: {}, introduction: '', suggested_questions: [] })),
+    }, {
       headers: setSession(sessionId),
     })
   }

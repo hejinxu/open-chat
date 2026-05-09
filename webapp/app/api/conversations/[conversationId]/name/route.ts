@@ -1,19 +1,17 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { client, getInfo } from '@/app/api/utils/common'
+import { getConversationService } from '@/lib/services/conversation'
 
 export async function POST(request: NextRequest, { params }: {
   params: Promise<{ conversationId: string }>
 }) {
   const body = await request.json()
-  const {
-    auto_generate,
-    name,
-  } = body
   const { conversationId } = await params
-  const { user } = getInfo(request)
-
-  // auto generate name
-  const { data } = await client.renameConversation(conversationId, name, user, auto_generate)
-  return NextResponse.json(data)
+  try {
+    const updated = await getConversationService().updateConversation(conversationId, { name: body.name })
+    return NextResponse.json(updated || { name: body.name })
+  }
+  catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }

@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
-import { getInfo } from '@/app/api/utils/common'
-import { API_URL, API_KEY } from '@/config'
+import { getInfo, getAgentIdFromRequest } from '@/app/api/utils/common'
+import { getAgentById, getDefaultAgent } from '@/app/api/utils/agents'
+import { createAdapter } from '@/lib/adapters'
 
 export async function POST(
   request: NextRequest,
@@ -8,20 +9,14 @@ export async function POST(
 ) {
   const { taskId } = await params
   const { user } = getInfo(request)
+  const agentId = getAgentIdFromRequest(request)
 
   try {
-    const res = await fetch(`${API_URL}/chat-messages/${taskId}/stop`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ user }),
-    })
-
-    const data = await res.json()
-    return new Response(JSON.stringify(data), {
-      status: res.status,
+    const agent = agentId ? getAgentById(agentId) : getDefaultAgent()
+    if (!agent) throw new Error('No agent found')
+    const adapter = createAdapter(agent)
+    await adapter.stopMessage(taskId, user)
+    return new Response(JSON.stringify({ result: 'success' }), {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (e: any) {

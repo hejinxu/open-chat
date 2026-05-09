@@ -380,6 +380,15 @@ export const ssePost = (
     signal: abortController.signal,
   }, fetchOptions)
 
+  // Merge headers if fetchOptions provides custom headers
+  if (fetchOptions?.headers) {
+    const mergedHeaders = new Headers(baseOptions.headers)
+    for (const [key, value] of Object.entries(fetchOptions.headers)) {
+      mergedHeaders.set(key, value as string)
+    }
+    options.headers = mergedHeaders
+  }
+
   const urlPrefix = API_PREFIX
   const urlWithPrefix = `${urlPrefix}${url.startsWith('/') ? url : `/${url}`}`
 

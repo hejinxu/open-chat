@@ -1,6 +1,6 @@
 'use client'
 import type { FC } from 'react'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import produce, { setAutoFreeze } from 'immer'
 import { useBoolean, useGetState } from 'ahooks'
@@ -9,7 +9,7 @@ import Toast from '@/app/components/base/toast'
 import Sidebar from '@/app/components/sidebar'
 import ConfigSence from '@/app/components/config-scence'
 import Header from '@/app/components/header'
-import { fetchAppParams, fetchChatList, fetchConversations, generationConversationName, sendChatMessage, stopChatMessage, updateFeedback } from '@/service'
+import { fetchAppParams, fetchChatList, fetchConversations, sendChatMessage, stopChatMessage, saveUserMessage, saveAssistantMessage, createLocalConversation, updateLocalConversationName } from '@/service'
 import type { ChatItem, ConversationItem, Feedbacktype, PromptConfig, VisionFile, VisionSettings } from '@/types/app'
 import type { FileUpload } from '@/app/components/base/file-uploader-in-attachment/types'
 import { Resolution, TransferMethod, WorkflowRunningStatus } from '@/types/app'
@@ -22,6 +22,8 @@ import AppUnavailable from '@/app/components/app-unavailable'
 import { API_KEY, APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/config'
 import type { Annotation as AnnotationType } from '@/types/log'
 import { addFileInfos, sortAgentSorts } from '@/utils/tools'
+import { getStorageProvider } from '@/lib/storage'
+import { stopReadAloud } from '@/app/components/chat/text-to-speech'
 
 export interface IMainProps {
   params: any
@@ -40,6 +42,105 @@ const Main: FC<IMainProps> = () => {
   const [isUnknownReason, setIsUnknownReason] = useState<boolean>(false)
   const [promptConfig, setPromptConfig] = useState<PromptConfig | null>(null)
   const [inited, setInited] = useState<boolean>(false)
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+  const [defaultAgentId, setDefaultAgentId] = useState<string>('')
+  const agentInputsCacheRef = useRef<Record<string, Record<string, any>>>({})
+  const skipChatListFetchRef = useRef(false)
+  const promptVariablesCacheRef = useRef<Record<string, { key: string, name?: string, required?: boolean }[]>>({})
+  const fetchingPromisesRef = useRef<Record<string, Promise<void>>>({})
+
+  // ---- Sync localStorage helpers ----
+  function getAllConversations(): any[] {
+    if (typeof window === 'undefined') return []
+    try { const d = localStorage.getItem('open_chat_conversations'); return d ? JSON.parse(d) : [] } catch { return [] }
+  }
+  function saveAllConversations(convs: any[]) {
+    localStorage.setItem('open_chat_conversations', JSON.stringify(convs))
+  }
+  function getAgentParamsSync(convId: string, agentId: string): Record<string, any> | null {
+    const convs = getAllConversations()
+    const conv = convs.find((c: any) => c.id === convId)
+    return conv?.agents?.[agentId]?.params || null
+  }
+  function saveAgentParamsSync(convId: string, agentId: string, params: Record<string, any>) {
+    const convs = getAllConversations()
+    const conv = convs.find((c: any) => c.id === convId)
+    if (conv) {
+      if (!conv.agents) conv.agents = {}
+      if (!conv.agents[agentId]) conv.agents[agentId] = {}
+      conv.agents[agentId].params = { ...params }
+      conv.updated_at = Math.floor(Date.now() / 1000)
+      saveAllConversations(convs)
+    }
+  }
+  function getBackendConvIdSync(convId: string, agentId: string): string | null {
+    const convs = getAllConversations()
+    const conv = convs.find((c: any) => c.id === convId)
+    return conv?.agents?.[agentId]?.backend_conversation_id || null
+  }
+  function saveBackendConvIdSync(convId: string, agentId: string, backendId: string) {
+    const convs = getAllConversations()
+    const conv = convs.find((c: any) => c.id === convId)
+    if (conv) {
+      if (!conv.agents) conv.agents = {}
+      if (!conv.agents[agentId]) conv.agents[agentId] = { params: {} }
+      conv.agents[agentId].backend_conversation_id = backendId
+      conv.updated_at = Math.floor(Date.now() / 1000)
+      saveAllConversations(convs)
+    }
+  }
+
+  // ---- Utility: fetch & cache prompt_variables ----
+  const fetchAndCachePromptVars = useCallback(async (agentId: string | null) => {
+    const key = agentId || ''
+    if (fetchingPromisesRef.current[key]) {
+      await fetchingPromisesRef.current[key]
+      return
+    }
+    const promise = (async () => {
+      try {
+        const headers: Record<string, string> = {}
+        if (agentId) headers['x-agent-id'] = agentId
+        const res = await fetch('/api/parameters', { headers })
+        const data = await res.json()
+        promptVariablesCacheRef.current[key] = userInputsFormToPromptVariables(data.user_input_form || [])
+      } catch {
+        promptVariablesCacheRef.current[key] = []
+      }
+      delete fetchingPromisesRef.current[key]
+    })()
+    fetchingPromisesRef.current[key] = promise
+    await promise
+  }, [])
+
+  // ---- Utility: sync clean params against latest prompt_variables ----
+  function syncAndCleanParams(convId: string, agentId: string, promptVars: { key: string }[]): Record<string, any> | null {
+    if (!convId || convId === '-1') {
+      const cleaned = agentInputsCacheRef.current[agentId] || null
+      return cleaned
+    }
+    const saved = getAgentParamsSync(convId, agentId)
+    const validKeys = new Set(promptVars.map(v => v.key))
+    const cleaned: Record<string, any> = {}
+    let dirty = false
+    if (saved) {
+      for (const [k, v] of Object.entries(saved)) {
+        if (validKeys.has(k)) {
+          cleaned[k] = v
+        } else {
+          dirty = true
+        }
+      }
+    }
+    if (dirty) saveAgentParamsSync(convId, agentId, cleaned)
+    if (Object.keys(cleaned).length > 0) {
+      agentInputsCacheRef.current[agentId] = { ...cleaned }
+      return cleaned
+    }
+    agentInputsCacheRef.current[agentId] = {}
+    return null
+  }
+
   // in mobile, show sidebar by click button
   const [isShowSidebar, { setTrue: showSidebar, setFalse: hideSidebar }] = useBoolean(false)
   const [visionConfig, setVisionConfig] = useState<VisionSettings | undefined>({
@@ -88,6 +189,8 @@ const Main: FC<IMainProps> = () => {
     createNewChat()
     setConversationIdChangeBecauseOfNew(true)
     setCurrInputs(inputs)
+    // Save to agent cache
+    agentInputsCacheRef.current[selectedAgentId || defaultAgentId] = { ...inputs }
     setChatStarted()
     // parse variables in introduction
     setChatList(generateNewChatListWithOpenStatement('', inputs))
@@ -124,8 +227,21 @@ const Main: FC<IMainProps> = () => {
       setCurrInputs(notSyncToStateInputs)
     }
 
+    // Sync agent params when switching conversations
+    if (!isNewConversation && currConversationId && currConversationId !== '-1') {
+      const agentKey = selectedAgentId || defaultAgentId
+      const promptVars = promptVariablesCacheRef.current[agentKey]
+      if (promptVars && agentKey) {
+        const cleaned = syncAndCleanParams(currConversationId, agentKey, promptVars)
+        if (cleaned) {
+          setCurrInputs(cleaned)
+          notSyncToStateInputs = cleaned
+        }
+      }
+    }
+
     // update chat list of current conversation
-    if (!isNewConversation && !conversationIdChangeBecauseOfNew && !isResponding) {
+    if (!isNewConversation && !conversationIdChangeBecauseOfNew && !isResponding && !skipChatListFetchRef.current) {
       fetchChatList(currConversationId).then((res: any) => {
         const { data } = res
         const newChatList: ChatItem[] = generateNewChatListWithOpenStatement(notSyncToStateIntroduction, notSyncToStateInputs)
@@ -150,12 +266,14 @@ const Main: FC<IMainProps> = () => {
         setChatList(newChatList)
       })
     }
+    skipChatListFetchRef.current = false
 
     if (isNewConversation && isChatStarted) { setChatList(generateNewChatListWithOpenStatement()) }
   }
   useEffect(handleConversationSwitch, [currConversationId, inited])
 
   const handleConversationIdChange = (id: string) => {
+    stopReadAloud()
     if (id === '-1') {
       createNewChat()
       setConversationIdChangeBecauseOfNew(true)
@@ -228,7 +346,7 @@ const Main: FC<IMainProps> = () => {
     }
     (async () => {
       try {
-        const [conversationData, appParams] = await Promise.all([fetchConversations(), fetchAppParams()])
+        const [conversationData, appParams, agentsRes] = await Promise.all([fetchConversations(), fetchAppParams(), fetch('/api/config/agents').then(r => r.json())])
         // handle current conversation id
         const { data: conversations, error } = conversationData as { data: ConversationItem[], error: string }
         if (error) {
@@ -276,7 +394,21 @@ const Main: FC<IMainProps> = () => {
         })
         setConversationList(conversations as ConversationItem[])
 
-        if (isNotNewConversation) { setCurrConversationId(_conversationId, APP_ID, false) }
+        // Resolve default agent ID
+        const defaultAgent = agentsRes.agents?.find((a: any) => a.is_default) || agentsRes.agents?.[0]
+        if (defaultAgent) {
+          setDefaultAgentId(defaultAgent.id)
+          // Cache default agent's prompt_variables for sync access on first render
+          promptVariablesCacheRef.current[defaultAgent.id] = prompt_variables
+        }
+
+        if (isNotNewConversation) {
+          // Clean up saved params for default agent in this conversation
+          if (defaultAgent) {
+            syncAndCleanParams(_conversationId, defaultAgent.id, prompt_variables)
+          }
+          setCurrConversationId(_conversationId, APP_ID, false)
+        }
 
         setInited(true)
       }
@@ -291,6 +423,59 @@ const Main: FC<IMainProps> = () => {
       }
     })()
   }, [])
+
+  const prevAgentIdRef = useRef<string | null>(null)
+
+  // Stop auto-read when refreshing page
+  useEffect(() => {
+    return () => { stopReadAloud() }
+  }, [])
+
+  useEffect(() => {
+    if (!inited) return
+
+    stopReadAloud()
+
+    const prevId = prevAgentIdRef.current
+    const prevKey = prevId || defaultAgentId
+    const realConvId = currConversationId && currConversationId !== '-1' ? currConversationId : null
+
+    // Save previous agent's params synchronously
+    if (currInputs && realConvId && prevKey) {
+      saveAgentParamsSync(realConvId, prevKey, currInputs)
+      agentInputsCacheRef.current[prevKey] = { ...currInputs }
+    }
+
+    // Clear form immediately to prevent stale params
+    setCurrInputs(null)
+    setPromptConfig(null)
+
+    const agentKey = selectedAgentId || defaultAgentId
+    if (!agentKey) return
+
+    // Always fetch latest prompt_variables from backend, then sync + restore
+    fetchAndCachePromptVars(selectedAgentId).then(() => {
+      const vars = promptVariablesCacheRef.current[agentKey] || []
+      const cleaned = syncAndCleanParams(realConvId, agentKey, vars)
+      setCurrInputs(cleaned ? { ...cleaned } : null)
+      setPromptConfig({ prompt_template: promptTemplate, prompt_variables: vars } as PromptConfig)
+    })
+
+    prevAgentIdRef.current = selectedAgentId
+  }, [selectedAgentId])
+
+  // Sync currInputs to localStorage whenever it changes
+  useEffect(() => {
+    if (inited && currInputs && Object.keys(currInputs).length > 0) {
+      const realConvId = currConversationId && currConversationId !== '-1' ? currConversationId : null
+      const agentKey = selectedAgentId || defaultAgentId
+      if (!agentKey) return
+      agentInputsCacheRef.current[agentKey] = { ...currInputs }
+      if (realConvId) {
+        saveAgentParamsSync(realConvId, agentKey, currInputs)
+      }
+    }
+  }, [currInputs, inited])
 
   const [isResponding, { setTrue: setRespondingTrue, setFalse: setRespondingFalse }] = useBoolean(false)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
@@ -320,6 +505,21 @@ const Main: FC<IMainProps> = () => {
   const [messageTaskId, setMessageTaskId] = useState('')
   const [hasStopResponded, setHasStopResponded, getHasStopResponded] = useGetState(false)
   const [isRespondingConIsCurrCon, setIsRespondingConCurrCon, getIsRespondingConIsCurrCon] = useGetState(true)
+  const agentInfoCacheRef = useRef<Record<string, { name: string, icon: string }>>({})
+
+  const fetchAgentInfo = async (agentId: string) => {
+    if (agentInfoCacheRef.current[agentId]) return agentInfoCacheRef.current[agentId]
+    try {
+      const res = await fetch('/api/config/agents')
+      const data = await res.json()
+      const agent = data.agents?.find((a: any) => a.id === agentId)
+      if (agent) {
+        agentInfoCacheRef.current[agentId] = { name: agent.name, icon: agent.icon }
+        return agentInfoCacheRef.current[agentId]
+      }
+    } catch { /* ignore */ }
+    return null
+  }
 
   const handleStopResponding = async () => {
     if (!messageTaskId) {
@@ -380,48 +580,67 @@ const Main: FC<IMainProps> = () => {
     }
   }
 
-  const handleSend = async (message: string, files?: VisionFile[]) => {
+  const handleSend = async (message: string, files?: VisionFile[], agentId?: string | null) => {
+    stopReadAloud()
+
     if (isResponding) {
       notify({ type: 'info', message: t('app.errorMessage.waitForResponse') })
       return
     }
+
+    const curAgentId = agentId || selectedAgentId
+    const agentKey = curAgentId || defaultAgentId
+    const realConvId = currConversationId !== '-1' ? currConversationId : null
+
+    // Guard: promptConfig not ready (null = still loading from backend)
+    if (!promptConfig) {
+      notify({ type: 'info', message: '智能体参数加载中，请稍后重试' })
+      return
+    }
+
+    // Load agent-specific params: cache → localStorage → empty
+    const resolvedInputs: Record<string, any> = agentInputsCacheRef.current[agentKey]
+      || (realConvId ? getAgentParamsSync(realConvId, agentKey) : null)
+      || {}
+
+    // Validate required prompt variables (skip if agent has no params)
+    if (promptConfig.prompt_variables.length) {
+      const missing = promptConfig.prompt_variables
+        .filter(v => v.required && (!resolvedInputs[v.key] && resolvedInputs[v.key] !== 0))
+        .map(v => v.name || v.key)
+      if (missing.length) {
+        notify({ type: 'error', message: `请填写必填参数：${missing.join('、')}` })
+        return
+      }
+    }
+
     const toServerInputs: Record<string, any> = {}
-    if (currInputs) {
-      Object.keys(currInputs).forEach((key) => {
-        const value = currInputs[key]
-        if (value.supportFileType) { toServerInputs[key] = transformToServerFile(value) }
+    Object.keys(resolvedInputs).forEach((key) => {
+      const value = resolvedInputs[key]
+      if (value?.supportFileType) { toServerInputs[key] = transformToServerFile(value) }
+      else if (value?.[0]?.supportFileType) { toServerInputs[key] = value.map((item: any) => transformToServerFile(item)) }
+      else { toServerInputs[key] = value }
+    })
 
-        else if (value[0]?.supportFileType) { toServerInputs[key] = value.map((item: any) => transformToServerFile(item)) }
-
-        else { toServerInputs[key] = value }
-      })
-    }
-
-    const data: Record<string, any> = {
-      inputs: toServerInputs,
-      query: message,
-      conversation_id: isNewConversation ? null : currConversationId,
-    }
-
-    if (files && files?.length > 0) {
-      data.files = files.map((item) => {
-        if (item.transfer_method === TransferMethod.local_file) {
-          return {
-            ...item,
-            url: '',
-          }
-        }
-        return item
-      })
+    // Save to agent-specific storage for next send (sync)
+    if (Object.keys(toServerInputs).length > 0) {
+      agentInputsCacheRef.current[agentKey] = { ...toServerInputs }
+      if (realConvId) saveAgentParamsSync(realConvId, agentKey, toServerInputs)
     }
 
     // question
     const questionId = `question-${Date.now()}`
+    let agentInfo: { name: string, icon: string } | null = null
+    if (agentId) {
+      agentInfo = await fetchAgentInfo(agentId)
+    }
     const questionItem = {
       id: questionId,
       content: message,
       isAnswer: false,
       message_files: (files || []).filter((f: any) => f.type === 'image'),
+      agent_id: agentId || null,
+      agent_name: agentInfo?.name || null,
     }
 
     const placeholderAnswerId = `answer-placeholder-${Date.now()}`
@@ -434,6 +653,39 @@ const Main: FC<IMainProps> = () => {
     const newList = [...getChatList(), questionItem, placeholderAnswerItem]
     setChatList(newList)
 
+    // Create local conversation + save user message BEFORE sending
+    let localConvId = currConversationId !== '-1' ? currConversationId : null
+    if (!localConvId) {
+      const conv = await createLocalConversation(t('app.chat.newChatDefaultName'))
+      localConvId = conv.id
+    }
+    await saveUserMessage({
+      conversation_id: localConvId,
+      content: message,
+      agent_id: agentId || null,
+      agent_name: agentInfo?.name || null,
+      message_files: (files || []).filter((f: any) => f.type === 'image'),
+    })
+
+    // Look up Dify conversation_id for this agent (sync)
+    const difyConvId = getBackendConvIdSync(localConvId, agentKey)
+
+    const sendData: Record<string, any> = {
+      inputs: toServerInputs,
+      query: message,
+      conversation_id: difyConvId || null,
+      agent_id: agentId || null,
+    }
+
+    if (files && files?.length > 0) {
+      sendData.files = files.map((item) => {
+        if (item.transfer_method === TransferMethod.local_file) {
+          return { ...item, url: '' }
+        }
+        return item
+      })
+    }
+
     let isAgentMode = false
 
     // answer
@@ -443,6 +695,8 @@ const Main: FC<IMainProps> = () => {
       agent_thoughts: [],
       message_files: [],
       isAnswer: true,
+      agent_id: agentId || null,
+      agent_name: agentInfo?.name || null,
     }
     let hasSetResponseId = false
 
@@ -451,24 +705,28 @@ const Main: FC<IMainProps> = () => {
 
     setRespondingTrue()
     setHasStopResponded(false)
-    sendChatMessage(data, {
+    sendChatMessage(sendData, {
       getAbortController: (abortController) => {
         setAbortController(abortController)
       },
-      onData: (message: string, isFirstMessage: boolean, { conversationId: newConversationId, messageId, taskId }: any) => {
+      onData: (message: string, isFirstMessage: boolean, { conversationId: newDifyConvId, messageId, taskId }: any) => {
+        // Map local conversation ID to Dify conversation ID
+        if (newDifyConvId) {
+          saveBackendConvIdSync(localConvId, agentKey, newDifyConvId)
+        }
         if (!isAgentMode) {
           responseItem.content = responseItem.content + message
         }
         else {
           const lastThought = responseItem.agent_thoughts?.[responseItem.agent_thoughts?.length - 1]
-          if (lastThought) { lastThought.thought = lastThought.thought + message } // need immer setAutoFreeze
+          if (lastThought) { lastThought.thought = lastThought.thought + message }
         }
         if (messageId && !hasSetResponseId) {
           responseItem.id = messageId
           hasSetResponseId = true
         }
 
-        if (isFirstMessage && newConversationId) { tempNewConversationId = newConversationId }
+        if (isFirstMessage && newDifyConvId) { tempNewConversationId = newDifyConvId }
 
         setMessageTaskId(taskId)
         // has switched to other conversation
@@ -486,19 +744,42 @@ const Main: FC<IMainProps> = () => {
       async onCompleted(hasError?: boolean) {
         if (hasError) { return }
 
-        if (getConversationIdChangeBecauseOfNew()) {
-          const { data: allConversations }: any = await fetchConversations()
-          const newItem: any = await generationConversationName(allConversations[0].id)
-
-          const newAllConversations = produce(allConversations, (draft: any) => {
-            draft[0].name = newItem.name
+        // Save assistant message
+        if (responseItem.content) {
+          await saveAssistantMessage({
+            conversation_id: localConvId,
+            content: responseItem.content,
+            agent_id: agentId || null,
+            agent_name: agentInfo?.name || null,
+            message_files: responseItem.message_files || [],
+            agent_thoughts: responseItem.agent_thoughts || [],
           })
-          setConversationList(newAllConversations as any)
+        }
+
+        if (getConversationIdChangeBecauseOfNew()) {
+          // Update title from first question
+          const title = questionItem.content.slice(0, 30) + (questionItem.content.length > 30 ? '...' : '')
+          await updateLocalConversationName(localConvId, title)
+
+          // Refresh sidebar
+          const { data: allConversations } = await fetchConversations()
+          setConversationList(allConversations as any)
         }
         setConversationIdChangeBecauseOfNew(false)
+        // Preserve current inputs before resetting
+        if (currInputs && Object.keys(currInputs).length > 0) {
+          const aKey = selectedAgentId || defaultAgentId
+          agentInputsCacheRef.current[aKey] = { ...currInputs }
+          if (localConvId && localConvId !== '-1') {
+            saveAgentParamsSync(localConvId, aKey, currInputs)
+          }
+        }
         resetNewConversationInputs()
         setChatNotStarted()
-        setCurrConversationId(tempNewConversationId, APP_ID, true)
+        if (localConvId) {
+          skipChatListFetchRef.current = true
+          setCurrConversationId(localConvId, APP_ID, true)
+        }
         setRespondingFalse()
       },
       onFile(file) {
@@ -647,7 +928,20 @@ const Main: FC<IMainProps> = () => {
   }
 
   const handleFeedback = async (messageId: string, feedback: Feedbacktype) => {
-    await updateFeedback({ url: `/messages/${messageId}/feedbacks`, body: { rating: feedback.rating } })
+    try {
+      const storage = getStorageProvider()
+      const conversations = await storage.getConversations()
+      for (const conv of conversations) {
+        const messages = await storage.getMessages(conv.id)
+        const target = messages.find(m => m.id === messageId)
+        if (target) {
+          target.feedback = { rating: feedback.rating }
+          await storage.saveMessage(target)
+          break
+        }
+      }
+    }
+    catch { /* ignore */ }
     const newChatList = chatList.map((item) => {
       if (item.id === messageId) {
         return {
@@ -666,6 +960,8 @@ const Main: FC<IMainProps> = () => {
       notify({ type: 'info', message: t('app.errorMessage.waitForResponse') })
       return
     }
+
+    stopReadAloud()
 
     // Find the answer item by id
     const answerIndex = chatList.findIndex(item => item.id === id && item.isAnswer)
@@ -693,11 +989,11 @@ const Main: FC<IMainProps> = () => {
       upload_file_id: file.upload_file_id,
     })) as VisionFile[] || []
 
-    await handleSend(questionItem.content, files)
+    await handleSend(questionItem.content, files, questionItem.agent_id || selectedAgentId)
   }
 
   const renderSidebar = () => {
-    if (!APP_ID || !APP_INFO || !promptConfig) { return null }
+    if (!APP_ID || !APP_INFO) { return null }
     return (
       <Sidebar
         list={conversationList}
@@ -712,7 +1008,7 @@ const Main: FC<IMainProps> = () => {
 
   if (appUnavailable) { return <AppUnavailable isUnknownReason={isUnknownReason} errMessage={!hasSetAppConfig ? 'Please set APP_ID and API_KEY in config/index.tsx' : ''} /> }
 
-  if (!APP_ID || !APP_INFO || !promptConfig) { return <Loading type='app' /> }
+  if (!APP_ID || !APP_INFO) { return <Loading type='app' /> }
 
   return (
     <div className='bg-surface'>
@@ -741,7 +1037,7 @@ const Main: FC<IMainProps> = () => {
             promptConfig={promptConfig}
             onStartChat={handleStartChat}
             canEditInputs={canEditInputs}
-            savedInputs={currInputs as Record<string, any>}
+            savedInputs={(currInputs as Record<string, any>) ?? agentInputsCacheRef.current[selectedAgentId || defaultAgentId]}
             onInputsChange={setCurrInputs}
           ></ConfigSence>
 
@@ -757,6 +1053,8 @@ const Main: FC<IMainProps> = () => {
                 checkCanSend={checkCanSend}
                 visionConfig={visionConfig}
                 fileConfig={fileConfig}
+                selectedAgentId={selectedAgentId}
+                onAgentChange={setSelectedAgentId}
               />)
           }
         </div>

@@ -1,7 +1,9 @@
 import type { NextRequest } from 'next/server'
-import { ChatClient } from 'dify-client'
 import { v4 } from 'uuid'
-import { API_KEY, API_URL, APP_ID, APP_INFO } from '@/config'
+import { APP_INFO, APP_ID } from '@/config'
+import { getAgentById, getDefaultAgent } from './agents'
+import { createAdapter } from '@/lib/adapters'
+import type { ChatAdapter } from '@/lib/adapters/types'
 
 const userPrefix = `user_${APP_ID}:`
 
@@ -21,4 +23,13 @@ export const setSession = (sessionId: string) => {
   return { 'Set-Cookie': `session_id=${sessionId}` }
 }
 
-export const client = new ChatClient(API_KEY, API_URL || undefined)
+export function getAgentIdFromRequest(request: NextRequest): string | null {
+  return request.headers.get('x-agent-id') || null
+}
+
+export function getAdapterForRequest(request: NextRequest): ChatAdapter {
+  const agentId = getAgentIdFromRequest(request)
+  const agent = agentId ? getAgentById(agentId) : getDefaultAgent()
+  if (!agent) throw new Error(`Agent not found: ${agentId}`)
+  return createAdapter(agent)
+}

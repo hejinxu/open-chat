@@ -20,28 +20,25 @@ import { VoiceInput } from './voice-input'
 import { setAutoReadPending, triggerAutoReadIfPending } from './text-to-speech'
 import { VOICE_INPUT_CONFIG, type VoiceRecognitionEngine } from '@/config/voice-input'
 import { VoiceSettings } from './voice-settings'
+import { AgentSelector } from './agent-selector'
 import type { WhisperModel } from './voice-recognition/whisper-recognition'
 
 export interface IChatProps {
   chatList: ChatItem[]
-  /**
-   * Whether to display the editing area and rating status
-   */
   feedbackDisabled?: boolean
-  /**
-   * Whether to display the input area
-   */
   isHideSendInput?: boolean
   onFeedback?: FeedbackFunc
   onRegenerate?: (id: string) => void
   checkCanSend?: () => boolean
-  onSend?: (message: string, files: VisionFile[]) => void
+  onSend?: (message: string, files: VisionFile[], agentId?: string | null) => void
   useCurrentUserAvatar?: boolean
   isResponding?: boolean
   onStopResponding?: () => void
   controlClearQuery?: number
   visionConfig?: VisionSettings
   fileConfig?: FileUpload
+  selectedAgentId?: string | null
+  onAgentChange?: (agentId: string | null) => void
 }
 
 const Chat: FC<IChatProps> = ({
@@ -58,6 +55,8 @@ const Chat: FC<IChatProps> = ({
   controlClearQuery,
   visionConfig,
   fileConfig,
+  selectedAgentId,
+  onAgentChange,
 }) => {
   const { t } = useTranslation()
   const { notify } = Toast
@@ -145,7 +144,6 @@ const Chat: FC<IChatProps> = ({
     localStorage.setItem('whisper-model', val)
   }
   const voiceInputRef = React.useRef<{ stop: () => void }>(null)
-
   const prevIsRespondingRef = useRef(false)
   const hasReadAloudRef = useRef(false)
 
@@ -215,7 +213,7 @@ const Chat: FC<IChatProps> = ({
     }))
     const docAndOtherFiles: VisionFile[] = getProcessedFiles(attachmentFiles)
     const combinedFiles: VisionFile[] = [...imageFiles, ...docAndOtherFiles]
-    onSend(queryRef.current, combinedFiles)
+    onSend(queryRef.current, combinedFiles, selectedAgentId)
     if (!files.find(item => item.type === TransferMethod.local_file && !item.fileId)) {
       if (files.length) { onClear() }
       if (!isResponding) {
@@ -324,6 +322,10 @@ const Chat: FC<IChatProps> = ({
               </div>
               <div className="flex items-center justify-between px-2 py-1">
                 <div className="flex items-center gap-1">
+                  <AgentSelector
+                    value={selectedAgentId ?? null}
+                    onChange={onAgentChange || (() => {})}
+                  />
                   <VoiceInput
                     ref={voiceInputRef}
                     onResult={(text) => {

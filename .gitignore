@@ -56,5 +56,8 @@ yarn.lock
 # Models (large files, don't track)
 ws-server/models/
 
+# Agent config (contains API keys)
+webapp/config/agents.config.json
+
 # MCP
 .serena
