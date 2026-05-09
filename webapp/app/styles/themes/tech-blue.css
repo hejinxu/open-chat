@@ -8,6 +8,9 @@
   --surface-active: rgba(0, 150, 255, 0.2);
   --surface-elevated: #0A1628;
 
+  /* Danger */
+  --danger-hover: rgba(239, 68, 68, 0.12);
+
   /* Text */
   --text: #E0F2FF;
   --text-secondary: #B0D4FF;

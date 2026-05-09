@@ -71,6 +71,7 @@ module.exports = {
           hover: 'var(--surface-hover)',
           active: 'var(--surface-active)',
           elevated: 'var(--surface-elevated)',
+          'danger-hover': 'var(--danger-hover)',
         },
         content: {
           DEFAULT: 'var(--text)',

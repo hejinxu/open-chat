@@ -8,6 +8,9 @@
   --surface-active: #EBF5FF;
   --surface-elevated: #FFFFFF;
 
+  /* Danger */
+  --danger-hover: #FEE2E2;
+
   /* Text */
   --text: #111928;
   --text-secondary: #374151;

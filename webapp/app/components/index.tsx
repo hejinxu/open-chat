@@ -23,6 +23,7 @@ import { API_KEY, APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/confi
 import type { Annotation as AnnotationType } from '@/types/log'
 import { addFileInfos, sortAgentSorts } from '@/utils/tools'
 import { getStorageProvider } from '@/lib/storage'
+import { getConversationService } from '@/lib/services/conversation'
 import { stopReadAloud } from '@/app/components/chat/text-to-speech'
 
 export interface IMainProps {
@@ -271,6 +272,25 @@ const Main: FC<IMainProps> = () => {
     if (isNewConversation && isChatStarted) { setChatList(generateNewChatListWithOpenStatement()) }
   }
   useEffect(handleConversationSwitch, [currConversationId, inited])
+
+  const handleDeleteConversation = async (id: string) => {
+    await getConversationService().deleteConversation(id)
+    const { data: allConversations } = await fetchConversations()
+    if (currConversationId === id) {
+      if (!allConversations.some((c: any) => c.id === '-1')) {
+        allConversations.unshift({ id: '-1', name: t('app.chat.newChatDefaultName'), inputs: {}, introduction: '', suggested_questions: [] })
+      }
+      setConversationList(allConversations as any)
+      stopReadAloud()
+      setCurrConversationId('-1', APP_ID)
+      setConversationIdChangeBecauseOfNew(true)
+      hideSidebar()
+    }
+    else {
+      setConversationList(allConversations as any)
+    }
+    notify({ type: 'success', message: t('common.api.success') })
+  }
 
   const handleConversationIdChange = (id: string) => {
     stopReadAloud()
@@ -998,6 +1018,7 @@ const Main: FC<IMainProps> = () => {
       <Sidebar
         list={conversationList}
         onCurrentIdChange={handleConversationIdChange}
+        onDelete={handleDeleteConversation}
         currentId={currConversationId}
         copyRight={APP_INFO.copyright || APP_INFO.title}
         isMobile={isMobile}

@@ -43,7 +43,7 @@ export const PanelTitle: FC<{ title: string, className?: string }> = ({
   className,
 }) => {
   return (
-    <div className={cn(className, 'flex items-center space-x-1 text-indigo-600')}>
+    <div className={cn(className, 'flex items-center space-x-1 text-content-accent')}>
       <StarIcon />
       <span className='text-xs'>{title}</span>
     </div>
