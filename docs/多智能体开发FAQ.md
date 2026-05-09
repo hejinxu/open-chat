@@ -165,3 +165,128 @@ localStorage.removeItem('open_chat_messages')
 localStorage.removeItem('conversationIdInfo')
 localStorage.removeItem('open_chat_v2_migrated')
 ```
+
+---
+
+## 10. 侧边栏会话删除
+
+### 10.1 点击侧边栏其他位置 dropdown 不关闭
+
+**现象**：三点按钮弹出删除 dropdown 后，点击侧边栏内其他会话条目，dropdown 不关闭。
+
+**根因**：`menuRef` 绑在 `<nav>` 上，所有会话条目都在 `ref` 范围内，`contains(e.target)` 始终返回 true。
+
+**修复**：去掉 `useRef`，改用 `data-menu-id` 属性标记 dropdown。`useEffect` 仅在 `openMenuId` 非空时注册 document 监听，用 `target.closest('[data-menu-id="..."]')` 判断点击是否在 dropdown 内。
+
+```typescript
+useEffect(() => {
+  if (openMenuId === null) return
+  const handler = (e: MouseEvent) => {
+    if (!(e.target as HTMLElement).closest(`[data-menu-id="${openMenuId}"]`))
+      setOpenMenuId(null)
+  }
+  document.addEventListener('mousedown', handler)
+  return () => document.removeEventListener('mousedown', handler)
+}, [openMenuId])
+```
+
+dropdown div 加 `data-menu-id={item.id}`，三点按钮也加，确保点击按钮时不触发关闭。
+
+---
+
+### 10.2 再次点击三点按钮 dropdown 重新打开而非关闭
+
+**现象**：dropdown 已打开时再次点击三点按钮，dropdown 先关闭再重新打开。
+
+**根因**：三点按钮不在 dropdown 的 `data-menu-id` 范围内，document mousedown handler 检测到点击不在 dropdown 内 → `setOpenMenuId(null)`。之后 onClick 执行时 `isMenuOpen` 已为 false → `setOpenMenuId(isMenuOpen ? null : item.id)` 重新设为 `item.id`。
+
+**修复**：给三点按钮也加 `data-menu-id={item.id}`，让 `closest` 命中，document handler 跳过。
+
+---
+
+### 10.3 删除会话后侧边栏列表不更新（需刷新页面）
+
+**现象**：删除会话后 localStorage 已更新，但侧边栏仍显示被删除的会话，刷新页面才消失。
+
+**根因**：删除当前会话时调用 `handleConversationIdChange('-1')` → `createNewChat()`。`createNewChat` 闭包捕获的是删除前的旧 `conversationList`（仍含被删除项），其内部的 `setConversationList(produce(旧列表, ...))` 覆盖了之前 `setConversationList(过滤后列表)` 的结果。
+
+React 18 自动批处理下，同一异步函数内的多次 `setState` 合并为单次渲染，最后一次调用（`createNewChat` 内）覆盖前面的结果。
+
+**修复**：不调 `handleConversationIdChange`，改为删除后重新从 localStorage 拉取全量列表，手动插入 `-1` 条目后 `setConversationList` 只调一次：
+
+```typescript
+const handleDeleteConversation = async (id: string) => {
+  await getConversationService().deleteConversation(id)
+  const { data: allConversations } = await fetchConversations()
+  if (currConversationId === id) {
+    if (!allConversations.some(c => c.id === '-1'))
+      allConversations.unshift({ id: '-1', ... })
+    setConversationList(allConversations)
+    stopReadAloud()
+    setCurrConversationId('-1', APP_ID)
+    setConversationIdChangeBecauseOfNew(true)
+    hideSidebar()
+  } else {
+    setConversationList(allConversations)
+  }
+}
+```
+
+---
+
+## 11. 主题颜色不跟随（硬编码颜色在深色模式下看不清）
+
+### 11.1 "Before start..." / "Conversation settings" 文字和 Star 图标不可见
+
+**现象**：深色主题（dark、tech-blue）下，welcome 页面的提示文字、标题文字和 Star 图标几乎不可见。
+
+**根因**：多处使用硬编码 Tailwind 颜色，不跟随主题 CSS 变量：
+
+| 位置 | 硬编码 | 值 |
+|------|--------|-----|
+| `welcome/index.tsx` 两处 | `text-indigo-600` | `#444CE7` |
+| `welcome/index.tsx` | `border-indigo-100` | `#E0EAFF` |
+| `value-panel/index.tsx` PanelTitle | `text-indigo-600` | `#444CE7` |
+| `massive-component.tsx` StarIcon | `fill="#444CE7"` | `#444CE7` |
+
+`#444CE7` 在深色背景上对比度不足。且 PanelTitle 自身的 `text-indigo-600` 覆盖了父级主题色。
+
+**修复**：
+
+| 文件 | 改前 | 改后 |
+|------|------|------|
+| `welcome/index.tsx:298` | `text-indigo-600 border-indigo-100` | `text-content-accent border-border` |
+| `welcome/index.tsx:319` | `text-indigo-600` | `text-content-accent` |
+| `value-panel/index.tsx:46` | `text-indigo-600` | `text-content-accent` |
+| `massive-component.tsx` | `fill="#444CE7"` | `fill="currentColor"` |
+
+---
+
+### 11.2 删除按钮 hover 背景色不可见
+
+**现象**：深色主题下 dropdown 删除按钮 hover 时看不到变化。
+
+**根因**：`hover:bg-red-50 dark:hover:bg-red-950` 硬编码颜色不跟随主题。且 dark 主题下 `--surface-elevated` 和 `--surface-hover` 同值 `#374151`。
+
+**修复**：改用语义变量。在三个主题文件中新增 `--danger-hover`，tailwind.config 注册为 `surface.danger-hover`，删除按钮 `hover:bg-surface-danger-hover`。
+
+各主题 `--danger-hover` 值：light `#FEE2E2`（浅红），dark `rgba(239,68,68,0.15)`，tech-blue `rgba(239,68,68,0.12)`。
+
+---
+
+## 12. 按钮 hover 效果不明显
+
+### 12.1 accent 按钮 hover 无背景变化
+
+**现象**：浅色模式下 "New chat" 按钮 hover 时几乎看不到变化。
+
+**根因**：accent 按钮 hover 仅改变边框 `#1C64F2` → `#1A56DB` + 微弱阴影，背景保持 `bg-surface`（白色）。
+
+**修复**：`Button` 组件 accent 变体中增加 `hover:bg-accent-bg-hover`：
+
+```diff
+- hover:shadow-sm hover:border-accent-hover
++ hover:shadow-sm hover:border-accent-hover hover:bg-accent-bg-hover
+```
+
+`--accent-bg-hover` 已在三个主题中定义：light `#DBEAFE`，dark `rgba(28,100,242,0.3)`，tech-blue `rgba(0,180,255,0.3)`。

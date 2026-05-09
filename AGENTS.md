@@ -164,7 +164,7 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 - **Imports**: Use `@/*` alias (maps to `webapp/`). Absolute imports preferred.
 - **Components**: `'use client'` required for client components. Server components are the default.
 - **Styling**: Tailwind-first. SCSS only for markdown/code. `classnames` or `tailwind-merge` for conditional classes.
-- **Theme classes**: Use semantic classes (`bg-surface`, `text-content`, `border-border`). Never use `dark:` prefix or hardcoded colors.
+- **Theme colors**: Use semantic CSS custom property classes (`text-content-accent`, `border-border`, `hover:bg-surface-hover`) exclusively. Never hardcode theme-specific colors — this includes Tailwind literals (`text-indigo-600`, `bg-red-50`, `border-indigo-100`), SVG fills (`fill="#444CE7"`), and `dark:` variant overrides. When a component needs a color not covered by existing variables: (1) add the CSS variable to all three theme files (`light.css`, `dark.css`, `tech-blue.css`), (2) register it in `tailwind.config.js` under the appropriate semantic group, (3) use the generated class in components. Hover/danger/interactive states each need their own variable — avoid piggybacking on existing variables that happen to share a value.
 - **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom. Scrollbar at screen edge via full-width scrollable container.
 - **Build**: `next.config.js` disables ESLint and TypeScript errors during build.
 - **Multi-Agent**: 后端 API 通过 `x-agent-id` header 选择智能体；前端 `AgentSelector` 组件在输入框内与语音按钮同排；`agents.config.json` 包含 API key 不可提交 git。
