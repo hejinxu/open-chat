@@ -28,7 +28,7 @@ const Button: FC<IButtonProps> = ({
       style = (disabled || loading) ? 'bg-primary-600/75 cursor-not-allowed text-white' : 'bg-primary-600 hover:bg-primary-600/75 hover:shadow-md cursor-pointer text-white hover:shadow-sm'
       break
     case 'accent':
-      style = disabled ? 'border-solid border border-border-accent bg-surface-tertiary cursor-not-allowed text-content-secondary' : 'border-solid border border-border-accent cursor-pointer text-content-accent bg-surface hover:shadow-sm hover:border-accent-hover'
+      style = disabled ? 'border-solid border border-border-accent bg-surface-tertiary cursor-not-allowed text-content-secondary' : 'border-solid border border-border-accent cursor-pointer text-content-accent bg-surface hover:shadow-sm hover:border-accent-hover hover:bg-accent-bg-hover'
       break
     default:
       style = disabled ? 'border-solid border border bg-surface-tertiary cursor-not-allowed text-content-secondary' : 'border-solid border border cursor-pointer text-content-tertiary hover:bg-surface hover:shadow-sm hover:border-strong'
