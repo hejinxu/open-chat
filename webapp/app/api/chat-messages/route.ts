@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
     files,
     conversation_id: conversationId,
     response_mode: responseMode,
+    messages,
   } = body
   const { user } = getInfo(request)
   const adapter = getAdapterForRequest(request)
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
     user,
     conversation_id: conversationId || undefined,
     files,
+    messages,
     response_mode: responseMode || 'streaming',
   })
 

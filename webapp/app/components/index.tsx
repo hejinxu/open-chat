@@ -715,6 +715,9 @@ const Main: FC<IMainProps> = () => {
       query: message,
       conversation_id: difyConvId || null,
       agent_id: agentId || null,
+      messages: chatList
+        .filter(item => !item.isOpeningStatement && item.content)
+        .map(item => ({ role: item.isAnswer ? 'assistant' as const : 'user' as const, content: item.content })),
     }
 
     if (files && files?.length > 0) {

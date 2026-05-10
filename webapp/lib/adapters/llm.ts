@@ -20,12 +20,15 @@ export class LLMAdapter implements ChatAdapter {
   }
 
   async sendMessage(params: SendMessageParams) {
-    const { query, conversation_id, user, inputs, response_mode } = params
+    const { query, messages: historyMessages, conversation_id, user, inputs, response_mode } = params
     const isStreaming = (response_mode || 'streaming') === 'streaming'
 
     const messages: any[] = []
     if (inputs?.system_prompt) {
       messages.push({ role: 'system', content: inputs.system_prompt })
+    }
+    if (historyMessages?.length) {
+      messages.push(...historyMessages)
     }
     messages.push({ role: 'user', content: query })
 

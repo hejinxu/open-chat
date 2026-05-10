@@ -5,6 +5,7 @@ export interface SendMessageParams {
   conversation_id?: string | null
   files?: any[] | null
   response_mode?: 'blocking' | 'streaming'
+  messages?: Array<{ role: string, content: string }>
 }
 
 export interface ChatAdapter {
