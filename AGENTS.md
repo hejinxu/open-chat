@@ -86,6 +86,19 @@ interface ConversationRecord {
 
 **welcome 组件安全：** `promptConfig` 可为 null，所有访问使用可选链 `promptConfig?.prompt_variables`。
 
+**直连 LLM 智能体（`backend_type: 'direct_llm'`）：**
+- **无参数定义**：不需要 `prompt_variables`，不请求 `/api/parameters`。切换时跳过 `fetchAndCachePromptVars`，同步设 `promptConfig = { prompt_variables: [] }`
+- **类型感知**：`agentTypeMapRef`（`Record<string, string>`）在 init 时填充每个 Agent 的 `backend_type`，切换智能体 effect 中检查 `=== 'direct_llm'` 做分支
+- **`isDirectLLM` 状态**：控制 `hasSetInputs`（直接返回 true，跳过欢迎页）、`ConfigSence`（强制 `isPublicVersion = false`，不显示提示词模板面板）
+- **会话上下文**：直连 LLM API 无状态，每次请求需携带完整对话历史。`handleSend` 从 `chatList` 构建 OpenAI 格式 `messages` 数组（过滤 `isOpeningStatement`，user/assistant 交替）→ `SendMessageParams.messages` → `route.ts` 转发 → `LLMAdapter.sendMessage()` 拼接历史 + 当前 query 后调用 API
+- **配置示例**：config 中需含 `model` 字段指定模型名
+
+**会话切换加载状态：**
+- **同步清空**：`handleConversationIdChange` 中先执行 `setChatList([])` + `setIsChatListLoading(true)`，再 `setCurrConversationId`，React 18 批处理合并为单帧
+- **竞争防护**：`chatListFetchIdRef` 递增计数器，每轮 fetch 记录 `fetchId`，回调中检查 `chatListFetchIdRef.current !== fetchId` 丢弃过期响应
+- **发送拦截**：`checkCanSend` 中 `isChatListLoading` 守卫，阻止发送（toast 提示 + return false），不清空输入
+- **侧边栏删除**：`sidebar/index.tsx` 会话条目悬停显示三点按钮，点击弹出删除 dropdown。`data-menu-id` + `target.closest()` 实现 click-outside 关闭
+
 #### 服务层
 - `lib/services/conversation.ts` — `ConversationService`（对话 CRUD）
 - `lib/services/message.ts` — `MessageService`（消息保存，区分用户消息和 AI 回复）
@@ -194,6 +207,17 @@ NEXT_PUBLIC_API_URL=https://api.dify.ai/v1
       "api_key": "app-xxxxx",
       "api_url": "https://api.dify.ai/v1",
       "is_default": true,
+      "is_enabled": true
+    },
+    {
+      "id": "siliconflow-deepseek-v4-flash",
+      "name": "硅基流动 · DeepSeek V4 Flash",
+      "icon": "💧",
+      "backend_type": "direct_llm",
+      "api_key": "sk-xxxxx",
+      "api_url": "https://api.siliconflow.cn/v1",
+      "model": "deepseek-ai/DeepSeek-V4-Flash",
+      "is_default": false,
       "is_enabled": true
     }
   ]

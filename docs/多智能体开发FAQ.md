@@ -290,3 +290,110 @@ const handleDeleteConversation = async (id: string) => {
 ```
 
 `--accent-bg-hover` 已在三个主题中定义：light `#DBEAFE`，dark `rgba(28,100,242,0.3)`，tech-blue `rgba(0,180,255,0.3)`。
+
+---
+
+## 13. 直连大模型智能体
+
+### 13.1 直连 LLM 无需请求会话参数定义
+
+**现象**：`direct_llm` 智能体不应该请求 `/api/parameters`，也不应显示 Dify 风格的参数编辑 UI（"Conversation settings"、"Before start..." 等）。
+
+**根因**：所有 Agent 类型共用同一套"fetch 参数定义 → 设置 `promptConfig` → 渲染参数编辑 UI"流程，`direct_llm` 无参数概念但也走了全流程。
+
+**修复**：
+
+1. `agentTypeMapRef`（`Record<string, string>`）在 init 时从 `agentsRes.agents` 填充每个 Agent 的 `backend_type`
+2. 切换智能体 effect 中检查 `agentTypeMapRef.current[agentKey] === 'direct_llm'`，跳过 `fetchAndCachePromptVars`，同步设置 `promptVariablesCacheRef.current[agentKey] = []` 和 `promptConfig = { prompt_variables: [] }`
+3. `hasSetInputs` 对 `isDirectLLM` 直接返回 `true`，跳过欢迎页（"👏 Welcome to use Chat APP"）
+4. `ConfigSence` 渲染条件加 `inited &&`，防止 init 完成前闪出欢迎页
+5. `isPublicVersion` 对 `isDirectLLM` 强制 `false`，不显示提示词模板面板
+
+**不变式**：对于 `direct_llm`，`promptConfig` 始终为 `{ prompt_variables: [] }`，`hasVar` 始终 `false`，renderHeader 正常显示会话标题，renderHasSetInputs 返回 null。
+
+---
+
+### 13.2 直连 LLM 保持会话上下文
+
+**现象**：直连 LLM（如硅基流动）API 无状态，每次请求仅发送当前一条用户消息，无对话历史，模型无上下文。
+
+**根因**：`LLMAdapter.sendMessage()` 每次从 `query` 重建 messages 数组 `[system?, user_query]`，未传入历史消息。
+
+**修复**（4 层传递）：
+
+| 文件 | 改动 |
+|------|------|
+| `lib/adapters/types.ts` | `SendMessageParams` 新增 `messages?: Array<{role: string, content: string}>` |
+| `app/components/index.tsx` | `handleSend` 从 `chatList` 构建完整 OpenAI 格式 messages（过滤 `isOpeningStatement`，user/assistant 交替），放入 `sendData` |
+| `app/api/chat-messages/route.ts` | 从 body 提取 `messages`，转发给 `adapter.sendMessage()` |
+| `lib/adapters/llm.ts` | `sendMessage` 优先使用传入的 `historyMessages`，在末尾追加当前 `query` 再调用 API |
+
+`service/index.ts` 无需改 —— `{ ...rest }` 自动透传 `messages`。Dify 适配器忽略 `messages` 字段，继续使用 `query` + `conversation_id`。
+
+---
+
+## 14. 会话切换加载状态
+
+### 14.1 切换会话时旧消息残留
+
+**现象**：点击侧边栏切换会话后，旧会话消息仍显示一帧，然后才出现 loading 态。
+
+**根因**：`setChatList([])` 和 `setIsChatListLoading(true)` 放在 `handleConversationSwitch`（useEffect）中，effect 在 React render **之后**才执行。时序为：
+
+```
+setCurrConversationId → render(旧chatList) → effect(清空+fetch) → render(空/loading)
+```
+
+**修复**：将清空 + 开启 loading 提前到 `handleConversationIdChange` 同步执行：
+
+```typescript
+// handleConversationIdChange
+else {
+  setConversationIdChangeBecauseOfNew(false)
+  setChatList([])              // 立即清空
+  setIsChatListLoading(true)   // 立即设 loading
+}
+setCurrConversationId(id, APP_ID)
+```
+
+React 18 批处理下，`setChatList([])` + `setIsChatListLoading(true)` + `setCurrConversationId(id)` 合并为单帧渲染，直接显示 loading 态。
+
+---
+
+### 14.2 加载中阻止发送消息
+
+**现象**：消息列表加载中点击发送，可能引发状态混乱。
+
+**修复**：`checkCanSend` 新增 `isChatListLoading` 守卫：
+
+```typescript
+if (isChatListLoading) {
+  notify({ type: 'info', message: '消息列表加载中，请稍后' })
+  return false
+}
+```
+
+关键：Chat 组件中 `handleSend` 调用 `checkCanSend` 返回 false 时直接 `return`，不调 `onSend`，不清空 `queryRef.current`，用户输入保留。
+
+---
+
+### 14.3 快速连续切换时旧请求覆盖新数据
+
+**现象**：快速连续点击侧边栏切换会话，后发先至的响应可能被先发后至的旧响应覆盖。
+
+**根因**：多个异步 `fetchChatList` Promise 竞争，无过期丢弃机制。
+
+**修复**：`chatListFetchIdRef` 递增计数器模式：
+
+```typescript
+chatListFetchIdRef.current += 1
+const fetchId = chatListFetchIdRef.current
+fetchChatList(currConversationId).then((res) => {
+  if (chatListFetchIdRef.current !== fetchId) return  // 过期丢弃
+  setChatList(newChatList)
+  setIsChatListLoading(false)
+}).catch(() => {
+  if (chatListFetchIdRef.current !== fetchId) return
+  setIsChatListLoading(false)
+})
+```
