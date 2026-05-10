@@ -46,8 +46,10 @@ const Main: FC<IMainProps> = () => {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [defaultAgentId, setDefaultAgentId] = useState<string>('')
   const [isDirectLLM, setIsDirectLLM] = useState<boolean>(false)
+  const [isChatListLoading, setIsChatListLoading] = useState<boolean>(false)
   const agentInputsCacheRef = useRef<Record<string, Record<string, any>>>({})
   const skipChatListFetchRef = useRef(false)
+  const chatListFetchIdRef = useRef(0)
   const promptVariablesCacheRef = useRef<Record<string, { key: string, name?: string, required?: boolean }[]>>({})
   const fetchingPromisesRef = useRef<Record<string, Promise<void>>>({})
   const agentTypeMapRef = useRef<Record<string, string>>({})
@@ -246,7 +248,12 @@ const Main: FC<IMainProps> = () => {
 
     // update chat list of current conversation
     if (!isNewConversation && !conversationIdChangeBecauseOfNew && !isResponding && !skipChatListFetchRef.current) {
+      setChatList([])
+      setIsChatListLoading(true)
+      chatListFetchIdRef.current += 1
+      const fetchId = chatListFetchIdRef.current
       fetchChatList(currConversationId).then((res: any) => {
+        if (chatListFetchIdRef.current !== fetchId) return
         const { data } = res
         const newChatList: ChatItem[] = generateNewChatListWithOpenStatement(notSyncToStateIntroduction, notSyncToStateInputs)
 
@@ -268,6 +275,10 @@ const Main: FC<IMainProps> = () => {
           })
         })
         setChatList(newChatList)
+        setIsChatListLoading(false)
+      }).catch(() => {
+        if (chatListFetchIdRef.current !== fetchId) return
+        setIsChatListLoading(false)
       })
     }
     skipChatListFetchRef.current = false
@@ -304,6 +315,8 @@ const Main: FC<IMainProps> = () => {
     }
     else {
       setConversationIdChangeBecauseOfNew(false)
+      setChatList([])
+      setIsChatListLoading(true)
     }
     // trigger handleConversationSwitch
     setCurrConversationId(id, APP_ID)
@@ -525,6 +538,10 @@ const Main: FC<IMainProps> = () => {
   }
 
   const checkCanSend = () => {
+    if (isChatListLoading) {
+      notify({ type: 'info', message: t('app.chat.messageListLoading') || '消息列表加载中，请稍后' })
+      return false
+    }
     if (currConversationId !== '-1') { return true }
 
     if (!currInputs || !promptConfig?.prompt_variables) { return true }
@@ -1096,6 +1113,7 @@ const Main: FC<IMainProps> = () => {
                 onFeedback={handleFeedback}
                 onRegenerate={handleRegenerate}
                 isResponding={isResponding}
+                isChatListLoading={isChatListLoading}
                 onStopResponding={handleStopResponding}
                 checkCanSend={checkCanSend}
                 visionConfig={visionConfig}
