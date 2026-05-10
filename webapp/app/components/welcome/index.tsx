@@ -24,6 +24,7 @@ export interface IWelcomeProps {
   canEditInputs: boolean
   savedInputs: Record<string, any>
   onInputsChange: (inputs: Record<string, any>) => void
+  isDirectLLM?: boolean
 }
 
 const Welcome: FC<IWelcomeProps> = ({

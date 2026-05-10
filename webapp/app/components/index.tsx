@@ -45,10 +45,12 @@ const Main: FC<IMainProps> = () => {
   const [inited, setInited] = useState<boolean>(false)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [defaultAgentId, setDefaultAgentId] = useState<string>('')
+  const [isDirectLLM, setIsDirectLLM] = useState<boolean>(false)
   const agentInputsCacheRef = useRef<Record<string, Record<string, any>>>({})
   const skipChatListFetchRef = useRef(false)
   const promptVariablesCacheRef = useRef<Record<string, { key: string, name?: string, required?: boolean }[]>>({})
   const fetchingPromisesRef = useRef<Record<string, Promise<void>>>({})
+  const agentTypeMapRef = useRef<Record<string, string>>({})
 
   // ---- Sync localStorage helpers ----
   function getAllConversations(): any[] {
@@ -198,6 +200,7 @@ const Main: FC<IMainProps> = () => {
   }
   const hasSetInputs = (() => {
     if (!isNewConversation) { return true }
+    if (isDirectLLM) { return true }
 
     return isChatStarted
   })()
@@ -270,6 +273,7 @@ const Main: FC<IMainProps> = () => {
     skipChatListFetchRef.current = false
 
     if (isNewConversation && isChatStarted) { setChatList(generateNewChatListWithOpenStatement()) }
+    if (isNewConversation && isDirectLLM) { setChatList([]) }
   }
   useEffect(handleConversationSwitch, [currConversationId, inited])
 
@@ -421,6 +425,10 @@ const Main: FC<IMainProps> = () => {
           // Cache default agent's prompt_variables for sync access on first render
           promptVariablesCacheRef.current[defaultAgent.id] = prompt_variables
         }
+        setIsDirectLLM(defaultAgent?.backend_type === 'direct_llm')
+
+        // Cache backend_type for each agent (used to skip param fetch for direct_llm etc.)
+        agentsRes.agents?.forEach((a: any) => { agentTypeMapRef.current[a.id] = a.backend_type })
 
         if (isNotNewConversation) {
           // Clean up saved params for default agent in this conversation
@@ -473,13 +481,25 @@ const Main: FC<IMainProps> = () => {
     const agentKey = selectedAgentId || defaultAgentId
     if (!agentKey) return
 
-    // Always fetch latest prompt_variables from backend, then sync + restore
-    fetchAndCachePromptVars(selectedAgentId).then(() => {
-      const vars = promptVariablesCacheRef.current[agentKey] || []
-      const cleaned = syncAndCleanParams(realConvId, agentKey, vars)
+    const isDirectLLM = agentTypeMapRef.current[agentKey] === 'direct_llm'
+    setIsDirectLLM(isDirectLLM)
+
+    if (isDirectLLM) {
+      // Direct LLM agents have no prompt_variables; skip fetch
+      promptVariablesCacheRef.current[agentKey] = []
+      const cleaned = syncAndCleanParams(realConvId, agentKey, [])
       setCurrInputs(cleaned ? { ...cleaned } : null)
-      setPromptConfig({ prompt_template: promptTemplate, prompt_variables: vars } as PromptConfig)
-    })
+      setPromptConfig({ prompt_template: promptTemplate, prompt_variables: [] } as PromptConfig)
+    }
+    else {
+      // Always fetch latest prompt_variables from backend, then sync + restore
+      fetchAndCachePromptVars(selectedAgentId).then(() => {
+        const vars = promptVariablesCacheRef.current[agentKey] || []
+        const cleaned = syncAndCleanParams(realConvId, agentKey, vars)
+        setCurrInputs(cleaned ? { ...cleaned } : null)
+        setPromptConfig({ prompt_template: promptTemplate, prompt_variables: vars } as PromptConfig)
+      })
+    }
 
     prevAgentIdRef.current = selectedAgentId
   }, [selectedAgentId])
@@ -1050,17 +1070,20 @@ const Main: FC<IMainProps> = () => {
         )}
         {/* main */}
         <div className='flex-grow flex flex-col h-screen overflow-hidden'>
+          {inited && (
           <ConfigSence
             conversationName={conversationName}
             hasSetInputs={hasSetInputs}
-            isPublicVersion={isShowPrompt}
+            isPublicVersion={isShowPrompt && agentTypeMapRef.current[selectedAgentId || defaultAgentId] !== 'direct_llm'}
             siteInfo={APP_INFO}
             promptConfig={promptConfig}
             onStartChat={handleStartChat}
             canEditInputs={canEditInputs}
             savedInputs={(currInputs as Record<string, any>) ?? agentInputsCacheRef.current[selectedAgentId || defaultAgentId]}
             onInputsChange={setCurrInputs}
+            isDirectLLM={isDirectLLM}
           ></ConfigSence>
+          )}
 
           {
             hasSetInputs && (
