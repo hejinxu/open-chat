@@ -397,3 +397,161 @@ fetchChatList(currConversationId).then((res) => {
   setIsChatListLoading(false)
 })
 ```
+
+---
+
+## 15. 多存储后端（SQLite）
+
+### 15.1 better-sqlite3 原生模块编译失败
+
+**现象**：安装 `better-sqlite3` 后启动 Next.js，报 `Could not locate the bindings file`。
+
+**根因**：`better-sqlite3` 是 Node.js 原生 C++ 模块，需要在目标系统上编译原生代码。Windows 环境下编译失败，缺少 `binding.gyp` 生成的二进制文件。
+
+**修复**：换用 `sql.js`（纯 JavaScript 实现，基于 WebAssembly），无需编译原生模块。API 兼容，支持所有 SQLite 操作。
+
+```bash
+pnpm remove better-sqlite3 @types/better-sqlite3
+pnpm add sql.js
+```
+
+---
+
+### 15.2 Next.js 打包 sql.js 导致 ESM/CJS 互操作冲突
+
+**现象**：`const initSqlJs = require('sql.js')` 和 `await import('sql.js')` 都报 `Cannot set properties of undefined (setting 'exports')`。
+
+**根因**：Next.js 服务端打包器会将动态 `import()` 转换为 webpack 的 `require()` 调用。sql.js 是 ESM 模块，被 CJS 方式引用时产生互操作冲突。
+
+**修复**：在 `next.config.js` 中添加 `serverExternalPackages: ['sql.js']`，阻止 Next.js 打包该模块，让它作为原生 Node.js 模块在运行时加载。
+
+```javascript
+// next.config.js
+const nextConfig = {
+  serverExternalPackages: ['sql.js'],
+  // ...
+}
+```
+
+**正确用法**：
+```typescript
+// lib/db/sqlite.ts
+const initSqlJs = require('sql.js')
+const SQL = await initSqlJs()
+const db = new SQL.Database(buffer)
+```
+
+---
+
+### 15.3 RemoteStorageProvider 导入客户端组件导致服务端报错
+
+**现象**：切换到 SQLite 后端后，现有 API 路由（`/api/conversations`）报 `Toast.notify is not a function`。
+
+**根因**：`RemoteStorageProvider` 导入了 `@/app/components/base/toast`（客户端组件，标记 `'use client'`）。当工厂函数在服务端执行时，导入链包含了客户端组件，Webpack 打包后 `Toast.notify` 变成了 mock 对象。
+
+**修复**：从 `RemoteStorageProvider` 移除 `Toast` 导入，改用回调通知机制。默认回调使用 `console.warn`/`console.error`，客户端组件可通过 `setStorageNotifyCallbacks` 注册自定义通知。
+
+```typescript
+// remote-storage.ts
+let notifyWarning = (msg: string) => console.warn(msg)
+let notifyError = (msg: string) => console.error(msg)
+
+export function setStorageNotifyCallbacks(opts: { warn?: (msg: string) => void; error?: (msg: string) => void }) {
+  if (opts.warn) notifyWarning = opts.warn
+  if (opts.error) notifyError = opts.error
+}
+```
+
+---
+
+### 15.4 服务端/客户端 Provider 混用导致循环依赖
+
+**现象**：SQLite 模式下，`ConversationService` 在服务端 API 路由中使用时创建了 `RemoteStorageProvider`，`RemoteStorageProvider` 又向 `http://localhost/api/storage/...` 发 HTTP 请求，形成循环。
+
+**根因**：工厂函数未区分运行环境，服务和客户端都返回同一个 `RemoteStorageProvider`。服务端应直接使用数据库，不应通过 HTTP 访问自己。
+
+**修复**：工厂函数通过 `typeof window === 'undefined'` 检测环境：
+- **服务端**：直接返回 `SqliteProvider` 实例（实现 `StorageProvider` 接口）
+- **客户端**：返回 `RemoteStorageProvider`（通过 HTTP 访问存储 API）
+
+```typescript
+// factory.ts
+export function createStorageProvider(): StorageProvider {
+  const backend = process.env.NEXT_PUBLIC_STORAGE_BACKEND
+  if (backend === 'sqlite' || backend === 'postgres') {
+    if (typeof window === 'undefined') {
+      // 服务端：直接使用数据库
+      return getDatabaseProvider() as unknown as StorageProvider
+    } else {
+      // 客户端：通过 HTTP API
+      return new RemoteStorageProvider()
+    }
+  }
+  return new LocalStorageProvider()
+}
+```
+
+**流程图**：
+```
+客户端: Component → ConversationService → RemoteStorageProvider → HTTP → /api/storage/xxx → SqliteProvider → SQLite
+服务端: API Route → ConversationService → SqliteProvider → SQLite
+```
+
+---
+
+### 15.5 端口残留导致测试混乱
+
+**现象**：测试时多次开关服务器，旧进程未完全杀死，新服务启动时端口被占用，跑到 3001、3002、3003 等随机端口。
+
+**根因**：`pkill -f "next dev"` 在 WSL 环境中可能不会立即杀死所有子进程。
+
+**排查**：
+```bash
+# 查看端口占用
+lsof -ti:3000
+
+# 强制释放所有 Next.js 相关端口
+kill $(lsof -ti:3000) $(lsof -ti:3001) $(lsof -ti:3002) $(lsof -ti:3003) 2>/dev/null
+```
+
+---
+
+### 15.6 多次开关导致 node_modules 损坏
+
+**现象**：多次运行 `pnpm install`、删除 `node_modules` 后，Next.js 启动报 `Cannot find module '../server/require-hook'`。
+
+**根因**：WSL 环境下 `rm -rf node_modules` 可能因文件锁无法完全删除，导致部分文件残留，`pnpm install` 未重新下载损坏的包。
+
+**修复**：
+1. 确保没有进程占用 `node_modules` 下的文件
+2. 完全删除 `node_modules` 目录
+3. `CI=true pnpm install --no-frozen-lockfile`
+4. 注意：`pnpm install` 在此环境中编译耗时 6-10 分钟，需要足够超时时间
+
+---
+
+### 15.7 langium `export *` 转发导致 Webpack 命名导出解析失败
+
+**现象**：启动 `pnpm dev` 后页面报 `Attempted import error: 'Emitter' is not exported from '../utils/event.js' (imported as 'Emitter')`。错误链：`streamdown` → `mermaid` → `@mermaid-js/parser` → `langium` → `vscode-jsonrpc`。
+
+**根因**：`langium/lib/utils/event.js` 只是一个转发文件，内容为 `export * from 'vscode-jsonrpc/lib/common/events.js'`。`Emitter` 类真正定义在 `vscode-jsonrpc` 中。
+
+当 Next.js 通过 `transpilePackages: ['langium']` 编译 `langium` 时，Webpack 遇到 `export *` 转发语句，需要追溯被转发的模块才能知道实际导出了什么。但 `vscode-jsonrpc` **不在** `transpilePackages` 列表中 → Webpack 无法解析 → 报 `Emitter is not exported`。
+
+注意：`langium` 的 `package.json` 设置了 `"type": "module"`，所有 `.js` 文件都按 ESM 处理。`event.js` 的 `export *` 是合法的 ESM 语法，但被 Webpack 转编译时无法跨模块追溯。
+
+**修复**：将 `vscode-jsonrpc` 加入 `transpilePackages`：
+
+```javascript
+// next.config.js
+transpilePackages: ['langium', 'vscode-jsonrpc', '@mermaid-js/parser'],
+```
+
+**原始 `transpilePackages` 对比**：
+| 原始配置 | 当前配置 |
+|----------|----------|
+| `['langium', 'vscode-languageserver-types', 'vscode-languageserver', 'vscode-uri', '@mermaid-js/parser']` | `['langium', 'vscode-jsonrpc', '@mermaid-js/parser']` |
+
+变更说明：
+- **移除** `vscode-languageserver-types`、`vscode-languageserver`、`vscode-uri`：这些已在 webpack client alias 中设为 `false`，不需要在服务端编译
+- **新增** `vscode-jsonrpc`：`langium` 通过 `export *` 转发其导出，必须纳入编译链

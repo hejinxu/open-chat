@@ -103,6 +103,39 @@ interface ConversationRecord {
 - `lib/services/conversation.ts` — `ConversationService`（对话 CRUD）
 - `lib/services/message.ts` — `MessageService`（消息保存，区分用户消息和 AI 回复）
 
+#### 存储层（多后端支持）
+- **StorageProvider 接口**: `lib/storage/types.ts` 定义统一的存储接口
+- **LocalStorageProvider**: `lib/storage/local-storage.ts` 实现 localStorage 存储（默认）
+- **RemoteStorageProvider**: `lib/storage/remote-storage.ts` 实现 HTTP API 存储，通过 `setStorageNotifyCallbacks` 注入通知（避免依赖客户端 Toast）
+- **全局写锁**: `lib/storage/tab-lock.ts` 防止多标签页并发写入，5s 锁超时 + 10s 最大等待
+- **存储工厂**: `lib/storage/factory.ts` 根据 `typeof window` 区分服务端（直接用 DB）/ 客户端（HTTP API）
+- **数据库适配器**: `lib/db/sqlite.ts` 使用 `sql.js`（纯 JS WebAssembly，无需原生编译）；`lib/db/postgres.ts` 预留
+- **API 路由**: `app/api/storage/` 提供存储 API（conversations, messages, merge）
+
+**存储后端切换**: 通过 `NEXT_PUBLIC_STORAGE_BACKEND` 环境变量选择（local/sqlite/postgres）。SQLite 使用时需在 `next.config.js` 中配置 `serverExternalPackages: ['sql.js']` 避免 ESM/CJS 互操作冲突。
+
+**数据流原则**: 以远程存储为主，本地存储只是远程存储失效时的备份来源。新增、编辑、删除、查询都是优先操作远程存储。
+
+**服务端 vs 客户端路径**:
+```
+客户端: Component → ConversationService → RemoteStorageProvider → HTTP → /api/storage/xxx → SqliteProvider → SQLite
+服务端: API Route → ConversationService → SqliteProvider → SQLite
+```
+
+**读操作流程**: ref 缓存 → 远程存储（10s 超时） → localStorage 降级
+**写操作流程**: ref 缓存 → 全局写锁 → 优先远程存储 → 成功后写 localStorage 缓存
+**删除操作流程**: 全局写锁 → 优先删除远程 → 成功后删除 localStorage
+**初始化流程**: 优先远程获取 → 失败降级到 localStorage
+
+**会话 ID 隔离**: 同一本地会话中的同一智能体共享 `backend_conversation_id`，不同本地会话中的同一智能体各自独立。
+
+**智能体类型与会话 ID**:
+- Dify 类型：在 `onData` 第一个 chunk 中保存 `conversation_id`（通过 `agentTypeMapRef` 判断类型）
+- 直连 LLM 类型：无后端会话 ID，上下文通过前端 `messages` 数组保持（包含所有智能体对话）
+
+**详细设计**: `docs/多存储后端实现计划.md`
+**FAQ**: `docs/多智能体开发FAQ.md` §15（多存储后端实施 FAQ）
+
 #### 数据流
 ```
 用户发送消息（可选选择智能体）
@@ -193,6 +226,13 @@ NEXT_PUBLIC_DEFAULT_THEME=tech-blue
 NEXT_PUBLIC_APP_ID=<dify-app-id>
 NEXT_PUBLIC_APP_KEY=<dify-api-key>
 NEXT_PUBLIC_API_URL=https://api.dify.ai/v1
+
+# 存储后端：local | sqlite | postgres
+NEXT_PUBLIC_STORAGE_BACKEND=local
+# SQLite 数据库路径（仅服务端，相对于 webapp 目录或绝对路径）
+SQLITE_DB_PATH=data/openchat.db
+# PostgreSQL 连接字符串（仅服务端，后续实现）
+# POSTGRES_URL=postgresql://user:password@localhost:5432/openchat
 ```
 
 ### webapp/config/agents.config.json（gitignored）
@@ -236,4 +276,4 @@ SPEECH_MODEL=whisper-tiny
 - **webapp/README.md**: webapp 详细文档
 - **ws-server/README.md**: ws-server 详细文档
 - **AGENTS.md**: AI 面向的工程上下文（本文件）
-- **docs/**: PRD、多智能体实现计划、开发 FAQ、语音识别系统等专项文档（根目录）
+- **docs/**: PRD、多智能体实现计划、开发 FAQ、语音识别系统、多存储后端实现计划等专项文档（根目录）

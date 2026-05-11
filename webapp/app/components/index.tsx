@@ -22,9 +22,17 @@ import AppUnavailable from '@/app/components/app-unavailable'
 import { API_KEY, APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/config'
 import type { Annotation as AnnotationType } from '@/types/log'
 import { addFileInfos, sortAgentSorts } from '@/utils/tools'
-import { getStorageProvider } from '@/lib/storage'
+import { getStorageProvider, getStorageBackend } from '@/lib/storage'
 import { getConversationService } from '@/lib/services/conversation'
 import { stopReadAloud } from '@/app/components/chat/text-to-speech'
+
+// 超时工具函数
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ])
+}
 
 export interface IMainProps {
   params: any
@@ -53,6 +61,10 @@ const Main: FC<IMainProps> = () => {
   const promptVariablesCacheRef = useRef<Record<string, { key: string, name?: string, required?: boolean }[]>>({})
   const fetchingPromisesRef = useRef<Record<string, Promise<void>>>({})
   const agentTypeMapRef = useRef<Record<string, string>>({})
+  const backendConvIdCacheRef = useRef<Record<string, string>>({})
+  const hasSavedBackendConvIdRef = useRef<Record<string, boolean>>({})
+
+  const storageBackend = getStorageBackend()
 
   // ---- Sync localStorage helpers ----
   function getAllConversations(): any[] {
@@ -144,6 +156,139 @@ const Main: FC<IMainProps> = () => {
     }
     agentInputsCacheRef.current[agentId] = {}
     return null
+  }
+
+  // ---- Async version: sync clean params with remote storage support ----
+  async function syncAndCleanParamsAsync(convId: string, agentId: string, promptVars: { key: string }[]): Promise<Record<string, any> | null> {
+    if (!convId || convId === '-1') {
+      return agentInputsCacheRef.current[agentId] || null
+    }
+
+    // 获取参数（优先远程，超时降级本地）
+    let saved: Record<string, any> | null = null
+    if (storageBackend !== 'local') {
+      try {
+        const provider = getStorageProvider()
+        const conv = await withTimeout(
+          provider.getConversationById(convId),
+          10000,
+          null
+        )
+        saved = conv?.agents?.[agentId]?.params || null
+      } catch {
+        console.warn('Failed to get params from remote, falling back to localStorage')
+        Toast.notify({ type: 'warning', message: '获取参数超时，使用本地缓存' })
+        saved = getAgentParamsSync(convId, agentId)
+      }
+    } else {
+      saved = getAgentParamsSync(convId, agentId)
+    }
+
+    // 清洗逻辑
+    const validKeys = new Set(promptVars.map(v => v.key))
+    const cleaned: Record<string, any> = {}
+    let dirty = false
+    if (saved) {
+      for (const [k, v] of Object.entries(saved)) {
+        if (validKeys.has(k)) {
+          cleaned[k] = v
+        } else {
+          dirty = true
+        }
+      }
+    }
+
+    if (dirty) {
+      saveAgentParamsSync(convId, agentId, cleaned)
+    }
+
+    if (Object.keys(cleaned).length > 0) {
+      agentInputsCacheRef.current[agentId] = { ...cleaned }
+      return cleaned
+    }
+
+    agentInputsCacheRef.current[agentId] = {}
+    return null
+  }
+
+  // ---- Async: get backend_conversation_id ----
+  async function getBackendConvId(convId: string, agentId: string): Promise<string | null> {
+    const cacheKey = `${convId}:${agentId}`
+
+    // 1. ref 缓存
+    if (backendConvIdCacheRef.current[cacheKey]) {
+      return backendConvIdCacheRef.current[cacheKey]
+    }
+
+    // 2. 远程存储（10s 超时）
+    if (storageBackend !== 'local') {
+      try {
+        const provider = getStorageProvider()
+        const conv = await withTimeout(
+          provider.getConversationById(convId),
+          10000,
+          null
+        )
+        if (conv) {
+          const backendConvId = conv.agents?.[agentId]?.backend_conversation_id || null
+          if (backendConvId) {
+            backendConvIdCacheRef.current[cacheKey] = backendConvId
+          }
+          return backendConvId
+        }
+      } catch {
+        console.warn('Failed to get backend_conv_id from remote, falling back to localStorage')
+        Toast.notify({ type: 'warning', message: '获取会话ID超时，使用本地缓存' })
+      }
+    }
+
+    // 3. localStorage fallback
+    return getBackendConvIdSync(convId, agentId)
+  }
+
+  // ---- Save backend_conversation_id (双写) ----
+  function saveBackendConvId(convId: string, agentId: string, backendId: string) {
+    const cacheKey = `${convId}:${agentId}`
+
+    // 1. 立即更新 ref 缓存
+    backendConvIdCacheRef.current[cacheKey] = backendId
+
+    // 2. 同步写入 localStorage
+    saveBackendConvIdSync(convId, agentId, backendId)
+
+    // 3. 异步写入远程存储
+    if (storageBackend !== 'local') {
+      getConversationService().saveBackendConversationId(convId, agentId, backendId)
+        .catch((error) => {
+          console.error('Failed to sync backend_conv_id to remote:', error)
+        })
+    }
+  }
+
+  // ---- Save agent params (优先远程，成功后写本地) ----
+  async function saveAgentParams(convId: string, agentId: string, params: Record<string, any>) {
+    // 1. 立即更新 ref 缓存
+    agentInputsCacheRef.current[agentId] = { ...params }
+
+    // 2. 同步写入 localStorage
+    saveAgentParamsSync(convId, agentId, params)
+
+    // 3. 异步写入远程存储
+    if (storageBackend !== 'local') {
+      try {
+        const provider = getStorageProvider()
+        const conv = await provider.getConversationById(convId)
+        if (conv) {
+          if (!conv.agents) conv.agents = {}
+          if (!conv.agents[agentId]) conv.agents[agentId] = { params: {} }
+          conv.agents[agentId].params = { ...params }
+          conv.updated_at = Math.floor(Date.now() / 1000)
+          await provider.saveConversation(conv)
+        }
+      } catch (error) {
+        console.error('Failed to sync agent params to remote:', error)
+      }
+    }
   }
 
   // in mobile, show sidebar by click button
@@ -500,15 +645,15 @@ const Main: FC<IMainProps> = () => {
     if (isDirectLLM) {
       // Direct LLM agents have no prompt_variables; skip fetch
       promptVariablesCacheRef.current[agentKey] = []
-      const cleaned = syncAndCleanParams(realConvId, agentKey, [])
+      const cleaned = agentInputsCacheRef.current[agentKey] || null
       setCurrInputs(cleaned ? { ...cleaned } : null)
       setPromptConfig({ prompt_template: promptTemplate, prompt_variables: [] } as PromptConfig)
     }
     else {
       // Always fetch latest prompt_variables from backend, then sync + restore
-      fetchAndCachePromptVars(selectedAgentId).then(() => {
+      fetchAndCachePromptVars(selectedAgentId).then(async () => {
         const vars = promptVariablesCacheRef.current[agentKey] || []
-        const cleaned = syncAndCleanParams(realConvId, agentKey, vars)
+        const cleaned = await syncAndCleanParamsAsync(realConvId, agentKey, vars)
         setCurrInputs(cleaned ? { ...cleaned } : null)
         setPromptConfig({ prompt_template: promptTemplate, prompt_variables: vars } as PromptConfig)
       })
@@ -724,8 +869,11 @@ const Main: FC<IMainProps> = () => {
       message_files: (files || []).filter((f: any) => f.type === 'image'),
     })
 
-    // Look up Dify conversation_id for this agent (sync)
-    const difyConvId = getBackendConvIdSync(localConvId, agentKey)
+    // Look up Dify conversation_id for this agent (async)
+    const difyConvId = await getBackendConvId(localConvId, agentKey)
+
+    // 重置保存标志
+    hasSavedBackendConvIdRef.current[`${localConvId}:${agentKey}`] = false
 
     const sendData: Record<string, any> = {
       inputs: toServerInputs,
@@ -770,9 +918,13 @@ const Main: FC<IMainProps> = () => {
         setAbortController(abortController)
       },
       onData: (message: string, isFirstMessage: boolean, { conversationId: newDifyConvId, messageId, taskId }: any) => {
-        // Map local conversation ID to Dify conversation ID
-        if (newDifyConvId) {
-          saveBackendConvIdSync(localConvId, agentKey, newDifyConvId)
+        // 只有 Dify 类型智能体才会在 chunk 中返回 conversation_id
+        const convKey = `${localConvId}:${agentKey}`
+        const isDifyAgent = agentTypeMapRef.current[agentKey] === 'dify'
+
+        if (isDifyAgent && newDifyConvId && !hasSavedBackendConvIdRef.current[convKey]) {
+          hasSavedBackendConvIdRef.current[convKey] = true
+          saveBackendConvId(localConvId, agentKey, newDifyConvId)
         }
         if (!isAgentMode) {
           responseItem.content = responseItem.content + message
@@ -831,7 +983,7 @@ const Main: FC<IMainProps> = () => {
           const aKey = selectedAgentId || defaultAgentId
           agentInputsCacheRef.current[aKey] = { ...currInputs }
           if (localConvId && localConvId !== '-1') {
-            saveAgentParamsSync(localConvId, aKey, currInputs)
+            saveAgentParams(localConvId, aKey, currInputs)
           }
         }
         resetNewConversationInputs()

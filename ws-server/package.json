@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
-    "onnxruntime-common": "^1.24.3",
+    "onnxruntime-common": "^1.21.0",
     "opencc-js": "^1.0.5",
     "socket.io": "^4.8.3"
   }
