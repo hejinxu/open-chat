@@ -43,16 +43,23 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { conversation_id } = await request.json()
-    if (!conversation_id) {
-      return NextResponse.json(
-        { success: false, error: 'Missing conversation_id' },
-        { status: 400 }
-      )
-    }
+    const body = await request.json()
     const db = getDatabaseProvider()
-    await db.deleteMessages(conversation_id)
-    return NextResponse.json({ success: true })
+
+    if (body.conversation_id) {
+      await db.deleteMessages(body.conversation_id)
+      return NextResponse.json({ success: true })
+    }
+
+    if (body.ids && Array.isArray(body.ids) && body.ids.length > 0) {
+      await db.deleteMessagesByIds(body.ids)
+      return NextResponse.json({ success: true })
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Missing conversation_id or ids' },
+      { status: 400 }
+    )
   } catch (error: any) {
     console.error('DELETE /api/storage/messages error:', error)
     return NextResponse.json(

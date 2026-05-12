@@ -24,7 +24,9 @@ import type { Annotation as AnnotationType } from '@/types/log'
 import { addFileInfos, sortAgentSorts } from '@/utils/tools'
 import { getStorageProvider, getStorageBackend } from '@/lib/storage'
 import { getConversationService } from '@/lib/services/conversation'
+import { getMessageService } from '@/lib/services/message'
 import { stopReadAloud } from '@/app/components/chat/text-to-speech'
+import ConfirmDialog from '@/app/components/base/confirm-dialog'
 
 // 超时工具函数
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -55,6 +57,7 @@ const Main: FC<IMainProps> = () => {
   const [defaultAgentId, setDefaultAgentId] = useState<string>('')
   const [isDirectLLM, setIsDirectLLM] = useState<boolean>(false)
   const [isChatListLoading, setIsChatListLoading] = useState<boolean>(false)
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<string | null>(null)
   const agentInputsCacheRef = useRef<Record<string, Record<string, any>>>({})
   const skipChatListFetchRef = useRef(false)
   const chatListFetchIdRef = useRef(0)
@@ -1202,6 +1205,40 @@ const Main: FC<IMainProps> = () => {
     await handleSend(questionItem.content, files, questionItem.agent_id || selectedAgentId)
   }
 
+  const handleDeleteMessage = (answerId: string) => {
+    setDeleteConfirmTarget(answerId)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmTarget) return
+    const answerId = deleteConfirmTarget
+    setDeleteConfirmTarget(null)
+
+    stopReadAloud()
+
+    const list = getChatList()
+    const aIndex = list.findIndex(item => item.id === answerId && item.isAnswer)
+    if (aIndex < 0) return
+
+    let qIndex = aIndex - 1
+    while (qIndex >= 0 && list[qIndex].isAnswer) {
+      qIndex--
+    }
+    const qItem = qIndex >= 0 ? list[qIndex] : null
+
+    const newList = list.filter((_, i) => i !== aIndex && (qItem ? i !== qIndex : true))
+    setChatList(newList)
+
+    try {
+      const idsToDelete = [answerId]
+      if (qItem) idsToDelete.push(qItem.id)
+      await getMessageService().deleteMessagesByIds(idsToDelete)
+      notify({ type: 'success', message: '消息已删除' })
+    } catch {
+      notify({ type: 'error', message: '删除失败' })
+    }
+  }
+
   const renderSidebar = () => {
     if (!APP_ID || !APP_INFO) { return null }
     return (
@@ -1262,6 +1299,7 @@ const Main: FC<IMainProps> = () => {
                 onSend={handleSend}
                 onFeedback={handleFeedback}
                 onRegenerate={handleRegenerate}
+                onDeleteMessage={handleDeleteMessage}
                 isResponding={isResponding}
                 isChatListLoading={isChatListLoading}
                 onStopResponding={handleStopResponding}
@@ -1274,6 +1312,14 @@ const Main: FC<IMainProps> = () => {
           }
         </div>
       </div>
+      <ConfirmDialog
+        open={deleteConfirmTarget !== null}
+        onClose={() => setDeleteConfirmTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title="确认删除"
+        message="确定要删除这条消息吗？删除后无法恢复。"
+        variant="danger"
+      />
     </div>
   )
 }

@@ -29,6 +29,7 @@ export interface IChatProps {
   isHideSendInput?: boolean
   onFeedback?: FeedbackFunc
   onRegenerate?: (id: string) => void
+  onDeleteMessage?: (id: string) => void
   checkCanSend?: () => boolean
   onSend?: (message: string, files: VisionFile[], agentId?: string | null) => void
   useCurrentUserAvatar?: boolean
@@ -48,6 +49,7 @@ const Chat: FC<IChatProps> = ({
   isHideSendInput = false,
   onFeedback,
   onRegenerate,
+  onDeleteMessage,
   checkCanSend,
   onSend = () => { },
   useCurrentUserAvatar,
@@ -275,6 +277,7 @@ const Chat: FC<IChatProps> = ({
                 feedbackDisabled={feedbackDisabled}
                 onFeedback={onFeedback}
                 onRegenerate={onRegenerate}
+                onDeleteMessage={onDeleteMessage}
                 isResponding={isResponding && isLast}
                 suggestionClick={suggestionClick}
               />

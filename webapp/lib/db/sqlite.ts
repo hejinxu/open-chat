@@ -165,6 +165,14 @@ export class SqliteProvider implements DatabaseProvider {
     this.saveToFile()
   }
 
+  async deleteMessagesByIds(ids: string[]): Promise<void> {
+    await this.ensureReady()
+    if (ids.length === 0) return
+    const placeholders = ids.map(() => '?').join(', ')
+    this.db.run(`DELETE FROM messages WHERE id IN (${placeholders})`, ids)
+    this.saveToFile()
+  }
+
   private mapConversation(row: any): ConversationRecord {
     return {
       id: row.id as string,

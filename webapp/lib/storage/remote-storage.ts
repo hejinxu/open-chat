@@ -207,4 +207,33 @@ export class RemoteStorageProvider implements StorageProvider {
       lock.releaseLock()
     }
   }
+
+  async deleteMessagesByIds(ids: string[]): Promise<void> {
+    const lock = getTabLock()
+    const hasLock = await lock.acquireLock()
+    if (!hasLock) {
+      throw new Error('获取写锁超时')
+    }
+
+    try {
+      const res = await withTimeout(
+        fetch(`${this.baseUrl}/messages`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        }),
+        TIMEOUT_MS
+      )
+      if (!res.ok) throw new Error('API failed')
+
+      // 成功后删本地
+      await this.localStorageProvider.deleteMessagesByIds(ids)
+    } catch (error) {
+      console.error('Failed to delete from remote:', error)
+      notifyError('删除远程数据失败，本地数据已保留')
+      throw error
+    } finally {
+      lock.releaseLock()
+    }
+  }
 }
