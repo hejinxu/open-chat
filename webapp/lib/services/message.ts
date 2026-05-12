@@ -66,6 +66,10 @@ export class MessageService {
   async deleteMessages(conversationId: string): Promise<void> {
     await this.storage.deleteMessages(conversationId)
   }
+
+  async deleteMessagesByIds(ids: string[]): Promise<void> {
+    await this.storage.deleteMessagesByIds(ids)
+  }
 }
 
 let _instance: MessageService | null = null

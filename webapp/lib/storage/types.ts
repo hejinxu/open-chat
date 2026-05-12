@@ -34,4 +34,5 @@ export interface StorageProvider {
   getMessages(conversationId: string): Promise<MessageRecord[]>
   saveMessage(msg: MessageRecord): Promise<void>
   deleteMessages(conversationId: string): Promise<void>
+  deleteMessagesByIds(ids: string[]): Promise<void>
 }

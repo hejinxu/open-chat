@@ -148,6 +148,11 @@ export class LocalStorageProvider implements StorageProvider {
     const messages = getAllMessagesFromStorage()
     saveAllMessagesToStorage(messages.filter(m => m.conversation_id !== conversationId))
   }
+
+  async deleteMessagesByIds(ids: string[]): Promise<void> {
+    const messages = getAllMessagesFromStorage()
+    saveAllMessagesToStorage(messages.filter(m => !ids.includes(m.id)))
+  }
 }
 
 let _instance: StorageProvider | null = null

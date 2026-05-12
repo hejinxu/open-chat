@@ -70,6 +70,8 @@ interface ConversationRecord {
 
 **agentKey 规则：永远使用实际智能体 ID**，不使用 `'__default__'` 魔术字符串。`agentKey = selectedAgentId || defaultAgentId`。切换默认智能体时 key 自然变化，旧参数不会泄漏。
 
+**消息保存中的 agent_id**：始终使用 `agentKey`（而非 `agentId`），确保未显式选择智能体时也能正确绑定到默认智能体。涉及 `saveUserMessage`、`sendData`、`responseItem` 三处。
+
 **参数同步不变式：** `表单值 == agentInputsCacheRef[agentKey] == localStorage conv.agents[agentKey].params`，三者永远相等。
 
 **参数定义懒加载：** 使用到哪个 Agent 才 fetch 其 `prompt_variables`，取后缓存到 `promptVariablesCacheRef`，再次使用时从缓存同步读取。
@@ -99,9 +101,46 @@ interface ConversationRecord {
 - **发送拦截**：`checkCanSend` 中 `isChatListLoading` 守卫，阻止发送（toast 提示 + return false），不清空输入
 - **侧边栏删除**：`sidebar/index.tsx` 会话条目悬停显示三点按钮，点击弹出删除 dropdown。`data-menu-id` + `target.closest()` 实现 click-outside 关闭
 
+**消息气泡删除**：AI 消息气泡操作栏含三点按钮（`MessageActionsDropdown`），使用 `EllipsisHorizontalIcon`，click-outside 关闭模式同侧边栏。展开 dropdown 含"删除"选项，触发 `ConfirmDialog` 确认后删除该条 AI 回复及对应的用户问题。删除同时移除 UI（`setChatList`）和存储（`MessageService.deleteMessagesByIds`）。dropdown 使用 `isLastMessage` 控制方向：最后一条向上展开（`bottom-full`），其余向下（`top-full`），统一 `left-0` 向右伸展。
+
+**ConfirmDialog**：`app/components/base/confirm-dialog/index.tsx` 基于 `@headlessui/react` 的 `Dialog`，支持 `danger`/`default` 两种 variant。按钮和面板使用语义化主题类（`bg-surface-elevated`、`text-content`、`bg-red-500` 等），无硬编码主题色。
+
 #### 服务层
 - `lib/services/conversation.ts` — `ConversationService`（对话 CRUD）
-- `lib/services/message.ts` — `MessageService`（消息保存，区分用户消息和 AI 回复）
+- `lib/services/message.ts` — `MessageService`（消息保存/删除，区分用户消息和 AI 回复；`deleteMessagesByIds` 按 ID 精确删除）
+
+#### 存储层（多后端支持）
+- **StorageProvider 接口**: `lib/storage/types.ts` 定义统一的存储接口
+- **LocalStorageProvider**: `lib/storage/local-storage.ts` 实现 localStorage 存储（默认）
+- **RemoteStorageProvider**: `lib/storage/remote-storage.ts` 实现 HTTP API 存储，通过 `setStorageNotifyCallbacks` 注入通知（避免依赖客户端 Toast）
+- **全局写锁**: `lib/storage/tab-lock.ts` 防止多标签页并发写入，5s 锁超时 + 10s 最大等待
+- **存储工厂**: `lib/storage/factory.ts` 根据 `typeof window` 区分服务端（直接用 DB）/ 客户端（HTTP API）
+- **数据库适配器**: `lib/db/sqlite.ts` 使用 `sql.js`（纯 JS WebAssembly，无需原生编译）；`lib/db/postgres.ts` 预留
+- **API 路由**: `app/api/storage/` 提供存储 API（conversations, messages, merge）
+
+**存储后端切换**: 通过 `NEXT_PUBLIC_STORAGE_BACKEND` 环境变量选择（local/sqlite/postgres）。SQLite 使用时需在 `next.config.js` 中配置 `serverExternalPackages: ['sql.js']` 避免 ESM/CJS 互操作冲突。
+
+**数据流原则**: 以远程存储为主，本地存储只是远程存储失效时的备份来源。新增、编辑、删除、查询都是优先操作远程存储。
+
+**服务端 vs 客户端路径**:
+```
+客户端: Component → ConversationService → RemoteStorageProvider → HTTP → /api/storage/xxx → SqliteProvider → SQLite
+服务端: API Route → ConversationService → SqliteProvider → SQLite
+```
+
+**读操作流程**: ref 缓存 → 远程存储（10s 超时） → localStorage 降级
+**写操作流程**: ref 缓存 → 全局写锁 → 优先远程存储 → 成功后写 localStorage 缓存
+**删除操作流程**: 全局写锁 → 优先删除远程 → 成功后删除 localStorage
+**初始化流程**: 优先远程获取 → 失败降级到 localStorage
+
+**会话 ID 隔离**: 同一本地会话中的同一智能体共享 `backend_conversation_id`，不同本地会话中的同一智能体各自独立。
+
+**智能体类型与会话 ID**:
+- Dify 类型：在 `onData` 第一个 chunk 中保存 `conversation_id`（通过 `agentTypeMapRef` 判断类型）
+- 直连 LLM 类型：无后端会话 ID，上下文通过前端 `messages` 数组保持（包含所有智能体对话）
+
+**详细设计**: `docs/多存储后端实现计划.md`
+**FAQ**: `docs/多智能体开发FAQ.md` §15（多存储后端实施 FAQ）
 
 #### 数据流
 ```
@@ -178,7 +217,7 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 - **Components**: `'use client'` required for client components. Server components are the default.
 - **Styling**: Tailwind-first. SCSS only for markdown/code. `classnames` or `tailwind-merge` for conditional classes.
 - **Theme colors**: Use semantic CSS custom property classes (`text-content-accent`, `border-border`, `hover:bg-surface-hover`) exclusively. Never hardcode theme-specific colors — this includes Tailwind literals (`text-indigo-600`, `bg-red-50`, `border-indigo-100`), SVG fills (`fill="#444CE7"`), and `dark:` variant overrides. When a component needs a color not covered by existing variables: (1) add the CSS variable to all three theme files (`light.css`, `dark.css`, `tech-blue.css`), (2) register it in `tailwind.config.js` under the appropriate semantic group, (3) use the generated class in components. Hover/danger/interactive states each need their own variable — avoid piggybacking on existing variables that happen to share a value.
-- **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom. Scrollbar at screen edge via full-width scrollable container.
+- **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom. Scrollbar at screen edge via full-width scrollable container. Auto-scroll: `ResizeObserver` on inner content wrapper (no overflow) triggers `scrollTop = scrollHeight` on outer scroll container — handles message loading, streaming, async markdown rendering.
 - **Build**: `next.config.js` disables ESLint and TypeScript errors during build.
 - **Multi-Agent**: 后端 API 通过 `x-agent-id` header 选择智能体；前端 `AgentSelector` 组件在输入框内与语音按钮同排；`agents.config.json` 包含 API key 不可提交 git。
 - **After coding**: 每次编写完代码后，主动询问用户是否需要更新 AGENTS.md。
@@ -193,6 +232,13 @@ NEXT_PUBLIC_DEFAULT_THEME=tech-blue
 NEXT_PUBLIC_APP_ID=<dify-app-id>
 NEXT_PUBLIC_APP_KEY=<dify-api-key>
 NEXT_PUBLIC_API_URL=https://api.dify.ai/v1
+
+# 存储后端：local | sqlite | postgres
+NEXT_PUBLIC_STORAGE_BACKEND=local
+# SQLite 数据库路径（仅服务端，相对于 webapp 目录或绝对路径）
+SQLITE_DB_PATH=data/openchat.db
+# PostgreSQL 连接字符串（仅服务端，后续实现）
+# POSTGRES_URL=postgresql://user:password@localhost:5432/openchat
 ```
 
 ### webapp/config/agents.config.json（gitignored）
@@ -236,4 +282,4 @@ SPEECH_MODEL=whisper-tiny
 - **webapp/README.md**: webapp 详细文档
 - **ws-server/README.md**: ws-server 详细文档
 - **AGENTS.md**: AI 面向的工程上下文（本文件）
-- **docs/**: PRD、多智能体实现计划、开发 FAQ、语音识别系统等专项文档（根目录）
+- **docs/**: PRD、多智能体实现计划、开发 FAQ、语音识别系统、多存储后端实现计划等专项文档（根目录）

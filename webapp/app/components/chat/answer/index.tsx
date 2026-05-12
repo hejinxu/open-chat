@@ -16,6 +16,7 @@ import LoadingAnim from '../loading-anim'
 import s from '../style.module.css'
 import Thought from '../thought'
 import { TextToSpeech } from '../text-to-speech'
+import MessageActionsDropdown from './message-actions-dropdown'
 
 function OperationBtn({ innerContent, onClick, className }: { innerContent: React.ReactNode, onClick?: () => void, className?: string }) {
   return (
@@ -73,6 +74,8 @@ interface IAnswerProps {
   feedbackDisabled: boolean
   onFeedback?: FeedbackFunc
   onRegenerate?: (id: string) => void
+  onDeleteMessage?: (id: string) => void
+  isLastMessage?: boolean
   isResponding?: boolean
   allToolIcons?: Record<string, string | Emoji>
   suggestionClick?: (suggestion: string) => void
@@ -84,6 +87,8 @@ const Answer: FC<IAnswerProps> = ({
   feedbackDisabled = false,
   onFeedback,
   onRegenerate,
+  onDeleteMessage,
+  isLastMessage = false,
   isResponding,
   allToolIcons,
   suggestionClick = () => { },
@@ -155,6 +160,13 @@ const Answer: FC<IAnswerProps> = ({
           </Tooltip>
         )}
         <TextToSpeech text={content} disabled={isResponding} />
+        {onDeleteMessage && !isResponding && (
+          <MessageActionsDropdown
+            messageId={id}
+            onDelete={onDeleteMessage}
+            isLastMessage={isLastMessage}
+          />
+        )}
       </div>
     )
   }

@@ -6,6 +6,7 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
   outputFileTracingRoot: path.join(__dirname, '../'),
+  serverExternalPackages: ['sql.js'],
   experimental: {
     // appDir: true,
   },
@@ -16,7 +17,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   output: 'standalone',
-  transpilePackages: ['langium', 'vscode-languageserver-types', 'vscode-languageserver', 'vscode-uri', '@mermaid-js/parser'],
+  transpilePackages: ['langium', 'vscode-jsonrpc', '@mermaid-js/parser'],
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -32,6 +33,10 @@ const nextConfig = {
         'vscode-uri': false,
       }
     }
+    config.stats = config.stats || {}
+    config.stats.warningsFilter = [
+      /node_modules\/langium/,
+    ]
     return config
   },
 }
