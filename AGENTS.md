@@ -70,6 +70,8 @@ interface ConversationRecord {
 
 **agentKey 规则：永远使用实际智能体 ID**，不使用 `'__default__'` 魔术字符串。`agentKey = selectedAgentId || defaultAgentId`。切换默认智能体时 key 自然变化，旧参数不会泄漏。
 
+**消息保存中的 agent_id**：始终使用 `agentKey`（而非 `agentId`），确保未显式选择智能体时也能正确绑定到默认智能体。涉及 `saveUserMessage`、`sendData`、`responseItem` 三处。
+
 **参数同步不变式：** `表单值 == agentInputsCacheRef[agentKey] == localStorage conv.agents[agentKey].params`，三者永远相等。
 
 **参数定义懒加载：** 使用到哪个 Agent 才 fetch 其 `prompt_variables`，取后缓存到 `promptVariablesCacheRef`，再次使用时从缓存同步读取。

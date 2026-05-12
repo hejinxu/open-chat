@@ -555,3 +555,81 @@ transpilePackages: ['langium', 'vscode-jsonrpc', '@mermaid-js/parser'],
 变更说明：
 - **移除** `vscode-languageserver-types`、`vscode-languageserver`、`vscode-uri`：这些已在 webpack client alias 中设为 `false`，不需要在服务端编译
 - **新增** `vscode-jsonrpc`：`langium` 通过 `export *` 转发其导出，必须纳入编译链
+
+---
+
+## 16. 默认语言配置
+
+### 16.1 页面提示显示英文而非中文
+
+**现象**：发送消息后被 `handleSend` 拦截时，toast 提示 "Please wait for the response to the previous message to complete."，而非中文。
+
+**根因**：i18n 默认语言配置为 `en`。`i18n/index.ts` 中 `defaultLocale: 'en'` 决定了当用户浏览器未指定语言时使用英文翻译。
+
+**修复**：将默认语言改为 `zh-Hans`：
+
+```typescript
+// i18n/index.ts
+export const i18n = {
+  defaultLocale: 'zh-Hans',   // 原值: 'en'
+  locales: ['zh-Hans', 'en', 'es', 'ja', 'fr'],
+} as const
+```
+
+```typescript
+// config/index.ts
+export const APP_INFO: AppInfo = {
+  default_language: 'zh-Hans',  // 原值: 'en'
+  // ...
+}
+```
+
+**i18n 语言加载流程**：
+1. 检查 `locale` cookie → 若有则使用
+2. 检查浏览器 `Accept-Language` header → 使用 intl-localematcher 匹配
+3. 兜底使用 `defaultLocale`
+
+中文翻译文件在 `i18n/lang/app.zh.ts`，对应的键为 `errorMessage.waitForResponse`。
+
+---
+
+## 17. 消息 agent_id / agent_name 为空
+
+### 17.1 未选择智能体时消息记录不绑定智能体身份
+
+**现象**：数据库中 messages 表的 `agent_id` 和 `agent_name` 字段为 `null`，无法追溯消息是哪个智能体产生的。
+
+**根因**：`handleSend` 中三处使用 `agentId || null`（来自参数，为 null 时表示未显式选择智能体），而未改用已回退到默认智能体的 `agentKey`。
+
+```typescript
+// 修复前（index.tsx 旧代码）
+const agentKey = curAgentId || defaultAgentId  // 正确：已回退到默认智能体
+// ...
+if (agentId) {                                   // ❌ agentId 为 null，跳过
+  agentInfo = await fetchAgentInfo(agentId)
+}
+// ...
+agent_id: agentId || null,                      // ❌ null，应为 agentKey
+agent_name: agentInfo?.name || null,             // ❌ null，应为默认智能体名字
+```
+
+数据流分析：
+| 场景 | `agentId`（参数） | `agentKey`（已回退） | 旧代码 `agent_id` | 正确值 |
+|------|-------------------|---------------------|-------------------|--------|
+| 选择了智能体 A | `"agent-a"` | `"agent-a"` | `"agent-a"` ✅ | `"agent-a"` |
+| 未选择（使用默认） | `null` | `"default-agent"` | `null` ❌ | `"default-agent"` |
+
+**修复**：所有 `agentId` 引用统一改为 `agentKey`：
+
+```typescript
+// 修复后
+agentInfo = await fetchAgentInfo(agentKey)  // 始终获取智能体信息
+// ...
+agent_id: agentKey,                          // 始终绑定到正确的智能体
+agent_name: agentInfo?.name || null,
+```
+
+涉及的三处：
+1. **`saveUserMessage`** — 保存用户消息时的 `agent_id` / `agent_name`
+2. **`sendData`** — 发送到后端 API 的 `agent_id` header
+3. **`responseItem`** — 保存 AI 回复时的 `agent_id` / `agent_name`

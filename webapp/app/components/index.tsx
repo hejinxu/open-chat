@@ -833,15 +833,13 @@ const Main: FC<IMainProps> = () => {
     // question
     const questionId = `question-${Date.now()}`
     let agentInfo: { name: string, icon: string } | null = null
-    if (agentId) {
-      agentInfo = await fetchAgentInfo(agentId)
-    }
+    agentInfo = await fetchAgentInfo(agentKey)
     const questionItem = {
       id: questionId,
       content: message,
       isAnswer: false,
       message_files: (files || []).filter((f: any) => f.type === 'image'),
-      agent_id: agentId || null,
+      agent_id: agentKey,
       agent_name: agentInfo?.name || null,
     }
 
@@ -864,7 +862,7 @@ const Main: FC<IMainProps> = () => {
     await saveUserMessage({
       conversation_id: localConvId,
       content: message,
-      agent_id: agentId || null,
+      agent_id: agentKey,
       agent_name: agentInfo?.name || null,
       message_files: (files || []).filter((f: any) => f.type === 'image'),
     })
@@ -879,7 +877,7 @@ const Main: FC<IMainProps> = () => {
       inputs: toServerInputs,
       query: message,
       conversation_id: difyConvId || null,
-      agent_id: agentId || null,
+      agent_id: agentKey,
       messages: chatList
         .filter(item => !item.isOpeningStatement && item.content)
         .map(item => ({ role: item.isAnswer ? 'assistant' as const : 'user' as const, content: item.content })),
@@ -903,7 +901,7 @@ const Main: FC<IMainProps> = () => {
       agent_thoughts: [],
       message_files: [],
       isAnswer: true,
-      agent_id: agentId || null,
+      agent_id: agentKey,
       agent_name: agentInfo?.name || null,
     }
     let hasSetResponseId = false
@@ -961,7 +959,7 @@ const Main: FC<IMainProps> = () => {
           await saveAssistantMessage({
             conversation_id: localConvId,
             content: responseItem.content,
-            agent_id: agentId || null,
+            agent_id: agentKey,
             agent_name: agentInfo?.name || null,
             message_files: responseItem.message_files || [],
             agent_thoughts: responseItem.agent_thoughts || [],
