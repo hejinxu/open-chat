@@ -75,6 +75,7 @@ interface IAnswerProps {
   onFeedback?: FeedbackFunc
   onRegenerate?: (id: string) => void
   onDeleteMessage?: (id: string) => void
+  isLastMessage?: boolean
   isResponding?: boolean
   allToolIcons?: Record<string, string | Emoji>
   suggestionClick?: (suggestion: string) => void
@@ -87,6 +88,7 @@ const Answer: FC<IAnswerProps> = ({
   onFeedback,
   onRegenerate,
   onDeleteMessage,
+  isLastMessage = false,
   isResponding,
   allToolIcons,
   suggestionClick = () => { },
@@ -162,6 +164,7 @@ const Answer: FC<IAnswerProps> = ({
           <MessageActionsDropdown
             messageId={id}
             onDelete={onDeleteMessage}
+            isLastMessage={isLastMessage}
           />
         )}
       </div>

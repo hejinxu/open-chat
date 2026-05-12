@@ -6,11 +6,13 @@ import { EllipsisHorizontalIcon, TrashIcon } from '@heroicons/react/24/outline'
 interface MessageActionsDropdownProps {
   messageId: string
   onDelete: (messageId: string) => void
+  isLastMessage?: boolean
 }
 
 const MessageActionsDropdown: FC<MessageActionsDropdownProps> = ({
   messageId,
   onDelete,
+  isLastMessage = false,
 }) => {
   const [open, setOpen] = useState(false)
 
@@ -46,7 +48,7 @@ const MessageActionsDropdown: FC<MessageActionsDropdownProps> = ({
       {open && (
         <div
           data-menu-id={`action-${messageId}`}
-          className="absolute right-0 top-full mt-1 w-28 bg-surface-elevated border border-border rounded-lg shadow-lg z-50 py-1"
+          className={`absolute w-28 bg-surface-elevated border border-border rounded-lg shadow-lg z-50 py-1 ${isLastMessage ? 'left-0 bottom-full mb-1' : 'left-0 top-full mt-1'}`}
         >
           <button
             onClick={handleDelete}

@@ -148,6 +148,8 @@ const Chat: FC<IChatProps> = ({
     localStorage.setItem('whisper-model', val)
   }
   const voiceInputRef = React.useRef<{ stop: () => void }>(null)
+  const chatListContainerRef = useRef<HTMLDivElement>(null)
+  const contentWrapperRef = useRef<HTMLDivElement>(null)
   const prevIsRespondingRef = useRef(false)
   const hasReadAloudRef = useRef(false)
 
@@ -166,6 +168,17 @@ const Chat: FC<IChatProps> = ({
     }
     prevIsRespondingRef.current = !!isResponding
   }, [isResponding, chatList, autoReadAloud])
+
+  useEffect(() => {
+    const wrapper = contentWrapperRef.current
+    const container = chatListContainerRef.current
+    if (!wrapper || !container) return
+    const ro = new ResizeObserver(() => {
+      container.scrollTop = container.scrollHeight
+    })
+    ro.observe(wrapper)
+    return () => ro.disconnect()
+  }, [])
 
   const handleContentChange = (e: any) => {
     const value = e.target.value
@@ -255,8 +268,8 @@ const Chat: FC<IChatProps> = ({
   return (
     <div className='flex flex-col grow overflow-hidden'>
       {/* Chat List - scrollbar at screen edge */}
-      <div className="flex flex-col grow overflow-y-auto">
-        <div className="pc:w-[794px] max-w-full mobile:w-full mx-auto space-y-[30px] pb-4 px-3.5">
+      <div ref={chatListContainerRef} className="flex flex-col grow overflow-y-auto">
+        <div ref={contentWrapperRef} className="pc:w-[794px] max-w-full mobile:w-full mx-auto space-y-[30px] pb-4 px-3.5">
           {isChatListLoading && chatList.length === 0 && (
             <div className='flex justify-center items-center h-32'>
               <div className='flex items-center space-x-2 text-content-tertiary text-sm'>
@@ -278,6 +291,7 @@ const Chat: FC<IChatProps> = ({
                 onFeedback={onFeedback}
                 onRegenerate={onRegenerate}
                 onDeleteMessage={onDeleteMessage}
+                isLastMessage={isLast}
                 isResponding={isResponding && isLast}
                 suggestionClick={suggestionClick}
               />
@@ -293,6 +307,7 @@ const Chat: FC<IChatProps> = ({
             )
           })}
         </div>
+        <div className="h-0 overflow-hidden" />
       </div>
       {
         !isHideSendInput && (
