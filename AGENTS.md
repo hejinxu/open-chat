@@ -101,9 +101,13 @@ interface ConversationRecord {
 - **发送拦截**：`checkCanSend` 中 `isChatListLoading` 守卫，阻止发送（toast 提示 + return false），不清空输入
 - **侧边栏删除**：`sidebar/index.tsx` 会话条目悬停显示三点按钮，点击弹出删除 dropdown。`data-menu-id` + `target.closest()` 实现 click-outside 关闭
 
+**消息气泡删除**：AI 消息气泡操作栏含三点按钮（`MessageActionsDropdown`），使用 `EllipsisHorizontalIcon`，click-outside 关闭模式同侧边栏。展开 dropdown 含"删除"选项，触发 `ConfirmDialog` 确认后删除该条 AI 回复及对应的用户问题。删除同时移除 UI（`setChatList`）和存储（`MessageService.deleteMessagesByIds`）。dropdown 使用 `isLastMessage` 控制方向：最后一条向上展开（`bottom-full`），其余向下（`top-full`），统一 `left-0` 向右伸展。
+
+**ConfirmDialog**：`app/components/base/confirm-dialog/index.tsx` 基于 `@headlessui/react` 的 `Dialog`，支持 `danger`/`default` 两种 variant。按钮和面板使用语义化主题类（`bg-surface-elevated`、`text-content`、`bg-red-500` 等），无硬编码主题色。
+
 #### 服务层
 - `lib/services/conversation.ts` — `ConversationService`（对话 CRUD）
-- `lib/services/message.ts` — `MessageService`（消息保存，区分用户消息和 AI 回复）
+- `lib/services/message.ts` — `MessageService`（消息保存/删除，区分用户消息和 AI 回复；`deleteMessagesByIds` 按 ID 精确删除）
 
 #### 存储层（多后端支持）
 - **StorageProvider 接口**: `lib/storage/types.ts` 定义统一的存储接口
@@ -213,7 +217,7 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 - **Components**: `'use client'` required for client components. Server components are the default.
 - **Styling**: Tailwind-first. SCSS only for markdown/code. `classnames` or `tailwind-merge` for conditional classes.
 - **Theme colors**: Use semantic CSS custom property classes (`text-content-accent`, `border-border`, `hover:bg-surface-hover`) exclusively. Never hardcode theme-specific colors — this includes Tailwind literals (`text-indigo-600`, `bg-red-50`, `border-indigo-100`), SVG fills (`fill="#444CE7"`), and `dark:` variant overrides. When a component needs a color not covered by existing variables: (1) add the CSS variable to all three theme files (`light.css`, `dark.css`, `tech-blue.css`), (2) register it in `tailwind.config.js` under the appropriate semantic group, (3) use the generated class in components. Hover/danger/interactive states each need their own variable — avoid piggybacking on existing variables that happen to share a value.
-- **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom. Scrollbar at screen edge via full-width scrollable container.
+- **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom. Scrollbar at screen edge via full-width scrollable container. Auto-scroll: `ResizeObserver` on inner content wrapper (no overflow) triggers `scrollTop = scrollHeight` on outer scroll container — handles message loading, streaming, async markdown rendering.
 - **Build**: `next.config.js` disables ESLint and TypeScript errors during build.
 - **Multi-Agent**: 后端 API 通过 `x-agent-id` header 选择智能体；前端 `AgentSelector` 组件在输入框内与语音按钮同排；`agents.config.json` 包含 API key 不可提交 git。
 - **After coding**: 每次编写完代码后，主动询问用户是否需要更新 AGENTS.md。

@@ -633,3 +633,87 @@ agent_name: agentInfo?.name || null,
 1. **`saveUserMessage`** — 保存用户消息时的 `agent_id` / `agent_name`
 2. **`sendData`** — 发送到后端 API 的 `agent_id` header
 3. **`responseItem`** — 保存 AI 回复时的 `agent_id` / `agent_name`
+
+---
+
+## 18. 消息删除、滚动与交互优化
+
+### 18.1 消息气泡删除
+
+**现象**：AI 消息气泡下方只有 TTS 朗读、顶踩、重新生成按钮，无法删除单条消息。
+
+**方案**：在 AI 消息气泡操作栏新增三点按钮（`MessageActionsDropdown`），展开 dropdown 含"删除"选项。点击删除弹出 `ConfirmDialog` 确认对话框，确认后同时删除该条 AI 回复及其对应的用户问题。
+
+**实现**：
+
+```
+用户点击三点按钮
+  → 展开 dropdown（仅含"删除"选项）
+  → 点击"删除"
+  → 弹 ConfirmDialog（标题"确认删除"，danger 红色确认按钮）
+  → 用户确认
+  → setChatList 移除 Q+A 对（UI 即时更新）
+  → MessageService.deleteMessagesByIds([questionId, answerId])
+  → remote → DELETE /api/storage/messages { ids: [...] } → SQLite
+  → 成功后同步删除 localStorage
+  → 关闭对话框
+```
+
+**关键文件**：
+- `app/components/chat/answer/message-actions-dropdown.tsx` — 三点按钮 + dropdown 组件
+- `app/components/base/confirm-dialog/index.tsx` — 确认对话框（基于 `@headlessui/react` 的 `Dialog`）
+- `app/components/chat/answer/index.tsx` — `IAnswerProps` 新增 `onDeleteMessage`、`isLastMessage`
+- `app/components/chat/type.ts` — `IChatProps` 新增 `onDeleteMessage`
+
+### 18.2 删除存储链路
+
+原有 `deleteMessages` 仅支持按 `conversation_id` 批量删除整个会话的消息。为支持精确删除单条 Q+A 对，全栈新增 `deleteMessagesByIds(ids: string[])`：
+
+| 层 | 文件 | 说明 |
+|----|------|------|
+| 接口 | `lib/storage/types.ts` | `StorageProvider.deleteMessagesByIds(ids)` |
+| 接口 | `lib/db/types.ts` | `DatabaseProvider.deleteMessagesByIds(ids)` |
+| 实现 | `lib/storage/local-storage.ts` | `messages.filter(m => !ids.includes(m.id))` |
+| 实现 | `lib/db/sqlite.ts` | `DELETE FROM messages WHERE id IN (?, ...)` |
+| 实现 | `lib/storage/remote-storage.ts` | 写锁 → `DELETE /api/storage/messages { ids }` → 同步本地 |
+| API | `app/api/storage/messages/route.ts` | DELETE 方法同时支持 `{ conversation_id }`（旧）和 `{ ids }`（新） |
+| 服务 | `lib/services/message.ts` | `MessageService.deleteMessagesByIds(ids)` |
+
+### 18.3 dropdown 定位策略
+
+**问题 1**：最后一条消息的 dropdown 向下展开（`top-full`）被消息输入框遮挡。
+
+**解决**：新增 `isLastMessage` prop。最后一条消息用 `bottom-full mb-1`（向上展开），其余用 `top-full mt-1`（向下展开）。
+
+**问题 2**：dropdown 使用 `right-0` 向左伸展，与按钮右对齐，视觉不自然。
+
+**解决**：统一改为 `left-0`，dropdown 左边缘对齐按钮左边缘，向右伸展。
+
+```typescript
+// message-actions-dropdown.tsx 定位逻辑
+const positionClass = isLastMessage
+  ? 'left-0 bottom-full mb-1'   // 最后一条：向右上展开
+  : 'left-0 top-full mt-1'      // 其他：向右下展开
+```
+
+### 18.4 自动滚动到底部
+
+**问题**：发送消息、切换会话后，消息列表不自动滚动到最下方。
+
+**过程**（已尝试的方案及失败原因）：
+
+| 尝试 | 方案 | 失败原因 |
+|------|------|----------|
+| 1 | `requestAnimationFrame` + `scrollTop = scrollHeight` | 单帧时序不足，布局计算未完成 |
+| 2 | `scrollIntoView({ block: 'end' })` 哨兵元素 | `Streamdown` 异步渲染 markdown 导致二次布局，哨兵位置不准确 |
+| 3 | `ResizeObserver` 监听滚动容器（`overflow-y-auto`） | 该容器高度由 flex 决定，内容溢出不改变容器自身尺寸，Observer 不触发 |
+
+**最终方案**：`ResizeObserver` 监听**内层 content wrapper**（无 overflow 限制，高度随内容同步变化），回调中滚动外层 scroll 容器。
+
+| # | 文件 | 改动 |
+|---|------|------|
+| 1 | `chat/index.tsx` | 新增 `contentWrapperRef`，指向内层 `<div className="...pb-4...">` |
+| 2 | `chat/index.tsx` | `ResizeObserver` 监听 `contentWrapperRef`，回调 `chatListContainerRef.current.scrollTop = scrollHeight` |
+| 3 | `chat/index.tsx` | 挂载时注册，卸载时 `disconnect()`，不依赖帧时序 |
+
+**关键洞察**：`overflow-y-auto` 容器的 content-box 尺寸由 flex 布局决定，不会因溢出内容增多而变大。必须监听内部无 overflow 限制的子容器。
