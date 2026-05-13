@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Cog6ToothIcon } from '@heroicons/react/24/outline'
 import type { VoiceRecognitionEngine } from '@/config/voice-input'
 import type { WhisperModel } from './voice-recognition/whisper-recognition'
@@ -43,10 +43,47 @@ export function VoiceSettings({
   onWhisperModelChange,
 }: VoiceSettingsProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({})
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  const positionPanel = useCallback(() => {
+    const btn = btnRef.current
+    if (!btn) { return }
+    const rect = btn.getBoundingClientRect()
+    const panelH = panelRef.current?.offsetHeight || 300
+    const panelW = 288
+    const gap = 8
+
+    let top = rect.top - panelH - gap
+    if (top < 8) {
+      top = rect.bottom + gap
+    }
+    let left = rect.right - panelW
+    if (left < 8) {
+      left = 8
+    }
+
+    setPanelStyle({ position: 'fixed', top, left, width: panelW })
+  }, [])
+
+  useEffect(() => {
+    if (isOpen) {
+      requestAnimationFrame(positionPanel)
+    }
+  }, [isOpen, positionPanel])
+
+  useEffect(() => {
+    if (!isOpen) { return }
+    const onResize = () => positionPanel()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [isOpen, positionPanel])
 
   return (
     <div className="relative">
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center justify-center w-8 h-8 rounded-md text-content-tertiary hover:text-content-secondary hover:bg-surface-hover transition-colors"
@@ -58,7 +95,11 @@ export function VoiceSettings({
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute bottom-full right-0 mb-2 w-72 bg-surface-elevated rounded-lg shadow-lg border border z-50 p-3">
+          <div
+            ref={panelRef}
+            className="fixed z-50 w-72 bg-surface-elevated rounded-lg shadow-lg border border-border p-3"
+            style={panelStyle}
+          >
             <div className="text-sm font-medium text-content mb-3">语音设置</div>
 
             <div className="space-y-3">
