@@ -848,3 +848,29 @@ var themeColors = {
 
 **安全**：监听方通过 `e.data?.type === 'com.openchat.embed'` 过滤，只响应特定消息格式，忽略其他来源。未来如需扩展更多跨 frame 通信，统一使用 `com.openchat.embed` 命名空间。
 
+---
+
+### 16.10 嵌入窗口中语音设置面板被裁切
+
+**现象**：点击语音设置按钮（齿轮图标）后，弹出面板左侧部分被截断，尤其在 iframe 宽度较小时明显。
+
+**根因**：`VoiceSettings` 面板使用 `absolute` 定位，但祖先链路存在 `overflow: hidden`（`components/index.tsx` 的 main content div）。`absolute` 定位的元素在溢出 `overflow: hidden` 容器边界时会被裁切。主应用中因为面板在全屏内不超出边界所以正常，iframe 宽度受限时面板横向超出就被截。
+
+**修复**：`voice-settings.tsx` 改为 `fixed` 定位 + 动态位置计算。
+
+```typescript
+// 读取按钮位置
+const rect = btnRef.current.getBoundingClientRect()
+// 计算面板位置：优先显示在上方，空间不够则显示在下方
+let top = rect.top - panelH - gap
+if (top < 8) { top = rect.bottom + gap }
+// 左侧边界限制 8px
+let left = rect.right - panelW
+if (left < 8) { left = 8 }
+```
+
+关键改动：
+1. 按钮加 `ref`，用于 `getBoundingClientRect()` 读取位置
+2. 面板从 `absolute` 改为 `fixed`（以 iframe 视口为基准，不受祖先 `overflow` 裁切）
+3. 监听 `resize` 事件，窗口大小变化时重新定位
+4. 主应用和嵌入模式都使用 `fixed` 定位，兼容两者
