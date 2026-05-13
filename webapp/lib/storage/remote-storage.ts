@@ -1,6 +1,7 @@
 import type { ConversationRecord, MessageRecord, StorageProvider } from './types'
 import { LocalStorageProvider } from './local-storage'
 import { getTabLock } from './tab-lock'
+import { API_PREFIX } from '@/config'
 
 const TIMEOUT_MS = 10000  // 10 秒超时
 
@@ -21,7 +22,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 export class RemoteStorageProvider implements StorageProvider {
   private localStorageProvider = new LocalStorageProvider()
-  private baseUrl = '/api/storage'
+  private get baseUrl() { return `${API_PREFIX}/storage` }
 
   // 读操作：优先远程，失败降级本地
   async getConversations(): Promise<ConversationRecord[]> {

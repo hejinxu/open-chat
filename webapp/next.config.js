@@ -2,6 +2,7 @@
 const path = require('path')
 
 const nextConfig = {
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || '',
   devIndicators: false,
   productionBrowserSourceMaps: false,
   pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],

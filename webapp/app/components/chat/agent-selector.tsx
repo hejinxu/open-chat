@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import type { AgentInfo } from '@/types/agent'
+import { API_PREFIX } from '@/config'
 
 interface AgentSelectorProps {
   value: string | null
@@ -14,7 +15,7 @@ export function AgentSelector({ value, onChange }: AgentSelectorProps) {
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    fetch('/api/config/agents')
+    fetch(`${API_PREFIX}/config/agents`)
       .then(res => res.json())
       .then(data => setAgents(data.agents || []))
       .catch(() => {})

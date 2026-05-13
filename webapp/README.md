@@ -54,6 +54,9 @@ NEXT_PUBLIC_APP_KEY=your_api_key
 # Dify API 地址
 NEXT_PUBLIC_API_URL=https://api.dify.ai/v1
 
+# 项目前缀路径（留空则无前缀，例如 /chat）
+NEXT_PUBLIC_BASE_PATH=
+
 # 默认主题
 NEXT_PUBLIC_DEFAULT_THEME=tech-blue
 ```

@@ -18,6 +18,7 @@ import { setLocaleOnClient } from '@/i18n/client'
 import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
 import Loading from '@/app/components/base/loading'
 import { replaceVarWithValues, userInputsFormToPromptVariables } from '@/utils/prompt'
+import { API_PREFIX } from '@/config'
 import AppUnavailable from '@/app/components/app-unavailable'
 import { API_KEY, APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/config'
 import type { Annotation as AnnotationType } from '@/types/log'
@@ -125,7 +126,7 @@ const Main: FC<IMainProps> = (props) => {
         const headers: Record<string, string> = {}
         if (agentId) headers['x-agent-id'] = agentId
         if (embedToken) headers['x-embed-token'] = embedToken
-        const res = await fetch('/api/parameters', { headers })
+        const res = await fetch(`${API_PREFIX}/parameters`, { headers })
         const data = await res.json()
         promptVariablesCacheRef.current[key] = userInputsFormToPromptVariables(data.user_input_form || [])
       } catch {
@@ -534,7 +535,7 @@ const Main: FC<IMainProps> = (props) => {
     }
     (async () => {
       try {
-        const [conversationData, appParams, agentsRes] = await Promise.all([fetchConversations(), fetchAppParams(), fetch('/api/config/agents').then(r => r.json())])
+        const [conversationData, appParams, agentsRes] = await Promise.all([fetchConversations(), fetchAppParams(), fetch(`${API_PREFIX}/config/agents`).then(r => r.json())])
         // handle current conversation id
         const { data: conversations, error } = conversationData as { data: ConversationItem[], error: string }
         if (error) {
@@ -718,7 +719,7 @@ const Main: FC<IMainProps> = (props) => {
   const fetchAgentInfo = async (agentId: string) => {
     if (agentInfoCacheRef.current[agentId]) return agentInfoCacheRef.current[agentId]
     try {
-      const res = await fetch('/api/config/agents')
+      const res = await fetch(`${API_PREFIX}/config/agents`)
       const data = await res.json()
       const agent = data.agents?.find((a: any) => a.id === agentId)
       if (agent) {
