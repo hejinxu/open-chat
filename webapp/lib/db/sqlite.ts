@@ -3,6 +3,7 @@ import fs from 'fs'
 import type { ConversationRecord, MessageRecord } from '../storage/types'
 import type { DatabaseProvider } from './types'
 import type { StorageProvider } from '../storage/types'
+import type { EmbedTokenRecord } from '@/types/embed'
 
 export class SqliteProvider implements DatabaseProvider {
   private db: any = null
@@ -63,6 +64,20 @@ export class SqliteProvider implements DatabaseProvider {
 
     this.db.run('CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)')
     this.db.run('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)')
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS embed_tokens (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        token TEXT NOT NULL UNIQUE,
+        allowed_agent_ids TEXT NOT NULL DEFAULT '[]',
+        is_enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `)
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_embed_tokens_token ON embed_tokens(token)')
 
     this.saveToFile()
   }
@@ -196,6 +211,79 @@ export class SqliteProvider implements DatabaseProvider {
       message_files: typeof row.message_files === 'string' ? JSON.parse(row.message_files as string) : (row.message_files as any[]) || [],
       agent_thoughts: typeof row.agent_thoughts === 'string' ? JSON.parse(row.agent_thoughts as string) : (row.agent_thoughts as any[]) || [],
       created_at: row.created_at as number,
+    }
+  }
+
+  async getEmbedTokens(): Promise<EmbedTokenRecord[]> {
+    await this.ensureReady()
+    const stmt = this.db.prepare('SELECT * FROM embed_tokens ORDER BY created_at DESC')
+    const rows: any[] = []
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject())
+    }
+    stmt.free()
+    return rows.map(this.mapEmbedToken)
+  }
+
+  async getEmbedTokenById(id: string): Promise<EmbedTokenRecord | null> {
+    await this.ensureReady()
+    const stmt = this.db.prepare('SELECT * FROM embed_tokens WHERE id = ?')
+    stmt.bind([id])
+    let row: any = null
+    if (stmt.step()) {
+      row = stmt.getAsObject()
+    }
+    stmt.free()
+    return row ? this.mapEmbedToken(row) : null
+  }
+
+  async getEmbedTokenByValue(token: string): Promise<EmbedTokenRecord | null> {
+    await this.ensureReady()
+    const stmt = this.db.prepare('SELECT * FROM embed_tokens WHERE token = ?')
+    stmt.bind([token])
+    let row: any = null
+    if (stmt.step()) {
+      row = stmt.getAsObject()
+    }
+    stmt.free()
+    return row ? this.mapEmbedToken(row) : null
+  }
+
+  async saveEmbedToken(tok: EmbedTokenRecord): Promise<void> {
+    await this.ensureReady()
+    this.db.run(
+      `INSERT OR REPLACE INTO embed_tokens (id, name, description, token, allowed_agent_ids, is_enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tok.id,
+        tok.name,
+        tok.description,
+        tok.token,
+        JSON.stringify(tok.allowed_agent_ids),
+        tok.is_enabled ? 1 : 0,
+        tok.created_at,
+        tok.updated_at,
+      ]
+    )
+    this.saveToFile()
+  }
+
+  async deleteEmbedToken(id: string): Promise<void> {
+    await this.ensureReady()
+    this.db.run('DELETE FROM embed_tokens WHERE id = ?', [id])
+    this.saveToFile()
+  }
+
+  private mapEmbedToken(row: any): EmbedTokenRecord {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      description: (row.description as string) || '',
+      token: row.token as string,
+      allowed_agent_ids: typeof row.allowed_agent_ids === 'string' ? JSON.parse(row.allowed_agent_ids as string) : (row.allowed_agent_ids as string[]) || [],
+      is_enabled: (row.is_enabled as number) === 1,
+      created_at: row.created_at as number,
+      updated_at: row.updated_at as number,
     }
   }
 }

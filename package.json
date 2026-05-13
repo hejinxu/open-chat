@@ -6,6 +6,7 @@
     "dev": "pnpm --parallel -r run dev",
     "dev:webapp": "pnpm --filter webapp dev",
     "dev:ws": "pnpm --filter ws-server dev",
+    "dev:embed-test": "pnpm --filter embed-test dev",
     "build": "pnpm --filter webapp build",
     "start": "pnpm --filter webapp start",
     "lint": "pnpm --parallel -r run lint",

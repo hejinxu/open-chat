@@ -5,7 +5,7 @@ import { getInfo, setSession, getAdapterForRequest } from '@/app/api/utils/commo
 export async function GET(request: NextRequest) {
   const { sessionId, user } = getInfo(request)
   try {
-    const adapter = getAdapterForRequest(request)
+    const adapter = await getAdapterForRequest(request)
     const data = await adapter.getParameters(user)
     return NextResponse.json(data as object, {
       headers: setSession(sessionId),

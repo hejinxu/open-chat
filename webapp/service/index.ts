@@ -35,9 +35,10 @@ export const sendChatMessage = async (
     onWorkflowFinished: IOnWorkflowFinished
   },
 ) => {
-  const { agent_id, ...rest } = body
+  const { agent_id, embed_token, messages: _messages, ...rest } = body
   const headers: Record<string, string> = {}
   if (agent_id) headers['x-agent-id'] = agent_id
+  if (embed_token) headers['x-embed-token'] = embed_token
   return ssePost('chat-messages', {
     body: {
       ...rest,
