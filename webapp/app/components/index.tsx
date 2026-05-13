@@ -40,11 +40,14 @@ export interface IMainProps {
   params: any
 }
 
-const Main: FC<IMainProps> = () => {
+const Main: FC<IMainProps> = (props) => {
   const { t } = useTranslation()
   const media = useBreakpoints()
   const isMobile = media === MediaType.mobile
   const hasSetAppConfig = APP_ID && API_KEY
+
+  const isEmbed = !!(props?.params?.isEmbed)
+  const embedToken = props?.params?.embedToken || ''
 
   /*
   * app info
@@ -121,6 +124,7 @@ const Main: FC<IMainProps> = () => {
       try {
         const headers: Record<string, string> = {}
         if (agentId) headers['x-agent-id'] = agentId
+        if (embedToken) headers['x-embed-token'] = embedToken
         const res = await fetch('/api/parameters', { headers })
         const data = await res.json()
         promptVariablesCacheRef.current[key] = userInputsFormToPromptVariables(data.user_input_form || [])
@@ -131,7 +135,7 @@ const Main: FC<IMainProps> = () => {
     })()
     fetchingPromisesRef.current[key] = promise
     await promise
-  }, [])
+  }, [embedToken])
 
   // ---- Utility: sync clean params against latest prompt_variables ----
   function syncAndCleanParams(convId: string, agentId: string, promptVars: { key: string }[]): Record<string, any> | null {
@@ -307,6 +311,17 @@ const Main: FC<IMainProps> = () => {
   useEffect(() => {
     if (APP_INFO?.title) { document.title = `${APP_INFO.title} - Powered by Dify` }
   }, [APP_INFO?.title])
+
+  // Listen for embed sidebar toggle from parent frame
+  useEffect(() => {
+    function onMsg(e: MessageEvent) {
+      if (e.data?.type === 'com.openchat.embed' && e.data?.action === 'toggle-sidebar') {
+        showSidebar()
+      }
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [])
 
   // onData change thought (the produce obj). https://github.com/immerjs/immer/issues/576
   useEffect(() => {
@@ -869,6 +884,7 @@ const Main: FC<IMainProps> = () => {
       query: message,
       conversation_id: difyConvId || null,
       agent_id: agentKey,
+      embed_token: embedToken || undefined,
       messages: chatList
         .filter(item => !item.isOpeningStatement && item.content)
         .map(item => ({ role: item.isAnswer ? 'assistant' as const : 'user' as const, content: item.content })),
@@ -1248,14 +1264,23 @@ const Main: FC<IMainProps> = () => {
 
   return (
     <div className='bg-surface'>
-      <Header
-        isMobile={isMobile}
-        onShowSideBar={showSidebar}
-        onCreateNewChat={() => handleConversationIdChange('-1')}
-      />
+      {!isEmbed && (
+        <Header
+          isMobile={isMobile}
+          onShowSideBar={showSidebar}
+          onCreateNewChat={() => handleConversationIdChange('-1')}
+        />
+      )}
       <div className="flex bg-surface overflow-hidden">
         {/* sidebar */}
-        {!isMobile && renderSidebar()}
+        {!isMobile && !isEmbed && renderSidebar()}
+        {!isMobile && isEmbed && isShowSidebar && (
+          <div className='fixed inset-0 z-50' style={{ backgroundColor: 'rgba(35, 56, 118, 0.2)' }} onClick={hideSidebar}>
+            <div className='inline-block h-full' onClick={e => e.stopPropagation()}>
+              {renderSidebar()}
+            </div>
+          </div>
+        )}
         {isMobile && isShowSidebar && (
           <div className='fixed inset-0 z-50' style={{ backgroundColor: 'rgba(35, 56, 118, 0.2)' }} onClick={hideSidebar} >
             <div className='inline-block' onClick={e => e.stopPropagation()}>
@@ -1264,7 +1289,7 @@ const Main: FC<IMainProps> = () => {
           </div>
         )}
         {/* main */}
-        <div className='flex-grow flex flex-col h-screen overflow-hidden'>
+        <div className='flex-grow flex flex-col overflow-hidden h-screen'>
           {inited && (
           <ConfigSence
             conversationName={conversationName}

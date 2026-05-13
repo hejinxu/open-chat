@@ -1,4 +1,5 @@
 import type { ConversationRecord, MessageRecord } from '../storage/types'
+import type { EmbedTokenRecord } from '@/types/embed'
 
 export interface DatabaseProvider {
   getConversations(): Promise<ConversationRecord[]>
@@ -9,4 +10,9 @@ export interface DatabaseProvider {
   saveMessage(msg: MessageRecord): Promise<void>
   deleteMessages(conversationId: string): Promise<void>
   deleteMessagesByIds(ids: string[]): Promise<void>
+  getEmbedTokens(): Promise<EmbedTokenRecord[]>
+  getEmbedTokenById(id: string): Promise<EmbedTokenRecord | null>
+  getEmbedTokenByValue(token: string): Promise<EmbedTokenRecord | null>
+  saveEmbedToken(tok: EmbedTokenRecord): Promise<void>
+  deleteEmbedToken(id: string): Promise<void>
 }

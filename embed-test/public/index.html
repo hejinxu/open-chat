@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Open Chat Embed Test</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #333;
+      background: #f5f5f5;
+      line-height: 1.6;
+    }
+
+    .site-header {
+      background: #1C64F2;
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .site-header .logo { font-size: 18px; font-weight: 700; }
+    .site-header nav { display: flex; gap: 20px; }
+    .site-header nav a { color: rgba(255,255,255,0.85); text-decoration: none; font-size: 14px; }
+    .site-header nav a:hover { color: #fff; }
+
+    .site-main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .hero {
+      background: #fff;
+      border-radius: 8px;
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .hero h1 { font-size: 24px; margin-bottom: 8px; }
+    .hero p { color: #666; margin-bottom: 16px; }
+
+    .config-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border-left: 4px solid #1C64F2;
+    }
+    .config-card h2 { font-size: 16px; margin-bottom: 12px; color: #1C64F2; }
+    .config-card pre {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .config-card .note {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #666;
+      padding: 8px 12px;
+      background: #fff8e1;
+      border-radius: 4px;
+    }
+
+    .content-section {
+      background: #fff;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .content-section h2 { font-size: 18px; margin-bottom: 12px; }
+    .content-section p { color: #555; margin-bottom: 12px; }
+    .content-section ul { color: #555; padding-left: 20px; margin-bottom: 12px; }
+    .content-section li { margin-bottom: 6px; }
+
+    .site-footer {
+      text-align: center;
+      padding: 24px;
+      color: #999;
+      font-size: 13px;
+      border-top: 1px solid #e5e5e5;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="logo">ExampleSite</div>
+    <nav>
+      <a href="#">Home</a>
+      <a href="#">Products</a>
+      <a href="#">Docs</a>
+      <a href="#">About</a>
+      <a href="#">Contact</a>
+    </nav>
+  </header>
+
+  <main class="site-main">
+
+    <div class="hero">
+      <h1>Welcome to ExampleSite</h1>
+      <p>This is a demo page showing the Open Chat embeddable widget in action.</p>
+      <p>The floating chat button should appear in the <strong>bottom-right</strong> corner. Click it to open the chat window. Drag the icon to reposition it.</p>
+    </div>
+
+    <div class="config-card">
+      <h2>Embed Configuration</h2>
+      <pre><code>window.openChatConfig = {
+  baseUrl: 'http://localhost:3000',
+  token: '<span style="color:#f9e2af">REPLACE_WITH_YOUR_TOKEN</span>',
+  iconUrl: 'https://api.dicebear.com/9.x/bottts/svg?seed=openchat',
+  windowTitle: 'AI Assistant',
+  theme: 'tech-blue',
+  windowSize: {
+    width: 420,
+    height: 640,
+    minWidth: 320,
+    minHeight: 400,
+    maxWidth: 800,
+    maxHeight: 900,
+  },
+  headerStyle: {
+    backgroundColor: '#1C64F2',
+    textColor: '#ffffff',
+    iconColor: '#ffffff',
+    buttonHoverBg: 'rgba(255,255,255,0.15)',
+  },
+}</code></pre>
+      <div class="note">
+        <strong>Setup:</strong> Replace <code>REPLACE_WITH_YOUR_TOKEN</code> with the output from
+        <code>node webapp/scripts/seed-embed-tokens.mjs</code>. The webapp must be running on port 3000.
+        <br><strong>Built-in icons (14):</strong> robot · bot · chat · sparkle · headset · message · brain · wand · rocket · puzzle · eye · code · gear.
+        Set <code>icon: 'chat'</code> to switch, or use <code>iconUrl</code> for custom images.
+      </div>
+    </div>
+
+    <div class="content-section">
+      <h2>Feature Tests</h2>
+      <p>Use this page to verify the following embed behaviors:</p>
+      <ul>
+        <li><strong>Floating button:</strong> Should appear at bottom-right with a robot icon</li>
+        <li><strong>Drag:</strong> Click and drag the button to reposition it on screen</li>
+        <li><strong>Open:</strong> Click the button (without dragging) to open the chat window</li>
+        <li><strong>Window drag:</strong> Drag the title bar to move the chat window</li>
+        <li><strong>Resize:</strong> Drag the bottom-right corner handle to resize the window</li>
+        <li><strong>Close:</strong> Click the &times; button to close and restore the floating icon</li>
+        <li><strong>Mobile:</strong> Use DevTools device emulation to test fullscreen mode</li>
+      </ul>
+    </div>
+
+    <div class="content-section">
+      <h2>Lorem Ipsum</h2>
+      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+      <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+    </div>
+
+  </main>
+
+  <footer class="site-footer">
+    &copy; 2026 ExampleSite. All rights reserved.
+  </footer>
+
+  <script>
+    // ======= Open Chat Embed Configuration =======
+    // Replace the token below with the output from:
+    //   node webapp/scripts/seed-embed-tokens.mjs
+    window.openChatConfig = {
+      baseUrl: 'http://localhost:3000',
+      token: 'sk-embed-default-2fbc2e86',
+      windowTitle: 'AI Assistant',
+      theme: 'tech-blue',
+      windowSize: {
+        width: 420,
+        height: 640,
+        minWidth: 320,
+        minHeight: 400,
+        maxWidth: 800,
+        maxHeight: 900,
+      },
+      headerStyle: {
+        backgroundColor: '#1C64F2',
+        textColor: '#ffffff',
+        iconColor: '#ffffff',
+        buttonHoverBg: 'rgba(255,255,255,0.15)',
+      },
+    }
+  </script>
+  <script src="http://localhost:3000/embed.min.js" defer></script>
+
+</body>
+</html>

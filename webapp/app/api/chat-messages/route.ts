@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     messages,
   } = body
   const { user } = getInfo(request)
-  const adapter = getAdapterForRequest(request)
+  const adapter = await getAdapterForRequest(request)
   const res = await adapter.sendMessage({
     inputs: inputs || {},
     query,

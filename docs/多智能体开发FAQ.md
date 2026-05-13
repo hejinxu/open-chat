@@ -717,3 +717,134 @@ const positionClass = isLastMessage
 | 3 | `chat/index.tsx` | 挂载时注册，卸载时 `disconnect()`，不依赖帧时序 |
 
 **关键洞察**：`overflow-y-auto` 容器的 content-box 尺寸由 flex 布局决定，不会因溢出内容增多而变大。必须监听内部无 overflow 限制的子容器。
+
+---
+
+## 16. 嵌入式对话组件 FAQ
+
+### 16.1 嵌入时出现 Hydration Mismatch 错误
+
+**现象**：`/embed` 页面控制台报 `Hydration failed because the server rendered HTML didn't match the client`。
+
+**根因**：`Main` 组件中 `isEmbed` 通过 `typeof window !== 'undefined' && window.location.pathname.startsWith('/embed')` 检测，服务端 `typeof window === 'undefined'`，客户端为 `'object'`，分支不一致。
+
+**修复**：改为从 `props.params.isEmbed` 读取。`main-embed.tsx` 传入 `<Main params={{ isEmbed: true, embedToken }}>`，`Main` 中 `const isEmbed = !!(props?.params?.isEmbed)`。
+
+---
+
+### 16.2 嵌入窗口出现双层标题栏
+
+**现象**：`embed.min.js` 外层有标题栏，iframe 内 `/embed` 页面也渲染了标题栏，出现双层。
+
+**根因**：`main-embed.tsx` 渲染了标题栏，同时 `embed.min.js` 的外层容器也有标题栏。
+
+**最终方案**：全部 UI 控件收归外层 `embed.min.js` 管理。`main-embed.tsx` 精简为纯 `<Main>` 渲染（`div.flex-1.min-h-0 > Main`）。iframe 只负责对话内容，不带任何标题栏。
+
+---
+
+### 16.3 嵌入窗口中输入框不在底部
+
+**现象**：对话输入框悬浮在窗口中间，没有贴底。
+
+**根因**：flex 布局高度链路断裂。`Main` 组件在嵌入模式时使用了 `h-full` + `flex-1 min-h-0` 等 hack，破坏了主应用原生的 `h-screen` + `overflow:hidden` 布局。
+
+**修复方案**：嵌入模式完全复用主应用的布局逻辑——外层 `bg-surface`（无额外高度 class）、flex 容器 `overflow:hidden`、main content `h-screen`。标题栏在 flex 容器上方自然占位，`overflow:hidden` 裁切 `h-screen` 多出的标题栏高度。和主应用 F12 移动端模式完全一致。
+
+**关键洞察**：不要为 embed 模式引入特殊的高度链逻辑，应复用主应用经过验证的布局。
+
+---
+
+### 16.4 ☰ 侧边栏按钮无响应
+
+**现象**：外层标题栏点击 ☰ 按钮，iframe 内没有打开侧边栏。
+
+**根因**：使用了 `iframe.contentWindow.dispatchEvent(new CustomEvent(...))`，但不同 JavaScript 上下文之间的 CustomEvent 不稳定，事件对象在跨 iframe 边界时可能丢失。
+
+**修复**：改为 `iframe.contentWindow.postMessage({ type: 'com.openchat.embed', action: 'toggle-sidebar' }, '*')`。iframe 内 `Main` 组件通过 `window.addEventListener('message', ...)` 监听。`postMessage` 是浏览器专门为跨 frame 通信设计的 API，稳定可靠。
+
+---
+
+### 16.5 嵌入窗口中 theme 不生效
+
+**现象**：`config.theme = 'tech-blue'`，但窗口内仍显示 light 主题。
+
+**根因**：`/embed` 页面布局的 `<html>` 标签缺少主题 class（如 `tech-blue`），CSS 变量未切换。
+
+**修复**：`embed/page.tsx` 的 `EmbedContent` 组件从 URL 读取 theme，通过 `useEffect` 将 class 应用到 `document.documentElement`，同时用 `themeApplied` state 确保 class 应用后再渲染子组件，避免闪烁。
+
+---
+
+### 16.6 Token 校验对所有 API 的影响
+
+**问题**：引入 token 校验后，是否会影响现有直接使用模式？
+
+**防护**：三层守卫确保零影响：
+1. `checkEmbedToken(request)` 首先检查 `x-embed-token` header 是否存在，无则立即 return null
+2. 所有调用方检查 `if (result && !result.valid)` 才拒绝请求
+3. `getAdapterForRequest` 中 token 无效时抛出 Error 而非静默降级
+
+现有模式请求不携带 `x-embed-token` header，代码路径与改动前完全一致。
+
+---
+
+### 16.7 内置图标系统
+
+**问题**：如何添加或替换嵌入浮动按钮的默认图标？
+
+**设计**：
+- 内置 14 个 SVG 图标，存于 `webapp/public/images/embed-icons/`，名称分别为 `robot` / `bot` / `chat` / `sparkle` / `headset` / `message` / `brain` / `wand` / `rocket` / `puzzle` / `eye` / `code` / `gear`
+- 图标规格：52×52px 圆形底 + 白色图形，背景色均取自 Tailwind 色板
+- 默认使用 `robot`，通过 `config.icon = 'chat'` 切换
+- `config.iconUrl` 优先级高于 `icon`，设置后直接使用外部 URL
+- 图标路径：`${baseUrl}/images/embed-icons/${iconName}.svg`
+
+**添加新图标**：
+1. 创建 52×52 SVG 放入 `webapp/public/images/embed-icons/`
+2. 更新 `docs/第三方应用集成指南.md` 的内置图标表
+3. 更新 `embed-test/public/index.html` 的说明文字
+
+---
+
+### 16.8 标题栏样式配置
+
+**问题**：`headerStyle` 不填时的默认值从哪来？
+
+**设计**：`headerStyle` 的默认值取自 `themeColors` 映射。`embed.min.js` 中定义：
+
+```javascript
+var themeColors = {
+  light:      { bg: '#ffffff',    border: '#e5e5e5' },
+  dark:       { bg: '#1f2937',    border: '#374151' },
+  'tech-blue':{ bg: 'rgba(14,25,51,0.98)', border: 'rgba(100,150,255,0.25)' },
+}
+```
+
+标题栏各属性默认值：
+
+| 属性 | 默认来源 |
+|------|----------|
+| `backgroundColor` | `themeColors[theme].bg` |
+| `borderColor` | `themeColors[theme].border` |
+| `textColor` | `'#333'` |
+| `iconColor` | `'#666'` |
+| `buttonHoverBg` | `'rgba(0,0,0,0.06)'` |
+
+`headerStyle` 中任意属性设置即覆盖对应默认值。
+
+---
+
+### 16.9 嵌入窗口的通信机制
+
+**问题**：外层 `embed.min.js` 如何控制 iframe 内的侧边栏？
+
+**机制**：
+
+| 方向 | 通道 | 消息 |
+|------|------|------|
+| 外层 → iframe（☰ 按钮） | `iframe.contentWindow.postMessage` | `{ type: 'com.openchat.embed', action: 'toggle-sidebar' }` |
+| iframe 接收 | `window.addEventListener('message')` | 过滤 `type === 'com.openchat.embed' && action === 'toggle-sidebar'` → `showSidebar()` |
+
+**为什么不用 CustomEvent**：`iframe.contentWindow.dispatchEvent(new CustomEvent(...))` 在跨 JavaScript 上下文传递时不稳定（CustomEvent 对象在创建方构造函数中，目标 window 无法正确识别），改用浏览器原生 `postMessage` API 保证可靠性。
+
+**安全**：监听方通过 `e.data?.type === 'com.openchat.embed'` 过滤，只响应特定消息格式，忽略其他来源。未来如需扩展更多跨 frame 通信，统一使用 `com.openchat.embed` 命名空间。
+

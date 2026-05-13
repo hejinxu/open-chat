@@ -8,6 +8,7 @@ Open Chat - 开放对话平台。pnpm workspace 管理的 monorepo，包含 Next
 open-chat/
 ├── webapp/          # Next.js 15 + React 19（对话 + admin）
 ├── ws-server/       # Socket.IO WebSocket 服务（语音识别）
+├── embed-test/      # 嵌入式对话组件测试工程
 ├── chat-component-vue2/   # 未来：Vue 2 组件库
 ├── chat-component-vue3/   # 未来：Vue 3 组件库
 └── chat-component-react/  # 未来：React 组件库
@@ -17,6 +18,7 @@ open-chat/
 - `pnpm dev` — 同时启动 webapp + ws-server
 - `pnpm dev:webapp` — 只启动 webapp（port 3000）
 - `pnpm dev:ws` — 只启动 ws-server（port 8787）
+- `pnpm dev:embed-test` — 只启动 embed-test（port 3001，测试嵌入组件）
 - `pnpm build` — 构建 webapp
 - `pnpm start` — 启动生产版本
 - `pnpm lint` — ESLint 检查
@@ -276,6 +278,41 @@ SQLITE_DB_PATH=data/openchat.db
 WS_PORT=8787
 SPEECH_MODEL=whisper-tiny
 ```
+
+### 嵌入式对话组件 (Embed)
+
+**架构**: iframe + postMessage，所有 UI 控件由外层 `embed.min.js` 管理，iframe 仅渲染纯对话内容。
+
+```
+embed.min.js (外层, ~450行 vanilla JS)
+├── [浮动按钮]      — 可拖动，位置持久化
+└── [窗口容器]
+     ├── [标题栏]   — ☰ + 标题 + × + 拖拽窗口
+     ├── [iframe]   — /embed?token=...&theme=...
+     └── [resize]   — 右下角拖拽，min/max 约束
+```
+
+**核心文件**:
+| 文件 | 作用 |
+|------|------|
+| `webapp/public/embed.min.js` | 外层脚本（浮动按钮、标题栏、拖拽、resize、postMessage） |
+| `webapp/app/embed/page.tsx` | `/embed` 页面入口（读取 URL 参数、应用 theme） |
+| `webapp/app/embed/main-embed.tsx` | 纯 Main 渲染包装（无标题栏） |
+| `webapp/app/components/index.tsx` | `isEmbed` 模式 + `openchat:toggle-sidebar` 监听 |
+| `webapp/app/api/utils/common.ts` | `checkEmbedToken()` — 所有 API 入口校验 |
+| `webapp/lib/db/sqlite.ts` | `embed_tokens` 表（id/name/description/token/allowed_agent_ids/is_enabled） |
+| `webapp/public/images/embed-icons/` | 14 个内置 SVG 图标（robot/bot/chat/sparkle/headset/message/brain/wand/rocket/puzzle/eye/code/gear） |
+
+**Token 认证**: 嵌入请求携带 `x-embed-token` header → 查询 `embed_tokens` 表 → 校验 `is_enabled` + `allowed_agent_ids`。
+
+**嵌入测试**: `embed-test/public/index.html` — 模拟真实网站，配置 `window.openChatConfig` 后引入 `embed.min.js`。
+
+**配置接口**: `window.openChatConfig = { baseUrl, token, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, inputs? }`
+
+**相关文档**:
+- `docs/嵌入式对话组件实现方案.md` — 技术方案全文
+- `docs/第三方应用集成指南.md` — 面向集成方的使用教程
+- `docs/多智能体开发FAQ.md` §16 — 嵌入组件开发 FAQ
 
 ## Docs
 - **README.md**: 根目录，用户面向的项目文档

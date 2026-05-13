@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const { user } = getInfo(request)
     formData.append('user', user)
-    const adapter = getAdapterForRequest(request)
+    const adapter = await getAdapterForRequest(request)
     const data = await adapter.fileUpload(formData)
     return new Response((data as any)?.id || '')
   }
