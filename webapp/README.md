@@ -57,6 +57,10 @@ NEXT_PUBLIC_API_URL=https://api.dify.ai/v1
 # 项目前缀路径（留空则无前缀，例如 /chat）
 NEXT_PUBLIC_BASE_PATH=
 
+# 认证系统开关（默认关闭，向后兼容）
+AUTH_ENABLED=false
+JWT_SECRET=your-secret-key-here
+
 # 默认主题
 NEXT_PUBLIC_DEFAULT_THEME=tech-blue
 ```

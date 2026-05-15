@@ -1,8 +1,13 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDatabaseProvider } from '@/lib/db'
+import { isRequestAuthenticated } from '@/app/api/utils/common'
 
 export async function GET(request: NextRequest) {
+  if (!isRequestAuthenticated(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const conversationId = searchParams.get('conversation_id')
@@ -10,7 +15,7 @@ export async function GET(request: NextRequest) {
     if (!conversationId) {
       return NextResponse.json(
         { success: false, error: 'Missing conversation_id parameter' },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -21,12 +26,16 @@ export async function GET(request: NextRequest) {
     console.error('GET /api/storage/messages error:', error)
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
 
 export async function POST(request: NextRequest) {
+  if (!isRequestAuthenticated(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const msg = await request.json()
     const db = getDatabaseProvider()
@@ -36,12 +45,16 @@ export async function POST(request: NextRequest) {
     console.error('POST /api/storage/messages error:', error)
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!isRequestAuthenticated(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const body = await request.json()
     const db = getDatabaseProvider()
@@ -58,13 +71,13 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json(
       { success: false, error: 'Missing conversation_id or ids' },
-      { status: 400 }
+      { status: 400 },
     )
   } catch (error: any) {
     console.error('DELETE /api/storage/messages error:', error)
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

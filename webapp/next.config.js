@@ -9,7 +9,7 @@ const nextConfig = {
   outputFileTracingRoot: path.join(__dirname, '../'),
   serverExternalPackages: ['sql.js'],
   experimental: {
-    // appDir: true,
+    nodeMiddleware: true,
   },
   eslint: {
     ignoreDuringBuilds: true,

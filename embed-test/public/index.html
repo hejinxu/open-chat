@@ -118,7 +118,7 @@
       <h2>Embed Configuration</h2>
       <pre><code>window.openChatConfig = {
   baseUrl: 'http://localhost:3000',
-  token: '<span style="color:#f9e2af">REPLACE_WITH_YOUR_TOKEN</span>',
+  apiKey: '<span style="color:#f9e2af">REPLACE_WITH_YOUR_API_KEY</span>',
   iconUrl: 'https://api.dicebear.com/9.x/bottts/svg?seed=openchat',
   windowTitle: 'AI Assistant',
   theme: 'tech-blue',
@@ -138,8 +138,7 @@
   },
 }</code></pre>
       <div class="note">
-        <strong>Setup:</strong> Replace <code>REPLACE_WITH_YOUR_TOKEN</code> with the output from
-        <code>node webapp/scripts/seed-embed-tokens.mjs</code>. The webapp must be running on port 3000.
+        <strong>Setup:</strong> Replace <code>REPLACE_WITH_YOUR_API_KEY</code> with an API key generated in the admin panel.
         <br><strong>Built-in icons (14):</strong> robot · bot · chat · sparkle · headset · message · brain · wand · rocket · puzzle · eye · code · gear.
         Set <code>icon: 'chat'</code> to switch, or use <code>iconUrl</code> for custom images.
       </div>
@@ -173,15 +172,14 @@
 
   <script>
     // ======= Open Chat Embed Configuration =======
-    // Replace the token below with the output from:
-    //   node webapp/scripts/seed-embed-tokens.mjs
+    // Replace the apiKey below with an API key generated in the admin panel
     //
     // If NEXT_PUBLIC_BASE_PATH is set (e.g. '/chat'), update baseUrl and script src accordingly:
     //   baseUrl: 'http://localhost:3000/chat'
     //   script src: 'http://localhost:3000/chat/embed.min.js'
     window.openChatConfig = {
       baseUrl: 'http://localhost:3000/chat',
-      token: 'sk-embed-default-2fbc2e86',
+      apiKey: 'sk-embed-default-2fbc2e86',
       windowTitle: 'AI Assistant',
       theme: 'tech-blue',
       windowSize: {

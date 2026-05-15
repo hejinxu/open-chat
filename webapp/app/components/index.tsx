@@ -18,12 +18,13 @@ import { setLocaleOnClient } from '@/i18n/client'
 import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
 import Loading from '@/app/components/base/loading'
 import { replaceVarWithValues, userInputsFormToPromptVariables } from '@/utils/prompt'
-import { API_PREFIX } from '@/config'
+import { BASE_PATH } from '@/config'
 import AppUnavailable from '@/app/components/app-unavailable'
 import { API_KEY, APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/config'
 import type { Annotation as AnnotationType } from '@/types/log'
 import { addFileInfos, sortAgentSorts } from '@/utils/tools'
 import { getStorageProvider, getStorageBackend } from '@/lib/storage'
+import { RemoteStorageProvider } from '@/lib/storage/remote-storage'
 import { getConversationService } from '@/lib/services/conversation'
 import { getMessageService } from '@/lib/services/message'
 import { stopReadAloud } from '@/app/components/chat/text-to-speech'
@@ -48,7 +49,7 @@ const Main: FC<IMainProps> = (props) => {
   const hasSetAppConfig = APP_ID && API_KEY
 
   const isEmbed = !!(props?.params?.isEmbed)
-  const embedToken = props?.params?.embedToken || ''
+  const apiKey = props?.params?.apiKey || ''
 
   /*
   * app info
@@ -70,6 +71,7 @@ const Main: FC<IMainProps> = (props) => {
   const agentTypeMapRef = useRef<Record<string, string>>({})
   const backendConvIdCacheRef = useRef<Record<string, string>>({})
   const hasSavedBackendConvIdRef = useRef<Record<string, boolean>>({})
+  const [currentUser, setCurrentUser] = useState<{ name: string, role: string } | null>(null)
 
   const storageBackend = getStorageBackend()
 
@@ -125,8 +127,8 @@ const Main: FC<IMainProps> = (props) => {
       try {
         const headers: Record<string, string> = {}
         if (agentId) headers['x-agent-id'] = agentId
-        if (embedToken) headers['x-embed-token'] = embedToken
-        const res = await fetch(`${API_PREFIX}/parameters`, { headers })
+        if (apiKey) headers['x-api-key'] = apiKey
+        const res = await fetch(`${BASE_PATH}/api/parameters`, { headers })
         const data = await res.json()
         promptVariablesCacheRef.current[key] = userInputsFormToPromptVariables(data.user_input_form || [])
       } catch {
@@ -136,7 +138,7 @@ const Main: FC<IMainProps> = (props) => {
     })()
     fetchingPromisesRef.current[key] = promise
     await promise
-  }, [embedToken])
+  }, [apiKey])
 
   // ---- Utility: sync clean params against latest prompt_variables ----
   function syncAndCleanParams(convId: string, agentId: string, promptVars: { key: string }[]): Record<string, any> | null {
@@ -456,9 +458,6 @@ const Main: FC<IMainProps> = (props) => {
     await getConversationService().deleteConversation(id)
     const { data: allConversations } = await fetchConversations()
     if (currConversationId === id) {
-      if (!allConversations.some((c: any) => c.id === '-1')) {
-        allConversations.unshift({ id: '-1', name: t('app.chat.newChatDefaultName'), inputs: {}, introduction: '', suggested_questions: [] })
-      }
       setConversationList(allConversations as any)
       stopReadAloud()
       setCurrConversationId('-1', APP_ID)
@@ -535,7 +534,18 @@ const Main: FC<IMainProps> = (props) => {
     }
     (async () => {
       try {
-        const [conversationData, appParams, agentsRes] = await Promise.all([fetchConversations(), fetchAppParams(), fetch(`${API_PREFIX}/config/agents`).then(r => r.json())])
+        const embedHeaders = apiKey ? { 'x-api-key': apiKey } : undefined
+
+        // Inject API key into RemoteStorageProvider for embed mode
+        const storageProvider = getStorageProvider()
+        if (storageProvider instanceof RemoteStorageProvider && apiKey) {
+          storageProvider.setApiKey(apiKey)
+        }
+
+        const [conversationData, appParams, agentsRes] = await Promise.all([fetchConversations(), fetchAppParams(embedHeaders), fetch(`${BASE_PATH}/api/config/agents`, { headers: embedHeaders }).then(r => r.json())])
+
+        // Fetch current user info (non-blocking)
+        fetch(`${BASE_PATH}/api/auth/me`, { headers: embedHeaders }).then(r => r.ok ? r.json() : null).then(data => setCurrentUser(data?.user || null)).catch(() => {})
         // handle current conversation id
         const { data: conversations, error } = conversationData as { data: ConversationItem[], error: string }
         if (error) {
@@ -719,7 +729,8 @@ const Main: FC<IMainProps> = (props) => {
   const fetchAgentInfo = async (agentId: string) => {
     if (agentInfoCacheRef.current[agentId]) return agentInfoCacheRef.current[agentId]
     try {
-      const res = await fetch(`${API_PREFIX}/config/agents`)
+      const headers = apiKey ? { 'x-api-key': apiKey } : undefined
+      const res = await fetch(`${BASE_PATH}/api/config/agents`, { headers })
       const data = await res.json()
       const agent = data.agents?.find((a: any) => a.id === agentId)
       if (agent) {
@@ -874,6 +885,12 @@ const Main: FC<IMainProps> = (props) => {
       message_files: (files || []).filter((f: any) => f.type === 'image'),
     })
 
+    // 新会话首条消息：立即异步设置标题，不等 AI 回复
+    if (getConversationIdChangeBecauseOfNew()) {
+      const title = message.slice(0, 30) + (message.length > 30 ? '...' : '')
+      updateLocalConversationName(localConvId, title)
+    }
+
     // Look up Dify conversation_id for this agent (async)
     const difyConvId = await getBackendConvId(localConvId, agentKey)
 
@@ -885,7 +902,7 @@ const Main: FC<IMainProps> = (props) => {
       query: message,
       conversation_id: difyConvId || null,
       agent_id: agentKey,
-      embed_token: embedToken || undefined,
+      apiKey: apiKey || undefined,
       messages: chatList
         .filter(item => !item.isOpeningStatement && item.content)
         .map(item => ({ role: item.isAnswer ? 'assistant' as const : 'user' as const, content: item.content })),
@@ -975,10 +992,6 @@ const Main: FC<IMainProps> = (props) => {
         }
 
         if (getConversationIdChangeBecauseOfNew()) {
-          // Update title from first question
-          const title = questionItem.content.slice(0, 30) + (questionItem.content.length > 30 ? '...' : '')
-          await updateLocalConversationName(localConvId, title)
-
           // Refresh sidebar
           const { data: allConversations } = await fetchConversations()
           setConversationList(allConversations as any)
@@ -1255,6 +1268,8 @@ const Main: FC<IMainProps> = (props) => {
         copyRight={APP_INFO.copyright || APP_INFO.title}
         isMobile={isMobile}
         title={APP_INFO.title}
+        user={currentUser}
+        isEmbed={isEmbed}
       />
     )
   }
@@ -1322,6 +1337,7 @@ const Main: FC<IMainProps> = (props) => {
                 fileConfig={fileConfig}
                 selectedAgentId={selectedAgentId}
                 onAgentChange={setSelectedAgentId}
+                apiKey={apiKey}
               />)
           }
         </div>

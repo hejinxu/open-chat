@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server'
-import { getInfo, getAgentIdFromRequest, checkEmbedToken } from '@/app/api/utils/common'
+import { getInfo, getAgentIdFromRequest, isRequestAuthenticated } from '@/app/api/utils/common'
 import { getAgentById, getDefaultAgent } from '@/app/api/utils/agents'
 import { createAdapter } from '@/lib/adapters'
 
@@ -7,10 +7,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ taskId: string }> },
 ) {
-  const result = await checkEmbedToken(request, { requireAgent: true })
-  if (result && !result.valid) {
-    return new Response(JSON.stringify({ error: result.error }), {
-      status: result.error === 'Invalid embed token' ? 401 : 403,
+  if (!isRequestAuthenticated(request)) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
       headers: { 'Content-Type': 'application/json' },
     })
   }

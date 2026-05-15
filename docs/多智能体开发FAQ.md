@@ -204,31 +204,22 @@ dropdown div 加 `data-menu-id={item.id}`，三点按钮也加，确保点击按
 
 ---
 
-### 10.3 删除会话后侧边栏列表不更新（需刷新页面）
+### 10.3 删除会话后自动出现"新的对话"
 
-**现象**：删除会话后 localStorage 已更新，但侧边栏仍显示被删除的会话，刷新页面才消失。
+**现象**：删除当前会话后，侧边栏自动出现一个"新的对话"条目，而不是等用户手动点击"新对话"按钮。
 
-**根因**：删除当前会话时调用 `handleConversationIdChange('-1')` → `createNewChat()`。`createNewChat` 闭包捕获的是删除前的旧 `conversationList`（仍含被删除项），其内部的 `setConversationList(produce(旧列表, ...))` 覆盖了之前 `setConversationList(过滤后列表)` 的结果。
+**根因**：`handleDeleteConversation` 中，删除当前会话时自动往列表头部插入了 `{ id: '-1', name: '新的对话' }` 条目。
 
-React 18 自动批处理下，同一异步函数内的多次 `setState` 合并为单次渲染，最后一次调用（`createNewChat` 内）覆盖前面的结果。
-
-**修复**：不调 `handleConversationIdChange`，改为删除后重新从 localStorage 拉取全量列表，手动插入 `-1` 条目后 `setConversationList` 只调一次：
+**修复**：删除自动插入 `-1` 条目的逻辑。删除当前会话后，只刷新列表并设置 `currConversationId='-1'`，"新的对话"仅在用户点击"新对话"按钮时才出现（通过 `createNewChat` 插入）。
 
 ```typescript
-const handleDeleteConversation = async (id: string) => {
-  await getConversationService().deleteConversation(id)
-  const { data: allConversations } = await fetchConversations()
-  if (currConversationId === id) {
-    if (!allConversations.some(c => c.id === '-1'))
-      allConversations.unshift({ id: '-1', ... })
-    setConversationList(allConversations)
-    stopReadAloud()
-    setCurrConversationId('-1', APP_ID)
-    setConversationIdChangeBecauseOfNew(true)
-    hideSidebar()
-  } else {
-    setConversationList(allConversations)
-  }
+// 修复后
+if (currConversationId === id) {
+  setConversationList(allConversations)  // 只刷新列表，不插入 -1
+  stopReadAloud()
+  setCurrConversationId('-1', APP_ID)
+  setConversationIdChangeBecauseOfNew(true)
+  hideSidebar()
 }
 ```
 
@@ -720,9 +711,9 @@ const positionClass = isLastMessage
 
 ---
 
-## 16. 嵌入式对话组件 FAQ
+## 19. 嵌入式对话组件 FAQ
 
-### 16.1 嵌入时出现 Hydration Mismatch 错误
+### 19.1 嵌入时出现 Hydration Mismatch 错误
 
 **现象**：`/embed` 页面控制台报 `Hydration failed because the server rendered HTML didn't match the client`。
 
@@ -732,7 +723,7 @@ const positionClass = isLastMessage
 
 ---
 
-### 16.2 嵌入窗口出现双层标题栏
+### 19.2 嵌入窗口出现双层标题栏
 
 **现象**：`embed.min.js` 外层有标题栏，iframe 内 `/embed` 页面也渲染了标题栏，出现双层。
 
@@ -742,7 +733,7 @@ const positionClass = isLastMessage
 
 ---
 
-### 16.3 嵌入窗口中输入框不在底部
+### 19.3 嵌入窗口中输入框不在底部
 
 **现象**：对话输入框悬浮在窗口中间，没有贴底。
 
@@ -754,7 +745,7 @@ const positionClass = isLastMessage
 
 ---
 
-### 16.4 ☰ 侧边栏按钮无响应
+### 19.4 ☰ 侧边栏按钮无响应
 
 **现象**：外层标题栏点击 ☰ 按钮，iframe 内没有打开侧边栏。
 
@@ -764,7 +755,7 @@ const positionClass = isLastMessage
 
 ---
 
-### 16.5 嵌入窗口中 theme 不生效
+### 19.5 嵌入窗口中 theme 不生效
 
 **现象**：`config.theme = 'tech-blue'`，但窗口内仍显示 light 主题。
 
@@ -774,20 +765,20 @@ const positionClass = isLastMessage
 
 ---
 
-### 16.6 Token 校验对所有 API 的影响
+### 19.6 API 认证对所有 API 的影响
 
-**问题**：引入 token 校验后，是否会影响现有直接使用模式？
+**问题**：引入 middleware 认证后，是否会影响现有直接使用模式？
 
 **防护**：三层守卫确保零影响：
-1. `checkEmbedToken(request)` 首先检查 `x-embed-token` header 是否存在，无则立即 return null
-2. 所有调用方检查 `if (result && !result.valid)` 才拒绝请求
-3. `getAdapterForRequest` 中 token 无效时抛出 Error 而非静默降级
+1. middleware 检查 `AUTH_ENABLED` 环境变量，`false` 时放行所有请求
+2. 所有 API 路由通过 `isRequestAuthenticated(request)` 检查 middleware 注入的 header（`x-auth-user-id` 或 `x-auth-integration-id`）
+3. `AUTH_ENABLED=false` 时 `isRequestAuthenticated` 直接返回 `true`
 
-现有模式请求不携带 `x-embed-token` header，代码路径与改动前完全一致。
+现有模式（`AUTH_ENABLED=false`）请求不携带认证信息，代码路径与改动前完全一致。
 
 ---
 
-### 16.7 内置图标系统
+### 19.7 内置图标系统
 
 **问题**：如何添加或替换嵌入浮动按钮的默认图标？
 
@@ -805,7 +796,7 @@ const positionClass = isLastMessage
 
 ---
 
-### 16.8 标题栏样式配置
+### 19.8 标题栏样式配置
 
 **问题**：`headerStyle` 不填时的默认值从哪来？
 
@@ -833,7 +824,7 @@ var themeColors = {
 
 ---
 
-### 16.9 嵌入窗口的通信机制
+### 19.9 嵌入窗口的通信机制
 
 **问题**：外层 `embed.min.js` 如何控制 iframe 内的侧边栏？
 
@@ -850,7 +841,7 @@ var themeColors = {
 
 ---
 
-### 16.10 嵌入窗口中语音设置面板被裁切
+### 19.10 嵌入窗口中语音设置面板被裁切
 
 **现象**：点击语音设置按钮（齿轮图标）后，弹出面板左侧部分被截断，尤其在 iframe 宽度较小时明显。
 
@@ -874,3 +865,394 @@ if (left < 8) { left = 8 }
 2. 面板从 `absolute` 改为 `fixed`（以 iframe 视口为基准，不受祖先 `overflow` 裁切）
 3. 监听 `resize` 事件，窗口大小变化时重新定位
 4. 主应用和嵌入模式都使用 `fixed` 定位，兼容两者
+
+---
+
+## 20. 认证系统与会话管理
+
+### 20.1 Session Cookie（关闭浏览器后需重新登录）
+
+**需求**：关闭浏览器后，下次打开需要重新登录。
+
+**实现**：登录 API 设置 cookie 时不指定 `maxAge`，使其成为 session cookie：
+
+```typescript
+// app/api/auth/login/route.ts
+response.cookies.set('auth_token', token, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  path: '/',
+  // 不设置 maxAge → session cookie，关闭浏览器后自动过期
+})
+```
+
+Session cookie 在浏览器关闭时自动清除，无需手动删除。
+
+---
+
+### 20.2 Setup 页面自动跳转到 Login
+
+**需求**：已有用户时访问 `/setup` 应自动跳转到 `/login`。
+
+**问题**：Next.js middleware 对 `/setup` 页面路由不生效（`experimental.nodeMiddleware` 在某些情况下不触发），导致无法通过 middleware 做重定向。
+
+**修复**：在页面层面做 server-side 检查，不依赖 middleware：
+
+```typescript
+// app/setup/page.tsx (Server Component)
+import { redirect } from 'next/navigation'
+import { getDatabaseProvider } from '@/lib/db'
+import { BASE_PATH } from '@/config'
+import SetupForm from './setup-form'
+
+export default async function SetupPage() {
+  const db = getDatabaseProvider()
+  await db.ensureReady()
+  const users = await db.getUsers()
+  if (users.length > 0) {
+    redirect(`${BASE_PATH}/login`)
+  }
+  return <SetupForm />
+}
+```
+
+表单逻辑提取到 `setup-form.tsx`（Client Component），创建成功后显示 3 秒倒计时跳转到登录页。
+
+---
+
+### 20.3 Setup API 清理孤立 user_accounts
+
+**需求**：手动删除 `users` 表记录后，重新运行 setup 应能正常创建用户。
+
+**问题**：`users` 表为空但 `user_accounts` 表有孤立记录时，`login_identifier` 的 UNIQUE 约束导致 INSERT 失败。
+
+**修复**：setup API 中，当 `users` 表为空时，检查并删除孤立的 `user_accounts` 记录：
+
+```typescript
+// app/api/auth/setup/route.ts
+const users = await db.getUsers()
+if (users.length > 0) {
+  return NextResponse.json({ error: 'Setup has already been completed' }, { status: 403 })
+}
+
+// users 表为空 — 清理孤立记录
+const existingAccount = await db.getUserAccountByIdentifier(identifier)
+if (existingAccount) {
+  await db.deleteUserAccount(existingAccount.id)
+}
+```
+
+---
+
+### 20.4 basePath 路由跳转需动态读取
+
+**需求**：设置 `NEXT_PUBLIC_BASE_PATH=/chat` 后，登录/设置等页面的跳转应包含 basePath 前缀。
+
+**问题**：硬编码 `window.location.href = '/'` 或 `router.push('/login')` 会跳到 `localhost:3000/` 而非 `localhost:3000/chat/`，导致 404。
+
+**修复**：`config/index.ts` 导出 `BASE_PATH` 常量，所有页面跳转统一使用：
+
+```typescript
+// config/index.ts
+export const BASE_PATH = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}`
+
+// app/login/page.tsx
+window.location.href = `${BASE_PATH}/`
+
+// app/setup/page.tsx (Server Component)
+redirect(`${BASE_PATH}/login`)
+```
+
+所有 API 调用统一使用 `${BASE_PATH}/api/...` 格式，不再使用 `API_PREFIX` 变量。
+
+---
+
+### 20.5 会话标题立即设置（不等 AI 回复）
+
+**需求**：发送第一条消息后立即设置会话标题，即使 AI 回复失败也能正确显示标题。
+
+**问题**：标题在 `onCompleted(hasError=false)` 中设置，AI 回复出错时 `hasError=true` 直接 return，标题永远是"新的对话"。
+
+**修复**：将标题更新移到用户消息保存之后，立即异步设置：
+
+```typescript
+// app/components/index.tsx — handleSend 中
+await saveUserMessage({ ... })
+
+// 新会话首条消息：立即异步设置标题，不等 AI 回复
+if (getConversationIdChangeBecauseOfNew()) {
+  const title = message.slice(0, 30) + (message.length > 30 ? '...' : '')
+  updateLocalConversationName(localConvId, title) // 无需 await
+}
+
+// onCompleted 中只做侧边栏刷新，不再更新标题
+```
+
+---
+
+## 21. basePath 双重前缀
+
+### 21.1 router.push / redirect 自动加 basePath
+
+**现象**：`router.push('/login')` 或 `redirect('/login')` 跳转后 URL 变成 `/chat/chat/login`，404。
+
+**根因**：Next.js 的 `router.push()` 和 `redirect()` **自动处理 basePath**，手动拼接 `BASE_PATH` 会导致双重叠加。
+
+**规则**：
+
+| API | 自动加 basePath | 需要手动加 `BASE_PATH` |
+|-----|----------------|----------------------|
+| `router.push()` | ✅ 是 | ❌ 不需要 |
+| `redirect()` (Server Component) | ✅ 是 | ❌ 不需要 |
+| `window.location.href` | ❌ 否 | ✅ 需要 |
+| `fetch()` | ❌ 否 | ✅ 需要 |
+
+**修复**：
+
+```typescript
+// ❌ 错误
+router.push(`${BASE_PATH}/login`)
+redirect(`${BASE_PATH}/admin/users`)
+
+// ✅ 正确
+router.push('/login')
+redirect('/admin/users')
+
+// ✅ 正确（window.location 需要手动加）
+window.location.href = `${BASE_PATH}/`
+```
+
+---
+
+## 22. Embed 认证 401
+
+### 22.1 RemoteStorageProvider 不携带 x-api-key
+
+**现象**：嵌入集成页面访问 `/api/storage/conversations` 等接口报 401，但 `/api/config/agents` 等接口正常。
+
+**根因**：`RemoteStorageProvider` 的所有 `fetch()` 调用没有传递 `x-api-key` header。init 阶段的 `fetchConversations()` 调用链不携带认证信息。
+
+**修复**：`RemoteStorageProvider` 新增 `setApiKey()` 方法，所有 fetch 统一携带：
+
+```typescript
+// remote-storage.ts
+export class RemoteStorageProvider {
+  private apiKey: string | null = null
+
+  setApiKey(key: string | null) {
+    this.apiKey = key
+  }
+
+  private getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (this.apiKey) headers['x-api-key'] = this.apiKey
+    return headers
+  }
+}
+
+// index.tsx init 中注入
+const storageProvider = getStorageProvider()
+if (storageProvider instanceof RemoteStorageProvider && apiKey) {
+  storageProvider.setApiKey(apiKey)
+}
+```
+
+### 22.2 /api/auth/me 返回 401（API Key 认证）
+
+**现象**：嵌入模式下 `/api/auth/me` 返回 401，尽管请求头携带了 `x-api-key`。
+
+**根因**：`/api/auth/me` 路由只检查 `x-auth-user-id`（JWT 认证），不识别 `x-auth-integration-id`（API Key 认证）。middleware 验证 API Key 后注入的是 `x-auth-integration-id`，不是 `x-auth-user-id`。
+
+**修复**：路由兼容两种认证方式：
+
+```typescript
+// api/auth/me/route.ts
+const userId = request.headers.get('x-auth-user-id')
+const integrationId = request.headers.get('x-auth-integration-id')
+
+if (!userId && !integrationId) {
+  return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+}
+
+if (integrationId && !userId) {
+  return NextResponse.json({
+    user: { id: integrationId, name: 'API User', role: 'user' },
+  })
+}
+```
+
+### 22.3 AgentSelector / fetchAgentInfo 不携带 apiKey
+
+**现象**：嵌入模式下 `AgentSelector` 和 `fetchAgentInfo` 的 fetch 请求报 401。
+
+**根因**：这两个组件独立发起 fetch，没有接收或传递 `apiKey` prop。
+
+**修复**：
+
+```typescript
+// agent-selector.tsx — 新增 apiKey prop
+interface AgentSelectorProps {
+  value: string | null
+  onChange: (agentId: string | null) => void
+  apiKey?: string  // 新增
+}
+
+// fetch 时携带
+const headers = apiKey ? { 'x-api-key': apiKey } : undefined
+fetch(`${BASE_PATH}/api/config/agents`, { headers })
+```
+
+```typescript
+// index.tsx fetchAgentInfo — 携带 apiKey
+const headers = apiKey ? { 'x-api-key': apiKey } : undefined
+const res = await fetch(`${BASE_PATH}/api/config/agents`, { headers })
+```
+
+---
+
+## 23. Embed 图标不显示
+
+**现象**：浮动按钮只显示背景色，图标不显示。
+
+**根因**：`/images/embed-icons/robot.svg` 被 middleware 拦截（`AUTH_ENABLED=true`），307 重定向到 `/login`。
+
+**修复**：在 middleware 的 `PUBLIC_PATHS` 中添加 `/images`：
+
+```typescript
+const PUBLIC_PATHS = [
+  // ...existing
+  '/images',  // 新增：嵌入图标等静态资源
+]
+```
+
+---
+
+## 24. Next.js 15 route params 必须 await
+
+**现象**：API 路由中 `params.integrationId` 报错：`params should be awaited before using its properties`。
+
+**根因**：Next.js 15 中，route handler 的 `params` 变为 Promise 类型，必须先 await。
+
+**修复**：
+
+```typescript
+// ❌ Next.js 14
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { integrationId: string } },
+) {
+  const id = params.integrationId  // 直接访问
+}
+
+// ✅ Next.js 15
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ integrationId: string }> },
+) {
+  const { integrationId } = await params  // 先 await
+}
+```
+
+---
+
+## 25. API Key bcrypt hash 明文存储
+
+**现象**：管理面板创建的 API Key 无法通过 middleware 验证，始终返回 401。
+
+**根因**：旧 `embed_tokens` 表迁移到 `api_keys` 时，key 以**明文**存储而非 bcrypt hash。middleware 用 `bcrypt.compare(plainKey, hash)` 验证，明文无法匹配。
+
+**排查**：
+
+```sql
+-- 检查 key_hash 是否为 bcrypt hash（以 $2b$ 开头）
+SELECT key_prefix, key_hash FROM api_keys;
+```
+
+**修复**：重新 hash：
+
+```javascript
+const bcryptjs = require('bcryptjs')
+const hash = await bcryptjs.hash('sk-xxx', 10)
+db.run('UPDATE api_keys SET key_hash = ?', [hash])
+```
+
+**预防**：创建 API Key 时确保使用 `hashApiKey()` 函数生成 hash。
+
+---
+
+## 26. 嵌入模式下菜单权限控制
+
+### 26.1 管理后台菜单对普通用户隐藏
+
+**需求**：侧边栏用户菜单中的「管理后台」只对 admin 角色显示。
+
+**实现**：
+
+```tsx
+{user.role === 'admin' && (
+  <button onClick={handleAdmin}>管理后台</button>
+)}
+```
+
+### 26.2 嵌入模式下隐藏管理后台和退出登录
+
+**需求**：嵌入 iframe 中不显示「管理后台」和「退出登录」。
+
+**实现**：Sidebar 新增 `isEmbed` prop：
+
+```tsx
+{user.role === 'admin' && !isEmbed && (
+  <button onClick={handleAdmin}>管理后台</button>
+)}
+{!isEmbed && (
+  <button onClick={handleLogout}>退出登录</button>
+)}
+```
+
+---
+
+## 27. 嵌入窗口四边拉伸
+
+**需求**：嵌入弹窗支持上下左右四边及四个角的拖拽拉伸。
+
+**实现**：`embed.min.js` 中创建 8 个方向的 resize handle：
+
+| 方向 | cursor | 拉伸时改变的属性 |
+|------|--------|-----------------|
+| n/s | ns-resize | height + top |
+| e/w | ew-resize | width + left |
+| nw/ne/sw/se | nwse/nesw-resize | width + height + left + top |
+
+**状态持久化**：按钮位置和窗口状态（大小 + 位置）统一存储在单个 localStorage key `open_chat_embed_state`：
+
+```json
+{
+  "btn": { "x": 1868, "y": 1028 },
+  "win": { "w": 420, "h": 640, "x": 1476, "y": 416 }
+}
+```
+
+- **无保存数据**：窗口位置默认右下角（`viewport - width - 24`），窗口大小取 `windowSize` 配置
+- **拖拽/resize 后**：`{w, h, x, y}` 覆盖写入，下次打开恢复上次状态
+- **`openWindow()` 每次打开时实时读取 localStorage**，不依赖缓存变量，确保拖拽后立即生效
+
+**关键实现细节**：
+
+| 事件 | 保存内容 | 说明 |
+|------|----------|------|
+| 浮动按钮拖拽结束 | `btn: {x, y}` | `saveState({ btn: {...} })` |
+| 窗口标题栏拖拽结束 | `win: {w, h, x, y}` | 从 `container.offsetWidth/Height` 和 `style.left/top` 读取 |
+| 窗口 resize 过程中 | `win: {w, h, x, y}` | 实时保存，拖拽过程中也写入 |
+
+**边界 clamp**：`openWindow()` 用实际窗口宽高 `fw`/`fh` 做 clamp，确保窗口不会超出屏幕：
+
+```js
+container.style.left = Math.max(0, Math.min(window.innerWidth - fw, fx)) + 'px'
+container.style.top = Math.max(0, Math.min(window.innerHeight - fh, fy)) + 'px'
+```
+
+**不要犯的错**：
+1. `onWinDragEnd` 必须保存窗口位置（之前遗漏导致每次打开回到默认位置）
+2. `openWindow()` 必须每次从 localStorage 读最新值，不能用页面加载时缓存的变量
+3. clamp 必须用窗口实际宽高，不能硬编码 `100` 或其他常量

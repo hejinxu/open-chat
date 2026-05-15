@@ -6,11 +6,14 @@ import {
   PencilSquareIcon,
   EllipsisVerticalIcon,
   TrashIcon,
+  Cog6ToothIcon,
+  ArrowRightStartOnRectangleIcon,
 } from '@heroicons/react/24/outline'
 import { ChatBubbleOvalLeftEllipsisIcon as ChatBubbleOvalLeftEllipsisSolidIcon } from '@heroicons/react/24/solid'
 import Button from '@/app/components/base/button'
 import AppIcon from '@/app/components/base/app-icon'
 import { ThemeToggleButton } from '@/app/components/theme-toggle-button'
+import { BASE_PATH } from '@/config'
 import type { ConversationItem } from '@/types/app'
 
 function classNames(...classes: any[]) {
@@ -27,6 +30,8 @@ export interface ISidebarProps {
   isMobile?: boolean
   title?: string
   onDelete?: (id: string) => void
+  user?: { name: string, role: string } | null
+  isEmbed?: boolean
 }
 
 const Sidebar: FC<ISidebarProps> = ({
@@ -37,9 +42,12 @@ const Sidebar: FC<ISidebarProps> = ({
   isMobile,
   title,
   onDelete,
+  user,
+  isEmbed,
 }) => {
   const { t } = useTranslation()
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   useEffect(() => {
     if (openMenuId === null) return
@@ -51,6 +59,29 @@ const Sidebar: FC<ISidebarProps> = ({
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [openMenuId])
+
+  useEffect(() => {
+    if (!userMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-user-menu]'))
+        setUserMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [userMenuOpen])
+
+  const handleLogout = async () => {
+    setUserMenuOpen(false)
+    await fetch(`${BASE_PATH}/api/auth/logout`, { method: 'POST' })
+    window.location.href = `${BASE_PATH}/login`
+  }
+
+  const handleAdmin = () => {
+    setUserMenuOpen(false)
+    window.location.href = `${BASE_PATH}/admin`
+  }
+
   return (
     <div
       className="shrink-0 flex flex-col overflow-y-auto bg-surface pc:w-[244px] tablet:w-[192px] mobile:w-[240px] border-r border-border-subtle h-screen"
@@ -109,7 +140,7 @@ const Sidebar: FC<ISidebarProps> = ({
               {onDelete && (
                 <button
                   data-menu-id={item.id}
-                  onMouseDown={(e) => e.stopPropagation()}
+                  onMouseDown={e => e.stopPropagation()}
                   onClick={() => setOpenMenuId(isMenuOpen ? null : item.id)}
                   className={classNames(
                     isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
@@ -135,11 +166,51 @@ const Sidebar: FC<ISidebarProps> = ({
           )
         })}
       </nav>
-      {/* <a className="flex flex-shrink-0 p-4" href="https://langgenius.ai/" target="_blank">
-        <Card><div className="flex flex-row items-center"><ChatBubbleOvalLeftEllipsisSolidIcon className="text-primary-600 h-6 w-6 mr-2" /><span>LangGenius</span></div></Card>
-      </a> */}
+
+      {/* Footer: User menu or copyright */}
       <div className="flex flex-shrink-0 pr-4 pb-4 pl-4">
-        <div className="text-content-quaternary font-normal text-xs">© {copyRight} {(new Date()).getFullYear()}</div>
+        {user && !isEmbed
+          ? (
+            <div className="relative" data-user-menu>
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-surface-hover transition-colors text-left"
+              >
+                <div className="w-7 h-7 rounded-full bg-accent text-white flex items-center justify-center text-xs font-medium flex-shrink-0">
+                  {user.name?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+                <span className="text-sm text-content truncate">{user.name}</span>
+              </button>
+              {userMenuOpen && (
+                <div className="absolute bottom-full left-0 mb-1 w-40 bg-surface-elevated border border-border rounded-lg shadow-lg z-50 py-1">
+                  {user.role === 'admin' && !isEmbed && (
+                    <button
+                      onClick={handleAdmin}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content hover:bg-surface-hover transition-colors"
+                    >
+                      <Cog6ToothIcon className="h-4 w-4" />
+                      <span>{t('common.auth.admin')}</span>
+                    </button>
+                  )}
+                  {user.role === 'admin' && !isEmbed && <div className="my-1 border-t border-border" />}
+                  {!isEmbed && (
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content hover:bg-surface-danger-hover transition-colors"
+                    >
+                      <ArrowRightStartOnRectangleIcon className="h-4 w-4" />
+                      <span>{t('common.auth.logout')}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            )
+          : (
+            <div className="text-content-quaternary font-normal text-xs">
+              © {copyRight} {(new Date()).getFullYear()}
+            </div>
+            )}
       </div>
     </div>
   )

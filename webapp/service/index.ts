@@ -35,10 +35,10 @@ export const sendChatMessage = async (
     onWorkflowFinished: IOnWorkflowFinished
   },
 ) => {
-  const { agent_id, embed_token, messages: _messages, ...rest } = body
+  const { agent_id, apiKey, messages: _messages, ...rest } = body
   const headers: Record<string, string> = {}
   if (agent_id) headers['x-agent-id'] = agent_id
-  if (embed_token) headers['x-embed-token'] = embed_token
+  if (apiKey) headers['x-api-key'] = apiKey
   return ssePost('chat-messages', {
     body: {
       ...rest,
@@ -93,8 +93,8 @@ export const fetchChatList = async (conversationId: string) => {
 }
 
 // init value. wait for server update
-export const fetchAppParams = async () => {
-  return get('parameters')
+export const fetchAppParams = async (headers?: Record<string, string>) => {
+  return get('parameters', headers ? { headers } : {})
 }
 
 export const updateFeedback = async ({ url, body }: { url: string, body: Feedbacktype }) => {
