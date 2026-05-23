@@ -1,14 +1,31 @@
 import type { VoiceRecognitionResult } from './types'
 import { io as socketIo } from 'socket.io-client'
+import { BASE_PATH } from '@/config'
 
 type WhisperCallback = (result: VoiceRecognitionResult) => void
 
 export type WhisperModel = 'whisper-tiny' | 'whisper-base' | 'whisper-small' | 'funasr-paraformer-zh' | 'funasr-sensevoice'
 
+interface WhisperRecognitionOptions {
+  authToken?: string
+}
+
 function getWhisperWsUrl(): string {
   if (typeof window === 'undefined') { return '' }
   const port = (window as any).__WHISPER_PORT__ || '8787'
   return `http://${window.location.hostname}:${port}`
+}
+
+async function fetchWsAuthToken(): Promise<string | null> {
+  try {
+    const resp = await fetch(`${BASE_PATH}/api/auth/ws-token`)
+    if (resp.ok) {
+      const data = await resp.json()
+      return data.token || null
+    }
+  }
+  catch {}
+  return null
 }
 
 export class WhisperRecognition {
@@ -18,10 +35,12 @@ export class WhisperRecognition {
   private stream: MediaStream | null = null
   private socket: any = null
   private modelName: WhisperModel
+  private authToken: string | undefined
 
-  constructor(callback: WhisperCallback, modelName: WhisperModel = 'whisper-tiny') {
+  constructor(callback: WhisperCallback, modelName: WhisperModel = 'whisper-tiny', options?: WhisperRecognitionOptions) {
     this.callback = callback
     this.modelName = modelName
+    this.authToken = options?.authToken
   }
 
   isSupported(): boolean {
@@ -83,8 +102,12 @@ export class WhisperRecognition {
   private async connectSocket(): Promise<void> {
     const url = getWhisperWsUrl()
 
+    // Fetch auth token if not provided
+    const token = this.authToken || await fetchWsAuthToken()
+
     return new Promise((resolve, reject) => {
       this.socket = socketIo(`${url}/speech`, {
+        auth: token ? { token } : undefined,
         transports: ['websocket'],
         reconnection: false,
       })

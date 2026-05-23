@@ -1,0 +1,8 @@
+{
+  "name": "test-projects",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx http-server public -p 3001 -c-1"
+  }
+}

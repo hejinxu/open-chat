@@ -251,6 +251,12 @@ importers:
       '@huggingface/transformers':
         specifier: ^3.8.1
         version: 3.8.1
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
+      jose:
+        specifier: ^6.0.11
+        version: 6.2.3
       onnxruntime-common:
         specifier: ^1.21.0
         version: 1.25.1
@@ -2239,6 +2245,10 @@ packages:
 
   dompurify@3.4.2:
     resolution: {integrity: sha512-lHeS9SA/IKeIFFyYciHBr2n0v1VMPlSj843HdLOwjb2OxNwdq9Xykxqhk+FE42MzAdHvInbAolSE4mhahPpjXA==}
+
+  dotenv@16.6.1:
+    resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
+    engines: {node: '>=12'}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -7089,6 +7099,8 @@ snapshots:
   dompurify@3.4.2:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
+
+  dotenv@16.6.1: {}
 
   dunder-proto@1.0.1:
     dependencies:
