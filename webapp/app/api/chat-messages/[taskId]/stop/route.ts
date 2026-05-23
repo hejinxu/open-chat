@@ -19,7 +19,7 @@ export async function POST(
   const agentId = getAgentIdFromRequest(request)
 
   try {
-    const agent = agentId ? getAgentById(agentId) : getDefaultAgent()
+    const agent = agentId ? await getAgentById(agentId) : await getDefaultAgent()
     if (!agent) { throw new Error('No agent found') }
     const adapter = createAdapter(agent)
     await adapter.stopMessage(taskId, user)

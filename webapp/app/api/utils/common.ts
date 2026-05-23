@@ -50,7 +50,7 @@ export async function getAdapterForRequest(request: NextRequest): Promise<ChatAd
   }
 
   const agentId = getAgentIdFromRequest(request)
-  const agent = agentId ? getAgentById(agentId) : getDefaultAgent()
+  const agent = agentId ? await getAgentById(agentId) : await getDefaultAgent()
   if (!agent) { throw new Error(`Agent not found: ${agentId}`) }
   return createAdapter(agent)
 }

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { getAgentInfoList, reloadConfig } from '@/app/api/utils/agents'
+import { getAgentInfoList } from '@/app/api/utils/agents'
 
 export async function GET() {
   try {
-    reloadConfig()
-    const agents = getAgentInfoList()
+    const agents = await getAgentInfoList()
     return NextResponse.json({ agents })
-  } catch (e: any) {
+  }
+  catch (e: any) {
     return NextResponse.json({ agents: [], error: e.message }, { status: 500 })
   }
 }

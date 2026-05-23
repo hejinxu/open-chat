@@ -192,7 +192,7 @@ pnpm start
 
 ## 相关文档
 
-- [PRD - 多智能体对话客户端](./docs/PRD-多智能体对话客户端.md)
+- [PRD - Open Chat](./docs/PRD-open-chat.md)
 - [语音识别引擎系统](./docs/语音识别引擎系统.md)
 - [添加新主题开发指南](./docs/添加新主题开发指南.md)
 - [AGENTS.md](./AGENTS.md) - AI 助手指令

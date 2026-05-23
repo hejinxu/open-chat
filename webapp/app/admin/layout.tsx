@@ -50,6 +50,7 @@ export default function AdminLayout({
 
   const tabs = [
     { name: t('common.auth.users'), href: '/admin/users' },
+    { name: t('common.auth.agents'), href: '/admin/agents' },
     { name: t('common.auth.integrations'), href: '/admin/integrations' },
   ] as const
 
