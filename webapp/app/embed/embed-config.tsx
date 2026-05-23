@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect } from 'react'
 
 export interface EmbedConfig {
-  token: string
+  apiKey: string
   agentId: string | null
   theme: string
   locale: string

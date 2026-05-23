@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { getInfo, setSession, checkEmbedToken } from '@/app/api/utils/common'
+import { getInfo, setSession, isRequestAuthenticated } from '@/app/api/utils/common'
 import { getMessageService } from '@/lib/services/message'
 import type { MessageRecord } from '@/lib/storage/types'
 
@@ -27,9 +27,8 @@ function messageRecordsToResponse(messages: MessageRecord[]) {
 }
 
 export async function GET(request: NextRequest) {
-  const result = await checkEmbedToken(request)
-  if (result && !result.valid) {
-    return NextResponse.json({ error: result.error }, { status: result.error === 'Invalid embed token' ? 401 : 403 })
+  if (!isRequestAuthenticated(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const { sessionId } = getInfo(request)

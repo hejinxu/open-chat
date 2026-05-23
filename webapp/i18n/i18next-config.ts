@@ -20,6 +20,17 @@ import toolsJa from './lang/tools.ja'
 import toolsFr from './lang/tools.fr'
 
 import type { Locale } from '.'
+import { i18n as i18nConfig } from '.'
+
+function getInitialLocale(): Locale {
+  if (typeof document === 'undefined') return i18nConfig.defaultLocale
+  const match = document.cookie.match(/(?:^|;\s*)locale=([^;]*)/)
+  const cookieLocale = match?.[1] as Locale | undefined
+  if (cookieLocale && i18nConfig.locales.includes(cookieLocale)) {
+    return cookieLocale
+  }
+  return i18nConfig.defaultLocale
+}
 
 const resources = {
   'en': {
@@ -74,7 +85,7 @@ i18n.use(initReactI18next)
   // init i18next
   // for all options read: https://www.i18next.com/overview/configuration-options
   .init({
-    lng: 'en',
+    lng: getInitialLocale(),
     fallbackLng: 'en',
     // debug: true,
     resources,

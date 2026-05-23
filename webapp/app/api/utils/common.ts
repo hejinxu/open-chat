@@ -4,7 +4,6 @@ import { APP_INFO, APP_ID } from '@/config'
 import { getAgentById, getDefaultAgent } from './agents'
 import { createAdapter } from '@/lib/adapters'
 import type { ChatAdapter } from '@/lib/adapters/types'
-import { getDatabaseProvider } from '@/lib/db'
 
 const userPrefix = `user_${APP_ID}:`
 
@@ -29,38 +28,25 @@ export function getAgentIdFromRequest(request: NextRequest): string | null {
   return request.headers.get('x-agent-id') || null
 }
 
-export async function checkEmbedToken(
-  request: NextRequest,
-  options?: { requireAgent?: boolean },
-): Promise<{ valid: boolean, error?: string } | null> {
-  const embedToken = request.headers.get('x-embed-token')
-  if (!embedToken) { return null }
-
-  try {
-    const db = getDatabaseProvider()
-    const tok = await db.getEmbedTokenByValue(embedToken)
-
-    if (!tok) { return { valid: false, error: 'Invalid embed token' } }
-    if (!tok.is_enabled) { return { valid: false, error: 'Embed token is disabled' } }
-
-    if (options?.requireAgent) {
-      const agentId = getAgentIdFromRequest(request)
-      if (!agentId) { return { valid: false, error: 'Missing x-agent-id header for embed request' } }
-      if (!tok.allowed_agent_ids.includes('*') && !tok.allowed_agent_ids.includes(agentId)) {
-        return { valid: false, error: 'Agent not allowed for this embed token' }
-      }
-    }
-
-    return { valid: true }
-  } catch (e: any) {
-    return { valid: false, error: `Token validation failed: ${e.message}` }
+/**
+ * Check if the request is authenticated via middleware-injected headers.
+ * When AUTH_ENABLED=false, the middleware passes all requests through,
+ * so this check is a no-op (returns true).
+ * When AUTH_ENABLED=true, the middleware injects x-auth-user-id or x-auth-integration-id.
+ */
+export function isRequestAuthenticated(request: NextRequest): boolean {
+  if (process.env.AUTH_ENABLED !== 'true') {
+    return true
   }
+
+  const userId = request.headers.get('x-auth-user-id')
+  const integrationId = request.headers.get('x-auth-integration-id')
+  return !!(userId || integrationId)
 }
 
 export async function getAdapterForRequest(request: NextRequest): Promise<ChatAdapter> {
-  const result = await checkEmbedToken(request, { requireAgent: true })
-  if (result && !result.valid) {
-    throw new Error(result.error || 'Unauthorized')
+  if (!isRequestAuthenticated(request)) {
+    throw new Error('Unauthorized')
   }
 
   const agentId = getAgentIdFromRequest(request)

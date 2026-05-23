@@ -36,8 +36,15 @@ Pre-commit hook 运行 `pnpm lint-staged`（ESLint on staged `.ts`/`.tsx` files�
 - **Client streaming**: `service/base.ts` exports `ssePost` for SSE streaming; `service/index.ts` wraps domain calls
 - **State**: Zustand + immer for state management; ahooks for utility hooks
 - **Config**: `config/index.ts` holds `APP_ID`, `API_KEY`, `API_URL` from env vars
-- **认证系统**: JWT + bcrypt，Next.js Middleware 验证（规划中）
-- **多租户**: 组织级数据隔离（规划中）
+- **basePath**: `NEXT_PUBLIC_BASE_PATH` 环境变量驱动 `next.config.js` 的 `basePath`（页面路由 + 静态资源）和 `config/index.ts` 的 `BASE_PATH` 常量（客户端 API 调用），默认为空（根路径）。所有客户端 `fetch('/api/...')` 统一使用 `${BASE_PATH}/api/...` 格式
+- **认证系统**: JWT + bcrypt，Next.js Middleware 全局验证。支持两种认证级别：Level 1 (API Key: `sk-xxx`) 用于简单嵌入集成，Level 2 (OAuth: `app_id` + `app_secret`) 用于服务端到服务端用户身份映射。通过 `AUTH_ENABLED` 环境变量控制是否启用（默认关闭，向后兼容）。认证 cookie 为 session cookie（无 maxAge），关闭浏览器后自动过期。详见 `docs/统一认证系统实现方案.md`
+- **多租户**: 组织级数据隔离（规划中，`users` 表已预留 `org_id` 字段）
+
+### Setup & Login
+- **Setup 页面**: Server Component，查询 DB 检查用户是否存在，有用户则 `redirect('/login')`，无用户则渲染客户端表单。创建用户成功后显示 3 秒倒计时跳转到登录页。
+- **Setup API**: 当 `users` 表为空时，自动清理 `user_accounts` 中的孤立记录（防止手动删用户后 identifier 冲突）。
+- **Login 页面**: 登录成功后使用 `window.location.href` 跳转，路径包含 `BASE_PATH` 前缀。
+- **Session Cookie**: 登录 cookie 不设置 `maxAge`，为 session cookie，关闭浏览器后自动过期。
 
 ### Multi-Agent System
 - **适配器模式**: `lib/adapters/` 定义 `ChatAdapter` 接口，不同后端类型有独立适配器实现
@@ -54,7 +61,7 @@ Pre-commit hook 运行 `pnpm lint-staged`（ESLint on staged `.ts`/`.tsx` files�
 ```typescript
 interface ConversationRecord {
   id: string                    // 本地 ID
-  name: string                  // 标题（第一条消息前 30 字）
+  name: string                  // 标题（首条用户消息前 30 字，发送时立即设置）
   created_at: number            // Unix 时间戳
   updated_at: number            // Unix 时间戳
   agents: Record<string, {      // 每个智能体在此会话中的状态
@@ -101,7 +108,7 @@ interface ConversationRecord {
 - **同步清空**：`handleConversationIdChange` 中先执行 `setChatList([])` + `setIsChatListLoading(true)`，再 `setCurrConversationId`，React 18 批处理合并为单帧
 - **竞争防护**：`chatListFetchIdRef` 递增计数器，每轮 fetch 记录 `fetchId`，回调中检查 `chatListFetchIdRef.current !== fetchId` 丢弃过期响应
 - **发送拦截**：`checkCanSend` 中 `isChatListLoading` 守卫，阻止发送（toast 提示 + return false），不清空输入
-- **侧边栏删除**：`sidebar/index.tsx` 会话条目悬停显示三点按钮，点击弹出删除 dropdown。`data-menu-id` + `target.closest()` 实现 click-outside 关闭
+- **侧边栏删除**：`sidebar/index.tsx` 会话条目悬停显示三点按钮，点击弹出删除 dropdown。`data-menu-id` + `target.closest()` 实现 click-outside 关闭。删除当前会话后不自动插入"新的对话"条目，需用户手动点击"新对话"按钮。
 
 **消息气泡删除**：AI 消息气泡操作栏含三点按钮（`MessageActionsDropdown`），使用 `EllipsisHorizontalIcon`，click-outside 关闭模式同侧边栏。展开 dropdown 含"删除"选项，触发 `ConfirmDialog` 确认后删除该条 AI 回复及对应的用户问题。删除同时移除 UI（`setChatList`）和存储（`MessageService.deleteMessagesByIds`）。dropdown 使用 `isLastMessage` 控制方向：最后一条向上展开（`bottom-full`），其余向下（`top-full`），统一 `left-0` 向右伸展。
 
@@ -224,16 +231,38 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 - **Multi-Agent**: 后端 API 通过 `x-agent-id` header 选择智能体；前端 `AgentSelector` 组件在输入框内与语音按钮同排；`agents.config.json` 包含 API key 不可提交 git。
 - **After coding**: 每次编写完代码后，主动询问用户是否需要更新 AGENTS.md。
 
+### basePath 路由规则
+- `router.push()` / `redirect()` **自动处理 basePath**，不要手动拼接 `BASE_PATH`
+- `window.location.href` / `fetch()` **不自动处理**，需要手动加 `${BASE_PATH}` 前缀
+- 所有 API 调用统一使用 `${BASE_PATH}/api/...` 格式，`API_PREFIX` 变量已删除
+
+### Embed 认证
+- `RemoteStorageProvider` 需通过 `setApiKey()` 注入 API key，所有 fetch 自动携带 `x-api-key`
+- middleware 验证 API Key 后注入 `x-auth-integration-id`（非 `x-auth-user-id`），路由需兼容
+- `AgentSelector` / `fetchAgentInfo` 需接收 `apiKey` prop 并在 fetch 中携带
+- middleware `PUBLIC_PATHS` 需包含 `/images`（嵌入图标静态资源）
+- API Key 必须用 `hashApiKey()` 生成 bcrypt hash 存储，明文无法通过验证
+
+### Next.js 15
+- Route handler 的 `params` 是 Promise 类型，必须先 `await` 再访问属性
+
 ## Environment
 
 ### webapp (.env.local)
 ```
 DATABASE_URL="postgresql://user:password@localhost:5432/openchat"
 JWT_SECRET="your-secret-key-here"
+
+# 认证系统开关（默认关闭，向后兼容）
+AUTH_ENABLED=false
+
 NEXT_PUBLIC_DEFAULT_THEME=tech-blue
 NEXT_PUBLIC_APP_ID=<dify-app-id>
 NEXT_PUBLIC_APP_KEY=<dify-api-key>
 NEXT_PUBLIC_API_URL=https://api.dify.ai/v1
+
+# 项目前缀路径（留空则无前缀，例如 /chat）
+NEXT_PUBLIC_BASE_PATH=
 
 # 存储后端：local | sqlite | postgres
 NEXT_PUBLIC_STORAGE_BACKEND=local
@@ -288,7 +317,7 @@ embed.min.js (外层, ~450行 vanilla JS)
 ├── [浮动按钮]      — 可拖动，位置持久化
 └── [窗口容器]
      ├── [标题栏]   — ☰ + 标题 + × + 拖拽窗口
-     ├── [iframe]   — /embed?token=...&theme=...
+     ├── [iframe]   — /embed?apiKey=...&theme=...
      └── [resize]   — 右下角拖拽，min/max 约束
 ```
 
@@ -299,15 +328,15 @@ embed.min.js (外层, ~450行 vanilla JS)
 | `webapp/app/embed/page.tsx` | `/embed` 页面入口（读取 URL 参数、应用 theme） |
 | `webapp/app/embed/main-embed.tsx` | 纯 Main 渲染包装（无标题栏） |
 | `webapp/app/components/index.tsx` | `isEmbed` 模式 + `openchat:toggle-sidebar` 监听 |
-| `webapp/app/api/utils/common.ts` | `checkEmbedToken()` — 所有 API 入口校验 |
-| `webapp/lib/db/sqlite.ts` | `embed_tokens` 表（id/name/description/token/allowed_agent_ids/is_enabled） |
+| `webapp/app/api/utils/common.ts` | `getAdapterForRequest()` — 适配器获取 + 认证校验 |
+| `webapp/lib/db/sqlite.ts` | `app_integrations` + `api_keys` 表（替代旧 `embed_tokens`） |
 | `webapp/public/images/embed-icons/` | 14 个内置 SVG 图标（robot/bot/chat/sparkle/headset/message/brain/wand/rocket/puzzle/eye/code/gear） |
 
-**Token 认证**: 嵌入请求携带 `x-embed-token` header → 查询 `embed_tokens` 表 → 校验 `is_enabled` + `allowed_agent_ids`。
+**认证流程**: 嵌入请求携带 `x-api-key: sk-xxx` header → 中间件验证 API Key → 查找 `api_keys` 表 → 校验 `is_enabled` + `expires_at` + `allowed_agent_ids`。详见 `docs/统一认证系统实现方案.md`。
 
 **嵌入测试**: `embed-test/public/index.html` — 模拟真实网站，配置 `window.openChatConfig` 后引入 `embed.min.js`。
 
-**配置接口**: `window.openChatConfig = { baseUrl, token, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, inputs? }`
+**配置接口**: `window.openChatConfig = { baseUrl, apiKey, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, inputs? }`
 
 **相关文档**:
 - `docs/嵌入式对话组件实现方案.md` — 技术方案全文

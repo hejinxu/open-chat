@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDatabaseProvider } from '@/lib/db'
+import { isRequestAuthenticated } from '@/app/api/utils/common'
 import type { ConversationRecord, MessageRecord } from '@/lib/storage/types'
 
 interface MergeRequest {
@@ -16,6 +17,10 @@ interface MergeRequest {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isRequestAuthenticated(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const body: MergeRequest = await request.json()
     const { strategy } = body
@@ -42,7 +47,7 @@ export async function POST(request: NextRequest) {
         if (!body.localData) {
           return NextResponse.json(
             { success: false, error: 'Missing localData for local strategy' },
-            { status: 400 }
+            { status: 400 },
           )
         }
 
@@ -61,7 +66,7 @@ export async function POST(request: NextRequest) {
         if (!body.localData || !body.remoteData) {
           return NextResponse.json(
             { success: false, error: 'Missing localData or remoteData for merge strategy' },
-            { status: 400 }
+            { status: 400 },
           )
         }
 
@@ -109,14 +114,14 @@ export async function POST(request: NextRequest) {
       default:
         return NextResponse.json(
           { success: false, error: `Unknown strategy: ${strategy}` },
-          { status: 400 }
+          { status: 400 },
         )
     }
   } catch (error: any) {
     console.error('POST /api/storage/merge error:', error)
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

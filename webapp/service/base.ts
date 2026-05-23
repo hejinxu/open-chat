@@ -1,4 +1,4 @@
-import { API_PREFIX } from '@/config'
+import { BASE_PATH } from '@/config'
 import Toast from '@/app/components/base/toast'
 import type { AnnotationReply, MessageEnd, MessageReplace, ThoughtItem } from '@/app/components/chat/type'
 import type { VisionFile } from '@/types/app'
@@ -249,7 +249,16 @@ const handleStream = (
 const baseFetch = (url: string, fetchOptions: any, { needAllResponseContent }: IOtherOptions) => {
   const options = Object.assign({}, baseOptions, fetchOptions)
 
-  const urlPrefix = API_PREFIX
+  // Merge headers if fetchOptions provides custom headers
+  if (fetchOptions?.headers) {
+    const mergedHeaders = new Headers(baseOptions.headers)
+    for (const [key, value] of Object.entries(fetchOptions.headers)) {
+      mergedHeaders.set(key, value as string)
+    }
+    options.headers = mergedHeaders
+  }
+
+  const urlPrefix = `${BASE_PATH}/api`
 
   let urlWithPrefix = `${urlPrefix}${url.startsWith('/') ? url : `/${url}`}`
 
@@ -325,7 +334,7 @@ const baseFetch = (url: string, fetchOptions: any, { needAllResponseContent }: I
 }
 
 export const upload = (fetchOptions: any): Promise<any> => {
-  const urlPrefix = API_PREFIX
+  const urlPrefix = `${BASE_PATH}/api`
   const urlWithPrefix = `${urlPrefix}/file-upload`
   const defaultOptions = {
     method: 'POST',
@@ -389,7 +398,7 @@ export const ssePost = (
     options.headers = mergedHeaders
   }
 
-  const urlPrefix = API_PREFIX
+  const urlPrefix = `${BASE_PATH}/api`
   const urlWithPrefix = `${urlPrefix}${url.startsWith('/') ? url : `/${url}`}`
 
   const { body } = options

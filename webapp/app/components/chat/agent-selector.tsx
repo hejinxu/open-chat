@@ -2,23 +2,26 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import type { AgentInfo } from '@/types/agent'
+import { BASE_PATH } from '@/config'
 
 interface AgentSelectorProps {
   value: string | null
   onChange: (agentId: string | null) => void
+  apiKey?: string
 }
 
-export function AgentSelector({ value, onChange }: AgentSelectorProps) {
+export function AgentSelector({ value, onChange, apiKey }: AgentSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [agents, setAgents] = useState<AgentInfo[]>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    fetch('/api/config/agents')
+    const headers = apiKey ? { 'x-api-key': apiKey } : undefined
+    fetch(`${BASE_PATH}/api/config/agents`, { headers })
       .then(res => res.json())
       .then(data => setAgents(data.agents || []))
       .catch(() => {})
-  }, [])
+  }, [apiKey])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

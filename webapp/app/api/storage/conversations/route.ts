@@ -1,8 +1,13 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDatabaseProvider } from '@/lib/db'
+import { isRequestAuthenticated } from '@/app/api/utils/common'
 
 export async function GET(request: NextRequest) {
+  if (!isRequestAuthenticated(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
@@ -20,12 +25,16 @@ export async function GET(request: NextRequest) {
     console.error('GET /api/storage/conversations error:', error)
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
 
 export async function POST(request: NextRequest) {
+  if (!isRequestAuthenticated(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const conv = await request.json()
     const db = getDatabaseProvider()
@@ -35,18 +44,22 @@ export async function POST(request: NextRequest) {
     console.error('POST /api/storage/conversations error:', error)
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!isRequestAuthenticated(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { id } = await request.json()
     if (!id) {
       return NextResponse.json(
         { success: false, error: 'Missing conversation id' },
-        { status: 400 }
+        { status: 400 },
       )
     }
     const db = getDatabaseProvider()
@@ -56,7 +69,7 @@ export async function DELETE(request: NextRequest) {
     console.error('DELETE /api/storage/conversations error:', error)
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

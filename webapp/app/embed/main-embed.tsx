@@ -6,7 +6,7 @@ import Main from '@/app/components'
 
 interface MainEmbedProps {
   config: {
-    token: string
+    apiKey: string
     agentId: string | null
     theme: string
     locale: string
@@ -18,7 +18,7 @@ const MainEmbed: FC<MainEmbedProps> = ({ config }) => {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 min-h-0">
-        <Main params={{ isEmbed: true, embedToken: config.token }} />
+        <Main params={{ isEmbed: true, apiKey: config.apiKey }} />
       </div>
     </div>
   )

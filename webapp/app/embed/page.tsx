@@ -10,7 +10,7 @@ function EmbedContent() {
   const searchParams = useSearchParams()
 
   const config: EmbedConfig = {
-    token: searchParams.get('token') || '',
+    apiKey: searchParams.get('apiKey') || '',
     agentId: searchParams.get('agentId') || null,
     theme: searchParams.get('theme') || 'light',
     locale: searchParams.get('locale') || 'zh-Hans',

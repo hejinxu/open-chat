@@ -40,6 +40,7 @@ export interface IChatProps {
   fileConfig?: FileUpload
   selectedAgentId?: string | null
   onAgentChange?: (agentId: string | null) => void
+  apiKey?: string
   isChatListLoading?: boolean
 }
 
@@ -60,6 +61,7 @@ const Chat: FC<IChatProps> = ({
   fileConfig,
   selectedAgentId,
   onAgentChange,
+  apiKey,
   isChatListLoading = false,
 }) => {
   const { t } = useTranslation()
@@ -356,6 +358,7 @@ const Chat: FC<IChatProps> = ({
                   <AgentSelector
                     value={selectedAgentId ?? null}
                     onChange={onAgentChange || (() => {})}
+                    apiKey={apiKey}
                   />
                   <VoiceInput
                     ref={voiceInputRef}
