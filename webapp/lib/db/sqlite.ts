@@ -2,7 +2,6 @@ import path from 'path'
 import fs from 'fs'
 import type { ConversationRecord, MessageRecord } from '../storage/types'
 import type { DatabaseProvider } from './types'
-import type { StorageProvider } from '../storage/types'
 import type { EmbedTokenRecord } from '@/types/embed'
 import type { UserRecord, UserAccountRecord, AppIntegrationRecord, ApiKeyRecord } from '@/types/auth'
 import type { AgentRecord } from '@/types/agent'
@@ -11,6 +10,8 @@ export class SqliteProvider implements DatabaseProvider {
   private db: any = null
   private dbPath: string
   private initPromise: Promise<void>
+  private _dirty = false
+  private _saveTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(dbPath?: string) {
     this.dbPath = dbPath || process.env.SQLITE_DB_PATH || path.join(process.cwd(), 'data', 'openchat.db')
@@ -174,6 +175,29 @@ export class SqliteProvider implements DatabaseProvider {
     fs.writeFileSync(this.dbPath, buffer)
   }
 
+  private scheduleSave(): void {
+    this._dirty = true
+    if (this._saveTimer) return
+    this._saveTimer = setTimeout(() => {
+      this._saveTimer = null
+      if (this._dirty) {
+        this._dirty = false
+        this.scheduleSave()
+      }
+    }, 1000)
+  }
+
+  async flush(): Promise<void> {
+    if (this._saveTimer) {
+      clearTimeout(this._saveTimer)
+      this._saveTimer = null
+    }
+    if (this._dirty) {
+      this._dirty = false
+      this.scheduleSave()
+    }
+  }
+
   async ensureReady(): Promise<void> {
     await this.initPromise
     if (!this.db) {
@@ -181,27 +205,40 @@ export class SqliteProvider implements DatabaseProvider {
     }
   }
 
-  async getConversations(): Promise<ConversationRecord[]> {
+  private async queryAll<T>(sql: string, params: any[], mapper: (row: any) => T): Promise<T[]> {
     await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM conversations ORDER BY updated_at DESC')
+    const stmt = this.db.prepare(sql)
+    if (params?.length) {
+      stmt.bind(params)
+    }
     const rows: any[] = []
     while (stmt.step()) {
       rows.push(stmt.getAsObject())
     }
     stmt.free()
-    return rows.map(this.mapConversation)
+    return rows.map(mapper)
   }
 
-  async getConversationById(id: string): Promise<ConversationRecord | null> {
+  private async queryOne<T>(sql: string, params: any[], mapper: (row: any) => T): Promise<T | null> {
     await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM conversations WHERE id = ?')
-    stmt.bind([id])
+    const stmt = this.db.prepare(sql)
+    if (params?.length) {
+      stmt.bind(params)
+    }
     let row: any = null
     if (stmt.step()) {
       row = stmt.getAsObject()
     }
     stmt.free()
-    return row ? this.mapConversation(row) : null
+    return row ? mapper(row) : null
+  }
+
+  async getConversations(): Promise<ConversationRecord[]> {
+    return this.queryAll('SELECT * FROM conversations ORDER BY updated_at DESC', [], this.mapConversation)
+  }
+
+  async getConversationById(id: string): Promise<ConversationRecord | null> {
+    return this.queryOne('SELECT * FROM conversations WHERE id = ?', [id], this.mapConversation)
   }
 
   async saveConversation(conv: ConversationRecord): Promise<void> {
@@ -210,26 +247,18 @@ export class SqliteProvider implements DatabaseProvider {
       'INSERT OR REPLACE INTO conversations (id, name, created_at, updated_at, agents) VALUES (?, ?, ?, ?, ?)',
       [conv.id, conv.name, conv.created_at, conv.updated_at, JSON.stringify(conv.agents || {})]
     )
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async deleteConversation(id: string): Promise<void> {
     await this.ensureReady()
     this.db.run('DELETE FROM messages WHERE conversation_id = ?', [id])
     this.db.run('DELETE FROM conversations WHERE id = ?', [id])
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async getMessages(conversationId: string): Promise<MessageRecord[]> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC')
-    stmt.bind([conversationId])
-    const rows: any[] = []
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject())
-    }
-    stmt.free()
-    return rows.map(this.mapMessage)
+    return this.queryAll('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC', [conversationId], this.mapMessage)
   }
 
   async saveMessage(msg: MessageRecord): Promise<void> {
@@ -256,13 +285,13 @@ export class SqliteProvider implements DatabaseProvider {
       'UPDATE conversations SET updated_at = ? WHERE id = ?',
       [Math.floor(Date.now() / 1000), msg.conversation_id]
     )
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async deleteMessages(conversationId: string): Promise<void> {
     await this.ensureReady()
     this.db.run('DELETE FROM messages WHERE conversation_id = ?', [conversationId])
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async deleteMessagesByIds(ids: string[]): Promise<void> {
@@ -270,7 +299,7 @@ export class SqliteProvider implements DatabaseProvider {
     if (ids.length === 0) return
     const placeholders = ids.map(() => '?').join(', ')
     this.db.run(`DELETE FROM messages WHERE id IN (${placeholders})`, ids)
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   private mapConversation(row: any): ConversationRecord {
@@ -300,38 +329,15 @@ export class SqliteProvider implements DatabaseProvider {
   }
 
   async getEmbedTokens(): Promise<EmbedTokenRecord[]> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM embed_tokens ORDER BY created_at DESC')
-    const rows: any[] = []
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject())
-    }
-    stmt.free()
-    return rows.map(this.mapEmbedToken)
+    return this.queryAll('SELECT * FROM embed_tokens ORDER BY created_at DESC', [], this.mapEmbedToken)
   }
 
   async getEmbedTokenById(id: string): Promise<EmbedTokenRecord | null> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM embed_tokens WHERE id = ?')
-    stmt.bind([id])
-    let row: any = null
-    if (stmt.step()) {
-      row = stmt.getAsObject()
-    }
-    stmt.free()
-    return row ? this.mapEmbedToken(row) : null
+    return this.queryOne('SELECT * FROM embed_tokens WHERE id = ?', [id], this.mapEmbedToken)
   }
 
   async getEmbedTokenByValue(token: string): Promise<EmbedTokenRecord | null> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM embed_tokens WHERE token = ?')
-    stmt.bind([token])
-    let row: any = null
-    if (stmt.step()) {
-      row = stmt.getAsObject()
-    }
-    stmt.free()
-    return row ? this.mapEmbedToken(row) : null
+    return this.queryOne('SELECT * FROM embed_tokens WHERE token = ?', [token], this.mapEmbedToken)
   }
 
   async saveEmbedToken(tok: EmbedTokenRecord): Promise<void> {
@@ -350,13 +356,13 @@ export class SqliteProvider implements DatabaseProvider {
         tok.updated_at,
       ]
     )
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async deleteEmbedToken(id: string): Promise<void> {
     await this.ensureReady()
     this.db.run('DELETE FROM embed_tokens WHERE id = ?', [id])
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   private mapEmbedToken(row: any): EmbedTokenRecord {
@@ -419,26 +425,11 @@ export class SqliteProvider implements DatabaseProvider {
   // ============ Users ============
 
   async getUserById(id: string): Promise<UserRecord | null> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM users WHERE id = ?')
-    stmt.bind([id])
-    let row: any = null
-    if (stmt.step()) {
-      row = stmt.getAsObject()
-    }
-    stmt.free()
-    return row ? this.mapUser(row) : null
+    return this.queryOne('SELECT * FROM users WHERE id = ?', [id], this.mapUser)
   }
 
   async getUsers(): Promise<UserRecord[]> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM users ORDER BY created_at DESC')
-    const rows: any[] = []
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject())
-    }
-    stmt.free()
-    return rows.map(this.mapUser)
+    return this.queryAll('SELECT * FROM users ORDER BY created_at DESC', [], this.mapUser)
   }
 
   async saveUser(user: UserRecord): Promise<void> {
@@ -448,14 +439,14 @@ export class SqliteProvider implements DatabaseProvider {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [user.id, user.name, user.role, user.org_id, user.is_enabled ? 1 : 0, user.created_at, user.updated_at]
     )
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async deleteUser(id: string): Promise<void> {
     await this.ensureReady()
     this.db.run('DELETE FROM user_accounts WHERE user_id = ?', [id])
     this.db.run('DELETE FROM users WHERE id = ?', [id])
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   private mapUser(row: any): UserRecord {
@@ -473,27 +464,11 @@ export class SqliteProvider implements DatabaseProvider {
   // ============ User Accounts ============
 
   async getUserAccountByIdentifier(identifier: string): Promise<UserAccountRecord | null> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM user_accounts WHERE login_identifier = ?')
-    stmt.bind([identifier])
-    let row: any = null
-    if (stmt.step()) {
-      row = stmt.getAsObject()
-    }
-    stmt.free()
-    return row ? this.mapUserAccount(row) : null
+    return this.queryOne('SELECT * FROM user_accounts WHERE login_identifier = ?', [identifier], this.mapUserAccount)
   }
 
   async getUserAccountsByUserId(userId: string): Promise<UserAccountRecord[]> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM user_accounts WHERE user_id = ? ORDER BY created_at ASC')
-    stmt.bind([userId])
-    const rows: any[] = []
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject())
-    }
-    stmt.free()
-    return rows.map(this.mapUserAccount)
+    return this.queryAll('SELECT * FROM user_accounts WHERE user_id = ? ORDER BY created_at ASC', [userId], this.mapUserAccount)
   }
 
   async saveUserAccount(account: UserAccountRecord): Promise<void> {
@@ -503,13 +478,13 @@ export class SqliteProvider implements DatabaseProvider {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [account.id, account.user_id, account.login_type, account.login_identifier, account.password_hash, account.is_primary ? 1 : 0, account.is_verified ? 1 : 0, account.created_at]
     )
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async deleteUserAccount(id: string): Promise<void> {
     await this.ensureReady()
     this.db.run('DELETE FROM user_accounts WHERE id = ?', [id])
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   private mapUserAccount(row: any): UserAccountRecord {
@@ -528,38 +503,15 @@ export class SqliteProvider implements DatabaseProvider {
   // ============ App Integrations ============
 
   async getAppIntegrations(): Promise<AppIntegrationRecord[]> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM app_integrations ORDER BY created_at DESC')
-    const rows: any[] = []
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject())
-    }
-    stmt.free()
-    return rows.map(this.mapAppIntegration)
+    return this.queryAll('SELECT * FROM app_integrations ORDER BY created_at DESC', [], this.mapAppIntegration)
   }
 
   async getAppIntegrationById(id: string): Promise<AppIntegrationRecord | null> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM app_integrations WHERE id = ?')
-    stmt.bind([id])
-    let row: any = null
-    if (stmt.step()) {
-      row = stmt.getAsObject()
-    }
-    stmt.free()
-    return row ? this.mapAppIntegration(row) : null
+    return this.queryOne('SELECT * FROM app_integrations WHERE id = ?', [id], this.mapAppIntegration)
   }
 
   async getAppIntegrationByAppId(appId: string): Promise<AppIntegrationRecord | null> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM app_integrations WHERE app_id = ?')
-    stmt.bind([appId])
-    let row: any = null
-    if (stmt.step()) {
-      row = stmt.getAsObject()
-    }
-    stmt.free()
-    return row ? this.mapAppIntegration(row) : null
+    return this.queryOne('SELECT * FROM app_integrations WHERE app_id = ?', [appId], this.mapAppIntegration)
   }
 
   async saveAppIntegration(integration: AppIntegrationRecord): Promise<void> {
@@ -569,14 +521,14 @@ export class SqliteProvider implements DatabaseProvider {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [integration.id, integration.name, integration.description, integration.app_id, integration.app_secret, integration.is_enabled ? 1 : 0, integration.created_at, integration.updated_at]
     )
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async deleteAppIntegration(id: string): Promise<void> {
     await this.ensureReady()
     this.db.run('DELETE FROM api_keys WHERE integration_id = ?', [id])
     this.db.run('DELETE FROM app_integrations WHERE id = ?', [id])
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   private mapAppIntegration(row: any): AppIntegrationRecord {
@@ -595,27 +547,11 @@ export class SqliteProvider implements DatabaseProvider {
   // ============ API Keys ============
 
   async getApiKeysByIntegration(integrationId: string): Promise<ApiKeyRecord[]> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM api_keys WHERE integration_id = ? ORDER BY created_at DESC')
-    stmt.bind([integrationId])
-    const rows: any[] = []
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject())
-    }
-    stmt.free()
-    return rows.map(this.mapApiKey)
+    return this.queryAll('SELECT * FROM api_keys WHERE integration_id = ? ORDER BY created_at DESC', [integrationId], this.mapApiKey)
   }
 
   async getApiKeyByKeyHash(keyHash: string): Promise<ApiKeyRecord | null> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM api_keys WHERE key_hash = ?')
-    stmt.bind([keyHash])
-    let row: any = null
-    if (stmt.step()) {
-      row = stmt.getAsObject()
-    }
-    stmt.free()
-    return row ? this.mapApiKey(row) : null
+    return this.queryOne('SELECT * FROM api_keys WHERE key_hash = ?', [keyHash], this.mapApiKey)
   }
 
   async saveApiKey(key: ApiKeyRecord): Promise<void> {
@@ -636,19 +572,19 @@ export class SqliteProvider implements DatabaseProvider {
         key.created_at,
       ]
     )
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async deleteApiKey(id: string): Promise<void> {
     await this.ensureReady()
     this.db.run('DELETE FROM api_keys WHERE id = ?', [id])
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async updateApiKeyLastUsed(id: string): Promise<void> {
     await this.ensureReady()
     this.db.run('UPDATE api_keys SET last_used_at = ? WHERE id = ?', [Math.floor(Date.now() / 1000), id])
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   private mapApiKey(row: any): ApiKeyRecord {
@@ -669,37 +605,15 @@ export class SqliteProvider implements DatabaseProvider {
   // ============ Agents ============
 
   async getAgents(): Promise<AgentRecord[]> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM agents ORDER BY created_at DESC')
-    const rows: any[] = []
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject())
-    }
-    stmt.free()
-    return rows.map(this.mapAgent)
+    return this.queryAll('SELECT * FROM agents ORDER BY created_at DESC', [], this.mapAgent)
   }
 
   async getAgentById(id: string): Promise<AgentRecord | null> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM agents WHERE id = ?')
-    stmt.bind([id])
-    let row: any = null
-    if (stmt.step()) {
-      row = stmt.getAsObject()
-    }
-    stmt.free()
-    return row ? this.mapAgent(row) : null
+    return this.queryOne('SELECT * FROM agents WHERE id = ?', [id], this.mapAgent)
   }
 
   async getDefaultAgent(): Promise<AgentRecord | null> {
-    await this.ensureReady()
-    const stmt = this.db.prepare('SELECT * FROM agents WHERE is_default = 1 LIMIT 1')
-    let row: any = null
-    if (stmt.step()) {
-      row = stmt.getAsObject()
-    }
-    stmt.free()
-    return row ? this.mapAgent(row) : null
+    return this.queryOne('SELECT * FROM agents WHERE is_default = 1 LIMIT 1', [], this.mapAgent)
   }
 
   async saveAgent(agent: AgentRecord): Promise<void> {
@@ -723,20 +637,20 @@ export class SqliteProvider implements DatabaseProvider {
         agent.updated_at,
       ]
     )
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async deleteAgent(id: string): Promise<void> {
     await this.ensureReady()
     this.db.run('DELETE FROM agents WHERE id = ?', [id])
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   async setDefaultAgent(id: string): Promise<void> {
     await this.ensureReady()
     this.db.run('UPDATE agents SET is_default = 0')
     this.db.run('UPDATE agents SET is_default = 1 WHERE id = ?', [id])
-    this.saveToFile()
+    this.scheduleSave()
   }
 
   private mapAgent(row: any): AgentRecord {
@@ -800,7 +714,7 @@ export class SqliteProvider implements DatabaseProvider {
         )
       }
 
-      this.saveToFile()
+      this.scheduleSave()
       console.log(`[DB] Migrated ${agents.length} agents from agents.config.json`)
     }
     catch (e) {

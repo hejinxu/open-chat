@@ -23,9 +23,14 @@ export class DifyAdapter implements ChatAdapter {
   }
 
   async stopMessage(taskId: string, user: string) {
-    const res = await fetch(`/chat-messages/${taskId}/stop`, {
+    // eslint-disable-next-line dot-notation
+    const res = await fetch(`${this.client['baseUrl']}/chat-messages/${taskId}/stop`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        // eslint-disable-next-line dot-notation
+        'Authorization': `Bearer ${this.client['apiKey']}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ user }),
     })
     return res.json()
@@ -53,9 +58,11 @@ export class DifyAdapter implements ChatAdapter {
     } else {
       data.name = name
     }
+    // eslint-disable-next-line dot-notation
     const res = await fetch(`${this.client['baseUrl']}/conversations/${id}/name`, {
       method: 'POST',
       headers: {
+        // eslint-disable-next-line dot-notation
         'Authorization': `Bearer ${this.client['apiKey']}`,
         'Content-Type': 'application/json',
       },

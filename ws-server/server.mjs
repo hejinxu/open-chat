@@ -81,6 +81,9 @@ async function registerHandler(handler) {
 
   ns.on('connection', (socket) => {
     handler.onConnection(socket, { io, handlers })
+    socket.on('disconnect', () => {
+      handler.disconnect?.(socket)
+    })
   })
 
   if (handler.init) {

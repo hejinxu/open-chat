@@ -29,6 +29,7 @@ import { getConversationService } from '@/lib/services/conversation'
 import { getMessageService } from '@/lib/services/message'
 import { stopReadAloud } from '@/app/components/chat/text-to-speech'
 import ConfirmDialog from '@/app/components/base/confirm-dialog'
+import { getAgentParamsSync, saveAgentParamsSync, getBackendConvIdSync, saveBackendConvIdSync } from '@/lib/conversation-storage'
 
 // 超时工具函数
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -74,47 +75,6 @@ const Main: FC<IMainProps> = (props) => {
   const [currentUser, setCurrentUser] = useState<{ name: string, role: string } | null>(null)
 
   const storageBackend = getStorageBackend()
-
-  // ---- Sync localStorage helpers ----
-  function getAllConversations(): any[] {
-    if (typeof window === 'undefined') return []
-    try { const d = localStorage.getItem('open_chat_conversations'); return d ? JSON.parse(d) : [] } catch { return [] }
-  }
-  function saveAllConversations(convs: any[]) {
-    localStorage.setItem('open_chat_conversations', JSON.stringify(convs))
-  }
-  function getAgentParamsSync(convId: string, agentId: string): Record<string, any> | null {
-    const convs = getAllConversations()
-    const conv = convs.find((c: any) => c.id === convId)
-    return conv?.agents?.[agentId]?.params || null
-  }
-  function saveAgentParamsSync(convId: string, agentId: string, params: Record<string, any>) {
-    const convs = getAllConversations()
-    const conv = convs.find((c: any) => c.id === convId)
-    if (conv) {
-      if (!conv.agents) conv.agents = {}
-      if (!conv.agents[agentId]) conv.agents[agentId] = {}
-      conv.agents[agentId].params = { ...params }
-      conv.updated_at = Math.floor(Date.now() / 1000)
-      saveAllConversations(convs)
-    }
-  }
-  function getBackendConvIdSync(convId: string, agentId: string): string | null {
-    const convs = getAllConversations()
-    const conv = convs.find((c: any) => c.id === convId)
-    return conv?.agents?.[agentId]?.backend_conversation_id || null
-  }
-  function saveBackendConvIdSync(convId: string, agentId: string, backendId: string) {
-    const convs = getAllConversations()
-    const conv = convs.find((c: any) => c.id === convId)
-    if (conv) {
-      if (!conv.agents) conv.agents = {}
-      if (!conv.agents[agentId]) conv.agents[agentId] = { params: {} }
-      conv.agents[agentId].backend_conversation_id = backendId
-      conv.updated_at = Math.floor(Date.now() / 1000)
-      saveAllConversations(convs)
-    }
-  }
 
   // ---- Utility: fetch & cache prompt_variables ----
   const fetchAndCachePromptVars = useCallback(async (agentId: string | null) => {
@@ -751,7 +711,8 @@ const Main: FC<IMainProps> = (props) => {
     }
     setHasStopResponded(true)
     try {
-      await stopChatMessage(messageTaskId)
+      const agentKey = selectedAgentId || defaultAgentId
+      await stopChatMessage(messageTaskId, agentKey || undefined, apiKey || undefined)
     } catch (e) {
       console.error('Failed to stop responding:', e)
     }
