@@ -23,6 +23,7 @@ open-chat/
 - `pnpm start` — 启动生产版本
 - `pnpm lint` — ESLint 检查
 - `pnpm fix` — 自动修复 lint
+- `pnpm typecheck` — TypeScript 类型检查
 - `pnpm download-whisper` — 下载 Whisper 模型
 - `pnpm download-funasr` — 下载 FunASR 模型
 
@@ -234,7 +235,7 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 - **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom. Scrollbar at screen edge via full-width scrollable container. Auto-scroll: `ResizeObserver` on inner content wrapper (no overflow) triggers `scrollTop = scrollHeight` on outer scroll container — handles message loading, streaming, async markdown rendering.
 - **Build**: `next.config.js` disables ESLint and TypeScript errors during build.
 - **Multi-Agent**: 后端 API 通过 `x-agent-id` header 选择智能体；前端 `AgentSelector` 组件在输入框内与语音按钮同排；`agents.config.json` 包含 API key 不可提交 git。
-- **After coding**: 每次编写完代码后，主动询问用户是否需要更新 AGENTS.md。
+- **After coding**: 每次编写完代码后，运行 `pnpm lint` 和 `pnpm typecheck` 检查，主动询问用户是否需要更新 AGENTS.md。
 
 ### basePath 路由规则
 - `router.push()` / `redirect()` **自动处理 basePath**，不要手动拼接 `BASE_PATH`

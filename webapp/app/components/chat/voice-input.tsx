@@ -157,6 +157,21 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
     setIsWaitingForResult(false)
     isActiveRef.current = true
 
+    const scheduleAutoSend = () => {
+      sendTimerRef.current = globalThis.setTimeout(() => {
+        if (!pendingSendRef.current) { return }
+        pendingSendRef.current = false
+        clearCountdown()
+        setIsWaitingForResult(false)
+        const finalText = accumulatedRef.current.trim()
+        if (finalText) {
+          onResultRef.current(finalText)
+          if (autoReadAloudRef.current) { setAutoReadPending(true) }
+          onAutoSendRef.current!()
+        }
+      }, noInputMsRef.current)
+    }
+
     const voiceEngine = createEngine((result: VoiceRecognitionResult) => {
       if (!isActiveRef.current) { return }
 
@@ -177,18 +192,7 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
             pendingSendRef.current = true
             setIsWaitingForResult(true)
             startCountdown(noInputMsRef.current)
-            sendTimerRef.current = globalThis.setTimeout(() => {
-              if (!pendingSendRef.current) { return }
-              pendingSendRef.current = false
-              clearCountdown()
-              setIsWaitingForResult(false)
-              const finalText = accumulatedRef.current.trim()
-              if (finalText) {
-                onResultRef.current(finalText)
-                if (autoReadAloudRef.current) { setAutoReadPending(true) }
-                onAutoSendRef.current!()
-              }
-            }, noInputMsRef.current)
+            scheduleAutoSend()
           }
         }, noInputMsRef.current)
       }
@@ -214,18 +218,7 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
         if (pendingSendRef.current) {
           clearSendTimer()
           startCountdown(noInputMsRef.current)
-          sendTimerRef.current = globalThis.setTimeout(() => {
-            if (!pendingSendRef.current) { return }
-            pendingSendRef.current = false
-            clearCountdown()
-            setIsWaitingForResult(false)
-            const finalText = accumulatedRef.current.trim()
-            if (finalText) {
-              onResultRef.current(finalText)
-              if (autoReadAloudRef.current) { setAutoReadPending(true) }
-              onAutoSendRef.current!()
-            }
-          }, noInputMsRef.current)
+          scheduleAutoSend()
         }
       }
       else if (!result.isFinal && result.text) {
@@ -259,18 +252,7 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
           pendingSendRef.current = true
           setIsWaitingForResult(true)
           startCountdown(noInputMsRef.current)
-          sendTimerRef.current = globalThis.setTimeout(() => {
-            if (!pendingSendRef.current) { return }
-            pendingSendRef.current = false
-            clearCountdown()
-            setIsWaitingForResult(false)
-            const finalText = accumulatedRef.current.trim()
-            if (finalText) {
-              onResultRef.current(finalText)
-              if (autoReadAloudRef.current) { setAutoReadPending(true) }
-              onAutoSendRef.current!()
-            }
-          }, noInputMsRef.current)
+          scheduleAutoSend()
         }
       }, noInputMsRef.current)
     }

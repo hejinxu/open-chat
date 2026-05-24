@@ -18,10 +18,9 @@ import type { FileEntity, FileUpload } from '@/app/components/base/file-uploader
 import { getProcessedFiles } from '@/app/components/base/file-uploader-in-attachment/utils'
 import { VoiceInput } from './voice-input'
 import { setAutoReadPending, triggerAutoReadIfPending } from './text-to-speech'
-import { VOICE_INPUT_CONFIG, type VoiceRecognitionEngine } from '@/config/voice-input'
 import { VoiceSettings } from './voice-settings'
 import { AgentSelector } from './agent-selector'
-import type { WhisperModel } from './voice-recognition/whisper-recognition'
+import { useVoiceSettings } from '@/hooks/use-voice-settings'
 
 export interface IChatProps {
   chatList: ChatItem[]
@@ -70,85 +69,21 @@ const Chat: FC<IChatProps> = ({
 
   const [query, setQuery] = React.useState('')
   const queryRef = useRef('')
-  const [autoStopOnNoInput, setAutoStopOnNoInput] = React.useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('voice-auto-stop-on-no-input')
-      return saved !== null ? saved === 'true' : true
-    }
-    return true
-  })
-  const [autoSendOnStop, setAutoSendOnStop] = React.useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('voice-auto-send-on-stop')
-      return saved !== null ? saved === 'true' : VOICE_INPUT_CONFIG.AUTO_SEND_ON_STOP
-    }
-    return VOICE_INPUT_CONFIG.AUTO_SEND_ON_STOP
-  })
-  const [autoReadAloud, setAutoReadAloud] = React.useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('voice-auto-read')
-      return saved !== null ? saved === 'true' : VOICE_INPUT_CONFIG.AUTO_READ_ALOUD
-    }
-    return VOICE_INPUT_CONFIG.AUTO_READ_ALOUD
-  })
-  const getDefaultNoInputMs = (engine: VoiceRecognitionEngine) => {
-    return engine === 'whisper'
-      ? VOICE_INPUT_CONFIG.NO_INPUT_TIMEOUT_MS_WHISPER
-      : VOICE_INPUT_CONFIG.NO_INPUT_TIMEOUT_MS_BROWSER
-  }
-  const [noInputMs, setNoInputMs] = React.useState(() => {
-    const engine = (typeof window !== 'undefined' && localStorage.getItem('voice-engine')) || VOICE_INPUT_CONFIG.DEFAULT_ENGINE
-    const key = `voice-no-input-ms-${engine}`
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(key)
-      return saved !== null ? Number(saved) : getDefaultNoInputMs(engine as VoiceRecognitionEngine)
-    }
-    return getDefaultNoInputMs(engine as VoiceRecognitionEngine)
-  })
-  const [voiceEngine, setVoiceEngine] = React.useState<VoiceRecognitionEngine>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('voice-engine')
-      if (saved === 'browser' || saved === 'whisper') { return saved }
-    }
-    return VOICE_INPUT_CONFIG.DEFAULT_ENGINE
-  })
-  const [whisperModel, setWhisperModel] = React.useState<WhisperModel>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('whisper-model')
-      const validModels: WhisperModel[] = ['whisper-tiny', 'whisper-base', 'whisper-small', 'funasr-paraformer-zh', 'funasr-sensevoice']
-      if (validModels.includes(saved as WhisperModel)) { return saved as WhisperModel }
-    }
-    return 'whisper-tiny'
-  })
 
-  const handleAutoStopChange = (val: boolean) => {
-    setAutoStopOnNoInput(val)
-    localStorage.setItem('voice-auto-stop-on-no-input', String(val))
-  }
-  const handleAutoSendChange = (val: boolean) => {
-    setAutoSendOnStop(val)
-    localStorage.setItem('voice-auto-send-on-stop', String(val))
-  }
-  const handleAutoReadAloudChange = (val: boolean) => {
-    setAutoReadAloud(val)
-    localStorage.setItem('voice-auto-read', String(val))
-  }
-  const handleTimeoutChange = (val: number) => {
-    setNoInputMs(val)
-    const key = `voice-no-input-ms-${voiceEngine}`
-    localStorage.setItem(key, String(val))
-  }
-  const handleVoiceEngineChange = (val: VoiceRecognitionEngine) => {
-    setVoiceEngine(val)
-    localStorage.setItem('voice-engine', val)
-    const key = `voice-no-input-ms-${val}`
-    const saved = localStorage.getItem(key)
-    setNoInputMs(saved !== null ? Number(saved) : getDefaultNoInputMs(val))
-  }
-  const handleWhisperModelChange = (val: WhisperModel) => {
-    setWhisperModel(val)
-    localStorage.setItem('whisper-model', val)
-  }
+  const {
+    autoStopOnNoInput,
+    autoSendOnStop,
+    autoReadAloud,
+    noInputMs,
+    voiceEngine,
+    whisperModel,
+    handleAutoStopChange,
+    handleAutoSendChange,
+    handleAutoReadAloudChange,
+    handleTimeoutChange,
+    handleVoiceEngineChange,
+    handleWhisperModelChange,
+  } = useVoiceSettings()
   const voiceInputRef = React.useRef<{ stop: () => void }>(null)
   const chatListContainerRef = useRef<HTMLDivElement>(null)
   const contentWrapperRef = useRef<HTMLDivElement>(null)
@@ -174,7 +109,9 @@ const Chat: FC<IChatProps> = ({
   useEffect(() => {
     const wrapper = contentWrapperRef.current
     const container = chatListContainerRef.current
-    if (!wrapper || !container) return
+    if (!wrapper || !container) {
+      return
+    }
     const ro = new ResizeObserver(() => {
       container.scrollTop = container.scrollHeight
     })

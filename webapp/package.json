@@ -9,6 +9,7 @@
     "lint": "next lint",
     "fix": "eslint . --fix",
     "eslint-fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
     "lint-staged": "lint-staged",
     "download-whisper": "node scripts/download-whisper-model.js"
   },
