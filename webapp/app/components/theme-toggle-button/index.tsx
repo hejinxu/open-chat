@@ -3,7 +3,8 @@
 import { useThemeContext } from '../theme-provider'
 import { THEME_MODES } from '@/config/theme'
 import { MoonIcon, SunIcon, ComputerDesktopIcon, SparklesIcon } from '@heroicons/react/24/outline'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
+import { useClickOutside } from '@/hooks/use-click-outside'
 
 export function ThemeToggleButton() {
   const { theme, setTheme } = useThemeContext()
@@ -32,21 +33,7 @@ export function ThemeToggleButton() {
     setIsDropdownOpen(false)
   }
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false)
-      }
-    }
-
-    if (isDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isDropdownOpen])
+  useClickOutside(dropdownRef, isDropdownOpen, () => setIsDropdownOpen(false))
 
   const getButtonClassName = (itemTheme: string) => {
     const isActive = theme === itemTheme

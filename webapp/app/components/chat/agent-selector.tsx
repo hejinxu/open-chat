@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import type { AgentInfo } from '@/types/agent'
 import { BASE_PATH } from '@/config'
+import { useClickOutside } from '@/hooks/use-click-outside'
 
 interface AgentSelectorProps {
   value: string | null
@@ -23,17 +24,11 @@ export function AgentSelector({ value, onChange, apiKey }: AgentSelectorProps) {
       .catch(() => {})
   }, [apiKey])
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  useClickOutside(dropdownRef, isOpen, () => setIsOpen(false))
 
-  if (agents.length === 0) return null
+  if (agents.length === 0) {
+    return null
+  }
 
   const currentAgent = agents.find(a => a.id === value) || agents.find(a => a.is_default) || agents[0]
 

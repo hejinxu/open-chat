@@ -671,7 +671,7 @@ const Main: FC<IMainProps> = (props) => {
     const inputLens = Object.values(currInputs).length
     const promptVariablesLens = promptConfig.prompt_variables.length
 
-    const emptyInput = inputLens < promptVariablesLens || Object.values(currInputs).find(v => !v)
+    const emptyInput = inputLens < promptVariablesLens || Object.values(currInputs).some(v => !v)
     if (emptyInput) {
       logError(t('app.errorMessage.valueOfVarRequired'))
       return false

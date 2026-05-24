@@ -167,4 +167,15 @@ export default {
     }
     console.log(`[Speech] Client disconnected: ${socket.id}`)
   },
+
+  cleanup() {
+    // Clear all client states and timers
+    for (const [socketId, state] of clientStates) {
+      if (state.processTimeout) {
+        clearTimeout(state.processTimeout)
+      }
+    }
+    clientStates.clear()
+    console.log('[Speech] All client states cleared')
+  },
 }
