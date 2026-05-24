@@ -1,7 +1,7 @@
 ---
 theme: default
 themeName: "默认主题"
-title: "多智能体开发FAQ"
+title: "Open Chat 开发 FAQ"
 ---
 
 # 多智能体开发 FAQ
@@ -797,7 +797,7 @@ const positionClass = isLastMessage
 
 **添加新图标**：
 1. 创建 52×52 SVG 放入 `webapp/public/images/embed-icons/`
-2. 更新 `docs/第三方应用集成指南.md` 的内置图标表
+2. 更新 `docs/开发指南/第三方应用集成指南.md` 的内置图标表
 3. 更新 `test-projects/public/embed-integration.html` 的说明文字
 
 ---

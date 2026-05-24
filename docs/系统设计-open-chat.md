@@ -7,7 +7,7 @@ title: "系统设计-open-chat"
 # 系统设计: Open Chat
 
 > **版本**: v2.0  
-> **状态**: Draft  
+> **状态**: Implemented  
 > **日期**: 2026-05-08  
 > **作者**: opencode + user  
 > **产品需求**: [PRD-open-chat.md](./PRD-open-chat.md)
