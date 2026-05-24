@@ -103,6 +103,12 @@ npm start
 
 ## 环境变量
 
+ws-server 通过 `.env` 文件配置。从 `.env.example` 复制创建：
+
+```bash
+cp .env.example .env
+```
+
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `WS_PORT` | `8787` | 服务端口 |
@@ -113,6 +119,60 @@ npm start
 | `SPEECH_OFFLINE` | - | 禁止远程下载模型 |
 | `SPEECH_MIRROR` | - | 模型下载镜像地址 |
 | `FUNASR_PYTHON` | `python3` | FunASR Python 路径 |
+| `AUTH_ENABLED` | `true` | 是否启用认证（`false` = 跳过认证） |
+| `AUTH_MODE` | `self` | 认证模式（`self` = 本地验证，`remote` = 远程验证） |
+| `VERIFY_ENDPOINT` | - | 远程验证 API URL（`AUTH_MODE=remote` 时必填，需包含 basePath） |
+| `VERIFY_TIMEOUT` | `5000` | 远程验证超时（毫秒） |
+
+## 认证
+
+ws-server 作为独立服务，支持两种认证模式：
+
+### self 模式（默认）
+
+本地 JSON 配置文件验证，零外部依赖。
+
+1. 复制 `config/auth.json.example` 为 `config/auth.json`
+2. 配置允许的 token：
+```json
+{
+  "tokens": [
+    {
+      "token": "sk-dev-key-001",
+      "name": "开发测试",
+      "enabled": true,
+      "description": "本地开发用"
+    }
+  ]
+}
+```
+
+### remote 模式
+
+调用外部验证 API，适用于需要集中管理认证的场景。
+
+1. 设置环境变量：
+```bash
+AUTH_MODE=remote
+VERIFY_ENDPOINT=http://localhost:3000/chat/api/auth/verify-token
+```
+
+**注意**：`VERIFY_ENDPOINT` 需包含 webapp 的 `NEXT_PUBLIC_BASE_PATH`。如果 webapp 配置了 `NEXT_PUBLIC_BASE_PATH=/chat`，则 URL 为 `http://127.0.0.1:3000/chat/api/auth/verify-token`。使用 `127.0.0.1` 而非 `localhost` 以避免 Windows IPv6 解析问题。
+
+2. 验证 API 协议：
+- 请求：`POST {VERIFY_ENDPOINT}`，body `{ "token": "..." }`
+- 成功响应：`{ "success": true, "code": 200, "msg": "ok", "data": { "id": "...", "name": "...", "role": "..." } }`
+- 失败响应：`{ "success": false, "code": 401, "msg": "Invalid token" }`
+
+### 客户端连接
+
+```ts
+this.socket = socketIo(`${url}/speech`, {
+  auth: { token: 'sk-xxx' },  // 传递认证 token
+  transports: ['websocket'],
+  reconnection: false,
+})
+```
 
 ## Socket.IO 协议
 
@@ -168,7 +228,10 @@ ws-server/
 ├── lib/
 │   ├── model-loader.mjs    # Whisper 模型加载
 │   ├── funasr.mjs          # FunASR sidecar
-│   └── audio-utils.mjs     # 音频工具
+│   ├── audio-utils.mjs     # 音频工具
+│   └── auth.mjs            # 认证模块（self + remote）
+├── config/
+│   └── auth.json.example   # 认证配置模板
 ├── scripts/
 │   ├── download-whisper-model.js  # 下载 Whisper 模型
 │   └── download-funasr-model.js   # 下载 FunASR 模型

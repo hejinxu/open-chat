@@ -173,4 +173,4 @@ docker run -p 3000:3000 webapp-conversation:latest
 4. 在 `hooks/use-theme.ts` 的 `toggleTheme` 循环中添加
 5. 在 `app/components/theme-toggle-button/index.tsx` 添加选项
 
-详细文档见 `../docs/添加新主题开发指南.md`
+详细文档见 `../docs/开发指南/添加新主题.md`

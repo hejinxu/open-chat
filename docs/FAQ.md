@@ -1,6 +1,12 @@
+---
+theme: default
+themeName: "默认主题"
+title: "Open Chat 开发 FAQ"
+---
+
 # 多智能体开发 FAQ
 
-> 本文记录多智能体对话客户端开发过程中遇到的各类问题、根因和修复方案，供后续开发和排查参考。
+> 本文记录 Open Chat 开发过程中遇到的各类问题、根因和修复方案，供后续开发和排查参考。
 
 ---
 
@@ -791,8 +797,8 @@ const positionClass = isLastMessage
 
 **添加新图标**：
 1. 创建 52×52 SVG 放入 `webapp/public/images/embed-icons/`
-2. 更新 `docs/第三方应用集成指南.md` 的内置图标表
-3. 更新 `embed-test/public/index.html` 的说明文字
+2. 更新 `docs/开发指南/第三方应用集成指南.md` 的内置图标表
+3. 更新 `test-projects/public/embed-integration.html` 的说明文字
 
 ---
 
@@ -1256,3 +1262,118 @@ container.style.top = Math.max(0, Math.min(window.innerHeight - fh, fy)) + 'px'
 1. `onWinDragEnd` 必须保存窗口位置（之前遗漏导致每次打开回到默认位置）
 2. `openWindow()` 必须每次从 localStorage 读最新值，不能用页面加载时缓存的变量
 3. clamp 必须用窗口实际宽高，不能硬编码 `100` 或其他常量
+
+---
+
+## 28. ws-server 认证
+
+**需求**：ws-server 作为独立服务，需要认证才能通信，但不依赖任何特定项目。
+
+**架构**：ws-server 支持两种认证模式，通过 `AUTH_MODE` 环境变量切换：
+
+| 模式 | AUTH_MODE | 验证方式 | 依赖 |
+|------|-----------|---------|------|
+| 自验证 | `self`（默认） | 本地 JSON 配置文件 | 无外部依赖 |
+| 远程验证 | `remote` | 调用外部验证 API | 需配置 `VERIFY_ENDPOINT` |
+
+**统一验证协议**：
+
+请求：`POST {VERIFY_ENDPOINT}`
+```json
+{ "token": "客户端传来的原始 token" }
+```
+
+成功响应（HTTP 200）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "msg": "ok",
+  "data": {
+    "id": "user-uuid",
+    "name": "张三",
+    "role": "admin"
+  }
+}
+```
+
+失败响应（HTTP 401）：
+```json
+{
+  "success": false,
+  "code": 401,
+  "msg": "Invalid token"
+}
+```
+
+**self 模式配置**（`ws-server/config/auth.json`）：
+```json
+{
+  "tokens": [
+    {
+      "token": "sk-dev-key-001",
+      "name": "开发测试",
+      "enabled": true,
+      "description": "本地开发用"
+    }
+  ]
+}
+```
+
+**客户端连接**：
+```ts
+this.socket = socketIo(`${url}/speech`, {
+  auth: { token: 'sk-xxx' },  // 或 JWT token
+  transports: ['websocket'],
+  reconnection: false,
+})
+```
+
+**不要犯的错**：
+1. `VERIFY_ENDPOINT` 必须包含 basePath（如 `/chat`）
+2. 使用 `127.0.0.1` 而非 `localhost` — Windows 上 `localhost` 可能解析到 IPv6（`::1`），而 webapp 通常只监听 IPv4，导致 `fetch failed`
+
+---
+
+## 29. middleware 中 basePath 的坑
+
+**现象**：设置了 `NEXT_PUBLIC_BASE_PATH=/chat`，但 middleware 中 `PUBLIC_PATHS` 匹配不上，页面无限重定向。
+
+**根因**：`request.nextUrl.pathname` **已被 Next.js 自动 strip basePath**。
+
+```
+浏览器访问: /chat/login
+request.nextUrl.pathname = /login    ← 不含 /chat
+```
+
+如果 PUBLIC_PATHS 定义为 `['/chat/login', ...]`，则 `/login` 永远匹配不上 → 重定向 → 无限循环。
+
+**正确写法**：
+```ts
+// ✅ 正确：PUBLIC_PATHS 不含 basePath
+const PUBLIC_PATHS = ['/login', '/api/auth/verify-token', ...]
+
+// ❌ 错误：PUBLIC_PATHS 加了 basePath
+const PUBLIC_PATHS = [`${basePath}/login`, `${basePath}/api/auth/verify-token`, ...]
+```
+
+**`getLoginUrl` / `getSetupUrl` 需要手动加 basePath**：
+```ts
+function getLoginUrl(request: NextRequest): string {
+  return new URL(`${basePath}/login`, request.url).toString()
+}
+```
+
+**确保 env 文件一致**：Next.js 官方文档称 `.env.local` 优先级高于 `.env.development`，但实践中发现空值可能导致意外行为。确保 `.env.development` 和 `.env.local` 中 `NEXT_PUBLIC_BASE_PATH` 值一致。
+
+**localhost IPv6 问题**：Windows 上 `localhost` 默认解析到 `::1`（IPv6），webapp 只监听 IPv4 会导致连接失败。在 `package.json` 的 `dev`/`start` 脚本加 `--hostname ::` 同时监听 IPv4 + IPv6。
+
+**不要犯的错**：
+1. `PUBLIC_PATHS` 不要加 basePath 前缀 — `pathname` 已被 strip
+2. `getLoginUrl` / `getSetupUrl` 要手动加 basePath — 生成的是完整 URL
+3. 确保 `.env.development` 和 `.env.local` 的 `NEXT_PUBLIC_BASE_PATH` 值一致，避免加载顺序导致的不可预期行为
+4. 测试时用无痕模式 — 浏览器会缓存旧的重定向响应
+
+**webapp 验证端点**：`POST /api/auth/verify-token` — 接受 JWT 或 API Key，返回统一格式。供任何 ws-server 实例调用。
+
+**ws-token 端点**：`GET /api/auth/ws-token` — 签发短期 JWT，供主应用客户端获取 token 后传给 ws-server。

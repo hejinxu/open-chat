@@ -1,0 +1,16 @@
+{
+  "tokens": [
+    {
+      "token": "sk-dev-key-001",
+      "name": "开发测试",
+      "enabled": true,
+      "description": "本地开发用"
+    },
+    {
+      "token": "sk-old-key-xxx",
+      "name": "旧密钥",
+      "enabled": false,
+      "description": "已废弃，待清理"
+    }
+  ]
+}

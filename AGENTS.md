@@ -8,7 +8,7 @@ Open Chat - 开放对话平台。pnpm workspace 管理的 monorepo，包含 Next
 open-chat/
 ├── webapp/          # Next.js 15 + React 19（对话 + admin）
 ├── ws-server/       # Socket.IO WebSocket 服务（语音识别）
-├── embed-test/      # 嵌入式对话组件测试工程
+├── test-projects/    # 通用测试/演示工程（嵌入集成、Socket 测试等）
 ├── chat-component-vue2/   # 未来：Vue 2 组件库
 ├── chat-component-vue3/   # 未来：Vue 3 组件库
 └── chat-component-react/  # 未来：React 组件库
@@ -18,7 +18,7 @@ open-chat/
 - `pnpm dev` — 同时启动 webapp + ws-server
 - `pnpm dev:webapp` — 只启动 webapp（port 3000）
 - `pnpm dev:ws` — 只启动 ws-server（port 8787）
-- `pnpm dev:embed-test` — 只启动 embed-test（port 3001，测试嵌入组件）
+- `pnpm dev:test-projects` — 只启动 test-projects（port 3001，测试页面）
 - `pnpm build` — 构建 webapp
 - `pnpm start` — 启动生产版本
 - `pnpm lint` — ESLint 检查
@@ -37,7 +37,7 @@ Pre-commit hook 运行 `pnpm lint-staged`（ESLint on staged `.ts`/`.tsx` files�
 - **State**: Zustand + immer for state management; ahooks for utility hooks
 - **Config**: `config/index.ts` holds `APP_ID`, `API_KEY`, `API_URL` from env vars
 - **basePath**: `NEXT_PUBLIC_BASE_PATH` 环境变量驱动 `next.config.js` 的 `basePath`（页面路由 + 静态资源）和 `config/index.ts` 的 `BASE_PATH` 常量（客户端 API 调用），默认为空（根路径）。所有客户端 `fetch('/api/...')` 统一使用 `${BASE_PATH}/api/...` 格式
-- **认证系统**: JWT + bcrypt，Next.js Middleware 全局验证。支持两种认证级别：Level 1 (API Key: `sk-xxx`) 用于简单嵌入集成，Level 2 (OAuth: `app_id` + `app_secret`) 用于服务端到服务端用户身份映射。通过 `AUTH_ENABLED` 环境变量控制是否启用（默认关闭，向后兼容）。认证 cookie 为 session cookie（无 maxAge），关闭浏览器后自动过期。详见 `docs/统一认证系统实现方案.md`
+- **认证系统**: JWT + bcrypt，Next.js Middleware 全局验证。支持两种认证级别：Level 1 (API Key: `sk-xxx`) 用于简单嵌入集成，Level 2 (OAuth: `app_id` + `app_secret`) 用于服务端到服务端用户身份映射。通过 `AUTH_ENABLED` 环境变量控制是否启用（默认关闭，向后兼容）。认证 cookie 为 session cookie（无 maxAge），关闭浏览器后自动过期。详见 `docs/开发指南/认证系统.md`
 - **多租户**: 组织级数据隔离（规划中，`users` 表已预留 `org_id` 字段）
 
 ### Setup & Login
@@ -148,8 +148,8 @@ interface ConversationRecord {
 - Dify 类型：在 `onData` 第一个 chunk 中保存 `conversation_id`（通过 `agentTypeMapRef` 判断类型）
 - 直连 LLM 类型：无后端会话 ID，上下文通过前端 `messages` 数组保持（包含所有智能体对话）
 
-**详细设计**: `docs/多存储后端实现计划.md`
-**FAQ**: `docs/多智能体开发FAQ.md` §15（多存储后端实施 FAQ）
+**详细设计**: `docs/开发指南/多存储后端.md`
+**FAQ**: `docs/FAQ.md` §15（多存储后端实施 FAQ）
 
 #### 数据流
 ```
@@ -170,6 +170,11 @@ interface ConversationRecord {
 - **命名空间**：`/speech`（语音识别）、`/push`（后端推送，预留）
 - **扩展方式**：在 `handlers/` 目录创建新 `.mjs` 文件即可自动注册
 - **环境变量**：`WS_PORT`（默认 8787）
+- **认证系统**：ws-server 始终作为独立服务，不依赖任何特定项目。支持两种认证模式：
+  - `AUTH_MODE=self`（默认）：本地 JSON 配置文件验证（`config/auth.json`）
+  - `AUTH_MODE=remote`：调用外部验证 API（`VERIFY_ENDPOINT`）
+  - `AUTH_ENABLED=false` 时跳过认证（向后兼容）
+  - 详见 `docs/开发指南/认证系统.md`
 
 ### Theme System (CSS Custom Properties)
 - **方案**: CSS Custom Properties，每个主题一个 CSS 变量文件
@@ -184,17 +189,17 @@ interface ConversationRecord {
 - **语义化类名**: `bg-surface`、`text-content`、`border-border`、`accent`
 - **弹出层**: 使用 `bg-surface-elevated`（完全不透明）
 - **Focus 样式**: 通过 `--ring` CSS 变量控制
-- **文档**: `docs/添加新主题开发指南.md`
+- **文档**: `docs/开发指南/添加新主题.md`
 
 ## Voice Recognition
 
 Two engines in `webapp/app/components/chat/voice-recognition/`:
 - **browser** (`browser-recognition.ts`): Web Speech API. Hardcoded `lang: 'zh-CN'`. Auto-restarts on `onend`.
-- **whisper** (`whisper-recognition.ts`): Socket.IO client (namespace: `/speech`). Supports: whisper-tiny/base/small, funasr-paraformer-zh, funasr-sensevoice.
+- **whisper** (`whisper-recognition.ts`): Socket.IO client (namespace: `/speech`). Supports: whisper-tiny/base/small, funasr-paraformer-zh, funasr-sensevoice. 支持 `authToken` 参数用于 ws-server 认证。
 
 ### Core Components
-- **`voice-input.tsx`**: Core orchestrator — owns `isActive`, `isListening`, engine callbacks, timers, countdown, pending send logic.
-- **`index.tsx`**: Parent — manages state, per-engine localStorage, prop passing.
+- **`voice-input.tsx`**: Core orchestrator — owns `isActive`, `isListening`, engine callbacks, timers, countdown, pending send logic. 接收 `authToken` prop 传递给 WhisperRecognition。
+- **`index.tsx`**: Parent — manages state, per-engine localStorage, prop passing. 将 `apiKey` 作为 `authToken` 传递给 VoiceInput。
 - **`voice-settings.tsx**: Settings UI — engine selector, timeout input, checkboxes.
 
 ### Auto-Stop & Timer Design
@@ -235,6 +240,12 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 - `router.push()` / `redirect()` **自动处理 basePath**，不要手动拼接 `BASE_PATH`
 - `window.location.href` / `fetch()` **不自动处理**，需要手动加 `${BASE_PATH}` 前缀
 - 所有 API 调用统一使用 `${BASE_PATH}/api/...` 格式，`API_PREFIX` 变量已删除
+
+### middleware 中 basePath 注意事项
+- **`request.nextUrl.pathname` 不含 basePath**：Next.js 已自动 strip。例如 `/chat/login` 的 `pathname` 是 `/login`
+- **`PUBLIC_PATHS` 不要加 basePath 前缀**：应定义为 `['/login', '/api/auth/verify-token', ...]`，不是 `['/chat/login', ...]`
+- **`getLoginUrl` / `getSetupUrl` 需要手动加 basePath**：用 `new URL(\`${basePath}/login\`, request.url)`
+- **确保 env 文件一致**：`.env.local` 和 `.env.development` 中 `NEXT_PUBLIC_BASE_PATH` 值应保持一致，避免加载顺序导致的不可预期行为
 
 ### Embed 认证
 - `RemoteStorageProvider` 需通过 `setApiKey()` 注入 API key，所有 fetch 自动携带 `x-api-key`
@@ -306,7 +317,12 @@ SQLITE_DB_PATH=data/openchat.db
 ```
 WS_PORT=8787
 SPEECH_MODEL=whisper-tiny
+AUTH_ENABLED=true       # false = 跳过认证（向后兼容）
+AUTH_MODE=remote        # self | remote（主应用使用 remote）
+VERIFY_ENDPOINT=http://127.0.0.1:3000/chat/api/auth/verify-token  # remote 模式必填，需包含 basePath
+VERIFY_TIMEOUT=5000     # 远程验证超时 ms
 ```
+配置文件：`ws-server/.env`（从 `.env.example` 复制创建，gitignored）
 
 ### 嵌入式对话组件 (Embed)
 
@@ -332,20 +348,20 @@ embed.min.js (外层, ~450行 vanilla JS)
 | `webapp/lib/db/sqlite.ts` | `app_integrations` + `api_keys` 表（替代旧 `embed_tokens`） |
 | `webapp/public/images/embed-icons/` | 14 个内置 SVG 图标（robot/bot/chat/sparkle/headset/message/brain/wand/rocket/puzzle/eye/code/gear） |
 
-**认证流程**: 嵌入请求携带 `x-api-key: sk-xxx` header → 中间件验证 API Key → 查找 `api_keys` 表 → 校验 `is_enabled` + `expires_at` + `allowed_agent_ids`。详见 `docs/统一认证系统实现方案.md`。
+**认证流程**: 嵌入请求携带 `x-api-key: sk-xxx` header → 中间件验证 API Key → 查找 `api_keys` 表 → 校验 `is_enabled` + `expires_at` + `allowed_agent_ids`。详见 `docs/开发指南/认证系统.md`。
 
-**嵌入测试**: `embed-test/public/index.html` — 模拟真实网站，配置 `window.openChatConfig` 后引入 `embed.min.js`。
+**嵌入测试**: `test-projects/public/embed-integration.html` — 模拟真实网站，配置 `window.openChatConfig` 后引入 `embed.min.js`。
 
 **配置接口**: `window.openChatConfig = { baseUrl, apiKey, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, inputs? }`
 
 **相关文档**:
-- `docs/嵌入式对话组件实现方案.md` — 技术方案全文
-- `docs/第三方应用集成指南.md` — 面向集成方的使用教程
-- `docs/多智能体开发FAQ.md` §16 — 嵌入组件开发 FAQ
+- `docs/开发指南/嵌入式对话组件.md` — 技术方案全文
+- `docs/开发指南/第三方应用集成指南.md` — 面向集成方的使用教程
+- `docs/FAQ.md` §16 — 嵌入组件开发 FAQ
 
 ## Docs
 - **README.md**: 根目录，用户面向的项目文档
 - **webapp/README.md**: webapp 详细文档
 - **ws-server/README.md**: ws-server 详细文档
 - **AGENTS.md**: AI 面向的工程上下文（本文件）
-- **docs/**: PRD、多智能体实现计划、开发 FAQ、语音识别系统、多存储后端实现计划等专项文档（根目录）
+- **docs/**: PRD、系统设计、开发指南、FAQ 等专项文档（根目录）

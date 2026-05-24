@@ -374,6 +374,7 @@ const Chat: FC<IChatProps> = ({
                     autoReadAloud={autoReadAloud}
                     engine={voiceEngine}
                     whisperModel={whisperModel}
+                    authToken={apiKey}
                   />
                   <VoiceSettings
                     autoStopOnNoInput={autoStopOnNoInput}

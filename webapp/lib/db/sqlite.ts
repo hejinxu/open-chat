@@ -5,6 +5,7 @@ import type { DatabaseProvider } from './types'
 import type { StorageProvider } from '../storage/types'
 import type { EmbedTokenRecord } from '@/types/embed'
 import type { UserRecord, UserAccountRecord, AppIntegrationRecord, ApiKeyRecord } from '@/types/auth'
+import type { AgentRecord } from '@/types/agent'
 
 export class SqliteProvider implements DatabaseProvider {
   private db: any = null
@@ -138,8 +139,30 @@ export class SqliteProvider implements DatabaseProvider {
     `)
     this.db.run('CREATE INDEX IF NOT EXISTS idx_api_keys_integration_id ON api_keys(integration_id)')
 
+    // Agents table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS agents (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        icon TEXT DEFAULT '🤖',
+        description TEXT DEFAULT '',
+        backend_type TEXT NOT NULL DEFAULT 'dify',
+        api_key TEXT NOT NULL DEFAULT '',
+        api_url TEXT NOT NULL DEFAULT '',
+        model TEXT,
+        extra_config TEXT DEFAULT '{}',
+        is_default INTEGER NOT NULL DEFAULT 0,
+        is_enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `)
+
     // Migrate legacy embed_tokens to app_integrations + api_keys
     await this.migrateEmbedTokens()
+
+    // Migrate legacy agents.config.json to agents table
+    await this.migrateAgentsConfig()
 
     this.saveToFile()
   }
@@ -640,6 +663,148 @@ export class SqliteProvider implements DatabaseProvider {
       last_used_at: row.last_used_at as number | null,
       is_enabled: (row.is_enabled as number) === 1,
       created_at: row.created_at as number,
+    }
+  }
+
+  // ============ Agents ============
+
+  async getAgents(): Promise<AgentRecord[]> {
+    await this.ensureReady()
+    const stmt = this.db.prepare('SELECT * FROM agents ORDER BY created_at DESC')
+    const rows: any[] = []
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject())
+    }
+    stmt.free()
+    return rows.map(this.mapAgent)
+  }
+
+  async getAgentById(id: string): Promise<AgentRecord | null> {
+    await this.ensureReady()
+    const stmt = this.db.prepare('SELECT * FROM agents WHERE id = ?')
+    stmt.bind([id])
+    let row: any = null
+    if (stmt.step()) {
+      row = stmt.getAsObject()
+    }
+    stmt.free()
+    return row ? this.mapAgent(row) : null
+  }
+
+  async getDefaultAgent(): Promise<AgentRecord | null> {
+    await this.ensureReady()
+    const stmt = this.db.prepare('SELECT * FROM agents WHERE is_default = 1 LIMIT 1')
+    let row: any = null
+    if (stmt.step()) {
+      row = stmt.getAsObject()
+    }
+    stmt.free()
+    return row ? this.mapAgent(row) : null
+  }
+
+  async saveAgent(agent: AgentRecord): Promise<void> {
+    await this.ensureReady()
+    this.db.run(
+      `INSERT OR REPLACE INTO agents (id, name, icon, description, backend_type, api_key, api_url, model, extra_config, is_default, is_enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        agent.id,
+        agent.name,
+        agent.icon,
+        agent.description,
+        agent.backend_type,
+        agent.api_key,
+        agent.api_url,
+        agent.model,
+        agent.extra_config,
+        agent.is_default ? 1 : 0,
+        agent.is_enabled ? 1 : 0,
+        agent.created_at,
+        agent.updated_at,
+      ]
+    )
+    this.saveToFile()
+  }
+
+  async deleteAgent(id: string): Promise<void> {
+    await this.ensureReady()
+    this.db.run('DELETE FROM agents WHERE id = ?', [id])
+    this.saveToFile()
+  }
+
+  async setDefaultAgent(id: string): Promise<void> {
+    await this.ensureReady()
+    this.db.run('UPDATE agents SET is_default = 0')
+    this.db.run('UPDATE agents SET is_default = 1 WHERE id = ?', [id])
+    this.saveToFile()
+  }
+
+  private mapAgent(row: any): AgentRecord {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      icon: (row.icon as string) || '🤖',
+      description: (row.description as string) || '',
+      backend_type: row.backend_type as AgentRecord['backend_type'],
+      api_key: (row.api_key as string) || '',
+      api_url: (row.api_url as string) || '',
+      model: row.model as string | null,
+      extra_config: (row.extra_config as string) || '{}',
+      is_default: (row.is_default as number) === 1,
+      is_enabled: (row.is_enabled as number) === 1,
+      created_at: row.created_at as number,
+      updated_at: row.updated_at as number,
+    }
+  }
+
+  private async migrateAgentsConfig(): Promise<void> {
+    // Check if agents table already has data
+    const result = this.db.exec('SELECT COUNT(*) as cnt FROM agents')
+    const count = result.length > 0 ? result[0].values[0][0] as number : 0
+    if (count > 0) return
+
+    // Try to read from agents.config.json
+    const { join } = require('path') as typeof import('path')
+    const { readFileSync, existsSync } = require('fs') as typeof import('fs')
+    const configPath = join(process.cwd(), 'config', 'agents.config.json')
+
+    if (!existsSync(configPath)) return
+
+    try {
+      const raw = readFileSync(configPath, 'utf-8')
+      const config = JSON.parse(raw)
+      const agents = config.agents || []
+
+      if (!Array.isArray(agents) || agents.length === 0) return
+
+      const now = Math.floor(Date.now() / 1000)
+      for (const agent of agents) {
+        this.db.run(
+          `INSERT OR IGNORE INTO agents (id, name, icon, description, backend_type, api_key, api_url, model, extra_config, is_default, is_enabled, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            agent.id,
+            agent.name,
+            agent.icon || '🤖',
+            agent.description || '',
+            agent.backend_type || 'dify',
+            agent.api_key || '',
+            agent.api_url || '',
+            agent.model || null,
+            JSON.stringify(agent.extra_config || {}),
+            agent.is_default ? 1 : 0,
+            agent.is_enabled ? 1 : 0,
+            now,
+            now,
+          ]
+        )
+      }
+
+      this.saveToFile()
+      console.log(`[DB] Migrated ${agents.length} agents from agents.config.json`)
+    }
+    catch (e) {
+      console.warn('[DB] Failed to migrate agents.config.json:', (e as Error).message)
     }
   }
 }

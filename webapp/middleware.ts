@@ -8,11 +8,15 @@ export const config = {
   runtime: 'nodejs',
 }
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
+console.log('[Middleware] basePath:', basePath || '(root)')
+
 const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/logout',
   '/api/auth/setup',
   '/api/auth/exchange',
+  '/api/auth/verify-token',
   '/login',
   '/embed',
   '/_next',
@@ -20,30 +24,15 @@ const PUBLIC_PATHS = [
   '/images',
 ]
 
-function getBasePath(): string {
-  return process.env.NEXT_PUBLIC_BASE_PATH || ''
-}
-
-function stripBasePath(pathname: string): string {
-  const basePath = getBasePath()
-  if (basePath && pathname.startsWith(basePath)) {
-    return pathname.slice(basePath.length) || '/'
-  }
-  return pathname
-}
-
 function isPublicPath(pathname: string): boolean {
-  const path = stripBasePath(pathname)
-  return PUBLIC_PATHS.some(p => path.startsWith(p))
+  return PUBLIC_PATHS.some(p => pathname.startsWith(p))
 }
 
 function getLoginUrl(request: NextRequest): string {
-  const basePath = getBasePath()
   return new URL(`${basePath}/login`, request.url).toString()
 }
 
 function getSetupUrl(request: NextRequest): string {
-  const basePath = getBasePath()
   return new URL(`${basePath}/setup`, request.url).toString()
 }
 
@@ -137,8 +126,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // 3. No credentials — redirect to login/setup for page requests, 401 for API
-  const path = stripBasePath(pathname)
-  if (path.startsWith('/api/')) {
+  if (pathname.startsWith('/api/')) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 
@@ -146,7 +134,7 @@ export async function middleware(request: NextRequest) {
   const usersExist = await ensureHasUsers(db)
 
   // /setup: allow only when no users exist, otherwise redirect to login
-  if (path === '/setup') {
+  if (pathname === '/setup') {
     if (usersExist) {
       return NextResponse.redirect(getLoginUrl(request))
     }

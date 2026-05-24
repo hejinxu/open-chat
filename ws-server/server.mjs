@@ -3,12 +3,32 @@ import { Server } from 'socket.io'
 import { readdir } from 'fs/promises'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { config as loadDotenv } from 'dotenv'
+import { loadAuthConfig, verifySelf, verifyRemote } from './lib/auth.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// Load .env file
+loadDotenv({ path: resolve(__dirname, '.env') })
+
 const PORT = parseInt(process.env.WS_PORT || '8787', 10)
+const AUTH_ENABLED = process.env.AUTH_ENABLED !== 'false'
+const AUTH_MODE = process.env.AUTH_MODE || 'self'
+const VERIFY_ENDPOINT = process.env.VERIFY_ENDPOINT || ''
+const VERIFY_TIMEOUT = parseInt(process.env.VERIFY_TIMEOUT || '5000', 10)
+
+// Startup validation
+if (AUTH_ENABLED && AUTH_MODE === 'remote' && !VERIFY_ENDPOINT) {
+  console.error('[WS Server] FATAL: AUTH_MODE=remote requires VERIFY_ENDPOINT')
+  process.exit(1)
+}
 
 console.log('[WS Server] Config:')
 console.log(`  Port: ${PORT}`)
+console.log(`  Auth: ${AUTH_ENABLED ? AUTH_MODE : 'disabled'}`)
+if (AUTH_ENABLED && AUTH_MODE === 'remote') {
+  console.log(`  Verify Endpoint: ${VERIFY_ENDPOINT}`)
+}
 
 const httpServer = createServer()
 const io = new Server(httpServer, {
@@ -27,6 +47,37 @@ async function registerHandler(handler) {
   console.log(`[WS Server] Registered handler: ${handler.name} (namespace: ${handler.namespace})`)
 
   const ns = io.of(handler.namespace)
+
+  // Auth middleware
+  if (AUTH_ENABLED) {
+    ns.use(async (socket, next) => {
+      const token = socket.handshake.auth?.token
+      if (!token) {
+        return next(new Error('Authentication required'))
+      }
+
+      try {
+        let result
+        if (AUTH_MODE === 'remote') {
+          if (!VERIFY_ENDPOINT) {
+            return next(new Error('VERIFY_ENDPOINT not configured'))
+          }
+          result = await verifyRemote(token, VERIFY_ENDPOINT, VERIFY_TIMEOUT)
+        } else {
+          result = verifySelf(token)
+        }
+
+        if (result.success) {
+          socket.data.user = result.data
+          next()
+        } else {
+          next(new Error(result.msg || 'Authentication failed'))
+        }
+      } catch (e) {
+        next(new Error('Authentication error: ' + e.message))
+      }
+    })
+  }
 
   ns.on('connection', (socket) => {
     handler.onConnection(socket, { io, handlers })

@@ -1,6 +1,7 @@
 import type { ConversationRecord, MessageRecord } from '../storage/types'
 import type { EmbedTokenRecord } from '@/types/embed'
 import type { UserRecord, UserAccountRecord, AppIntegrationRecord, ApiKeyRecord } from '@/types/auth'
+import type { AgentRecord } from '@/types/agent'
 
 export interface DatabaseProvider {
   // Conversations
@@ -47,4 +48,12 @@ export interface DatabaseProvider {
   saveApiKey(key: ApiKeyRecord): Promise<void>
   deleteApiKey(id: string): Promise<void>
   updateApiKeyLastUsed(id: string): Promise<void>
+
+  // Agents
+  getAgents(): Promise<AgentRecord[]>
+  getAgentById(id: string): Promise<AgentRecord | null>
+  getDefaultAgent(): Promise<AgentRecord | null>
+  saveAgent(agent: AgentRecord): Promise<void>
+  deleteAgent(id: string): Promise<void>
+  setDefaultAgent(id: string): Promise<void>
 }
