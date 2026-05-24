@@ -101,8 +101,11 @@ export const updateFeedback = async ({ url, body }: { url: string, body: Feedbac
   return post(url, { body })
 }
 
-export const stopChatMessage = async (taskId: string) => {
-  return post(`chat-messages/${taskId}/stop`)
+export const stopChatMessage = async (taskId: string, agentId?: string, apiKey?: string) => {
+  const headers: Record<string, string> = {}
+  if (agentId) headers['x-agent-id'] = agentId
+  if (apiKey) headers['x-api-key'] = apiKey
+  return post(`chat-messages/${taskId}/stop`, { headers })
 }
 
 export const saveUserMessage = async (params: {

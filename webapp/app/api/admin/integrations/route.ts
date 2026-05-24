@@ -2,18 +2,11 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { v4 } from 'uuid'
 import { getDatabaseProvider } from '@/lib/db'
+import { requireAdmin } from '@/app/api/utils/auth-guard'
 
 export async function GET(request: NextRequest) {
-  const userId = request.headers.get('x-auth-user-id')
-  const role = request.headers.get('x-auth-user-role')
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
+  const authError = requireAdmin(request)
+  if (authError) return authError
 
   try {
     const db = getDatabaseProvider()
@@ -26,16 +19,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const userId = request.headers.get('x-auth-user-id')
-  const role = request.headers.get('x-auth-user-role')
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
+  const authError = requireAdmin(request)
+  if (authError) return authError
 
   try {
     const body = await request.json()
@@ -69,16 +54,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const userId = request.headers.get('x-auth-user-id')
-  const role = request.headers.get('x-auth-user-role')
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
+  const authError = requireAdmin(request)
+  if (authError) return authError
 
   try {
     const body = await request.json()
@@ -110,16 +87,8 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const userId = request.headers.get('x-auth-user-id')
-  const role = request.headers.get('x-auth-user-role')
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
+  const authError = requireAdmin(request)
+  if (authError) return authError
 
   try {
     const body = await request.json()

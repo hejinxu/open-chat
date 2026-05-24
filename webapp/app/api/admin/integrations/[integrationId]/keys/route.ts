@@ -3,21 +3,14 @@ import { NextResponse } from 'next/server'
 import { v4 } from 'uuid'
 import { getDatabaseProvider } from '@/lib/db'
 import { generateApiKey, hashApiKey, getKeyPrefix } from '@/lib/auth/token'
+import { requireAdmin } from '@/app/api/utils/auth-guard'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ integrationId: string }> },
 ) {
-  const userId = request.headers.get('x-auth-user-id')
-  const role = request.headers.get('x-auth-user-role')
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
+  const authError = requireAdmin(request)
+  if (authError) return authError
 
   try {
     const { integrationId } = await params
@@ -46,16 +39,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ integrationId: string }> },
 ) {
-  const userId = request.headers.get('x-auth-user-id')
-  const role = request.headers.get('x-auth-user-role')
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
+  const authError = requireAdmin(request)
+  if (authError) return authError
 
   try {
     const { integrationId } = await params
@@ -108,16 +93,8 @@ export async function DELETE(
   request: NextRequest,
   { params: _params }: { params: Promise<{ integrationId: string }> },
 ) {
-  const userId = request.headers.get('x-auth-user-id')
-  const role = request.headers.get('x-auth-user-role')
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
+  const authError = requireAdmin(request)
+  if (authError) return authError
 
   try {
     const body = await request.json()
