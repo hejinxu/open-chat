@@ -872,6 +872,33 @@ if (left < 8) { left = 8 }
 3. 监听 `resize` 事件，窗口大小变化时重新定位
 4. 主应用和嵌入模式都使用 `fixed` 定位，兼容两者
 
+### 19.11 嵌入指定 agentId 不生效
+
+**现象**：`window.openChatConfig` 中设置了 `agentId`，但嵌入窗口始终使用默认智能体。
+
+**根因**：`agentId` 在 `embed.min.js` → iframe URL → `EmbedConfig` 层层传递，但在 `main-embed.tsx` 中未传入 `Main` 组件的 `params`，导致 `selectedAgentId` 始终为 `null`，回退到默认智能体。
+
+**修复**：
+1. `main-embed.tsx` 将 `config.agentId` 作为 `embedAgentId` 传入 `Main params`
+2. `Main` 组件读取 `embedAgentId`，在 init 阶段校验该 ID 是否存在于可用智能体列表中
+3. 若存在，设为 `selectedAgentId`；若不存在或已被禁用，回退到默认智能体
+
+```typescript
+// main-embed.tsx
+<Main params={{ isEmbed: true, apiKey: config.apiKey, embedAgentId: config.agentId }} />
+
+// Main 组件 init effect
+const activeAgent = embedAgentId
+  ? agentsRes.agents?.find((a: any) => a.id === embedAgentId)
+  : null
+if (activeAgent) {
+  setSelectedAgentId(activeAgent.id)
+  setIsDirectLLM(activeAgent.backend_type === 'direct_llm')
+}
+```
+
+**注意**：若指定的 `agentId` 不在 API Key 的 `allowed_agent_ids` 列表中，UI 会选中该智能体，但发送消息时 API 返回 403。嵌入方应确保 `agentId` 与 API Key 的权限匹配。
+
 ---
 
 ## 20. 认证系统与会话管理

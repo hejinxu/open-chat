@@ -182,7 +182,7 @@ export class SqliteProvider implements DatabaseProvider {
       this._saveTimer = null
       if (this._dirty) {
         this._dirty = false
-        this.scheduleSave()
+        this.saveToFile()
       }
     }, 1000)
   }
@@ -194,7 +194,7 @@ export class SqliteProvider implements DatabaseProvider {
     }
     if (this._dirty) {
       this._dirty = false
-      this.scheduleSave()
+      this.saveToFile()
     }
   }
 

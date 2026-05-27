@@ -107,7 +107,7 @@ export type IOnFile = (file: VisionFile) => void
 export type IOnMessageEnd = (messageEnd: MessageEnd) => void
 export type IOnMessageReplace = (messageReplace: MessageReplace) => void
 export type IOnAnnotationReply = (messageReplace: AnnotationReply) => void
-export type IOnCompleted = (hasError?: boolean) => void
+export type IOnCompleted = (hasError?: boolean, errorMessage?: string) => void
 export type IOnError = (msg: string, code?: string) => void
 export type IOnWorkflowStarted = (workflowStarted: WorkflowStartedResponse) => void
 export type IOnWorkflowFinished = (workflowFinished: WorkflowFinishedResponse) => void
@@ -190,7 +190,7 @@ const handleStream = (
                 errorCode: bufferObj?.code,
               })
               hasError = true
-              onCompleted?.(true)
+              onCompleted?.(true, bufferObj?.message || 'Request failed')
               return
             }
             if (bufferObj.event === 'message' || bufferObj.event === 'agent_message') {
@@ -405,15 +405,16 @@ export const ssePost = (
   if (body) { options.body = JSON.stringify(body) }
 
   globalThis.fetch(urlWithPrefix, options)
-    .then((res: any) => {
+    .then(async (res: any) => {
       if (!/^(2|3)\d{2}$/.test(res.status)) {
-        // eslint-disable-next-line no-new
-        new Promise(() => {
-          res.json().then((data: any) => {
-            Toast.notify({ type: 'error', message: data.message || 'Server Error' })
-          })
-        })
-        onError?.('Server Error')
+        let msg = 'Server Error'
+        try {
+          const data = await res.json()
+          msg = data.message || msg
+        }
+        catch {}
+        Toast.notify({ type: 'error', message: msg })
+        onCompleted?.(true, msg)
         return
       }
       return handleStream(res, (str: string, isFirstMessage: boolean, moreInfo: IOnDataMoreInfo) => {
@@ -422,13 +423,14 @@ export const ssePost = (
           return
         }
         onData?.(str, isFirstMessage, moreInfo)
-      }, () => {
-        onCompleted?.()
+      }, (hasError?: boolean, errorMessage?: string) => {
+        onCompleted?.(hasError, errorMessage)
       }, onThought, onMessageEnd, onMessageReplace, onFile, onWorkflowStarted, onWorkflowFinished, onNodeStarted, onNodeFinished)
     })
     .catch((e) => {
-      Toast.notify({ type: 'error', message: e })
-      onError?.(e)
+      const msg = `${e}`
+      Toast.notify({ type: 'error', message: msg })
+      onCompleted?.(true, msg)
     })
 }
 

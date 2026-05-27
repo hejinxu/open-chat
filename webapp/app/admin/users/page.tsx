@@ -201,43 +201,59 @@ export default function UsersPage() {
       >
         {error && <div className="mb-3 p-2 bg-red-50 text-red-700 text-sm rounded">{error}</div>}
         <div className="space-y-3">
-          <input
-            type="text"
-            placeholder={t('common.auth.displayName')}
-            value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })}
-            className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
-            required
-          />
+          <div>
+            <label className="block text-xs text-content-secondary mb-1">{t('common.auth.displayName')}</label>
+            <input
+              type="text"
+              placeholder={t('common.auth.displayName')}
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+              className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
+              required
+            />
+          </div>
           {!isEditing && (
             <>
-              <input
-                type="text"
-                placeholder={t('common.auth.loginIdentifier')}
-                value={form.identifier}
-                onChange={e => setForm({ ...form, identifier: e.target.value })}
-                className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
-                required
-              />
-              <input
-                type="password"
-                placeholder={t('common.auth.password')}
-                value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-                className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
-                required
-                minLength={6}
-              />
+              <div>
+                <label className="block text-xs text-content-secondary mb-1">{t('common.auth.loginIdentifier')}</label>
+                <input
+                  type="text"
+                  placeholder={t('common.auth.loginIdentifier')}
+                  value={form.identifier}
+                  onChange={e => setForm({ ...form, identifier: e.target.value })}
+                  className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
+                  name="user-login-id"
+                  autoComplete="off"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-content-secondary mb-1">{t('common.auth.password')}</label>
+                <input
+                  type="password"
+                  placeholder={t('common.auth.password')}
+                  value={form.password}
+                  onChange={e => setForm({ ...form, password: e.target.value })}
+                  className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
+                  name="user-password"
+                  autoComplete="new-password"
+                  required
+                  minLength={6}
+                />
+              </div>
             </>
           )}
-          <select
-            value={form.role}
-            onChange={e => setForm({ ...form, role: e.target.value })}
-            className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
-          >
-            <option value="user">{t('common.auth.users')}</option>
-            <option value="admin">{t('common.auth.admin')}</option>
-          </select>
+          <div>
+            <label className="block text-xs text-content-secondary mb-1">{t('common.auth.role')}</label>
+            <select
+              value={form.role}
+              onChange={e => setForm({ ...form, role: e.target.value })}
+              className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
+            >
+              <option value="user">{t('common.auth.users')}</option>
+              <option value="admin">{t('common.auth.admin')}</option>
+            </select>
+          </div>
         </div>
       </FormDialog>
     </div>

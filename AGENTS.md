@@ -353,7 +353,7 @@ embed.min.js (外层, ~450行 vanilla JS)
 
 **嵌入测试**: `test-projects/public/embed-integration.html` — 模拟真实网站，配置 `window.openChatConfig` 后引入 `embed.min.js`。
 
-**配置接口**: `window.openChatConfig = { baseUrl, apiKey, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, inputs? }`
+**配置接口**: `window.openChatConfig = { baseUrl, apiKey, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, bubblePosition?, inputs? }`
 
 **相关文档**:
 - `docs/开发指南/嵌入式对话组件.md` — 技术方案全文

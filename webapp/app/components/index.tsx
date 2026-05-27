@@ -51,6 +51,7 @@ const Main: FC<IMainProps> = (props) => {
 
   const isEmbed = !!(props?.params?.isEmbed)
   const apiKey = props?.params?.apiKey || ''
+  const embedAgentId = props?.params?.embedAgentId as string | null
 
   /*
   * app info
@@ -560,7 +561,18 @@ const Main: FC<IMainProps> = (props) => {
           // Cache default agent's prompt_variables for sync access on first render
           promptVariablesCacheRef.current[defaultAgent.id] = prompt_variables
         }
-        setIsDirectLLM(defaultAgent?.backend_type === 'direct_llm')
+
+        // Validate embed agent ID — use it as selected agent if it exists and is enabled
+        const activeAgent = embedAgentId
+          ? agentsRes.agents?.find((a: any) => a.id === embedAgentId)
+          : null
+        if (activeAgent) {
+          setSelectedAgentId(activeAgent.id)
+          setIsDirectLLM(activeAgent.backend_type === 'direct_llm')
+        }
+        else {
+          setIsDirectLLM(defaultAgent?.backend_type === 'direct_llm')
+        }
 
         // Cache backend_type for each agent (used to skip param fetch for direct_llm etc.)
         agentsRes.agents?.forEach((a: any) => { agentTypeMapRef.current[a.id] = a.backend_type })
@@ -937,8 +949,27 @@ const Main: FC<IMainProps> = (props) => {
           questionItem,
         })
       },
-      async onCompleted(hasError?: boolean) {
-        if (hasError) { return }
+      async onCompleted(hasError?: boolean, errorMessage?: string) {
+        if (hasError) {
+          const errorContent = `⚠ ${errorMessage || 'Request failed'}`
+          responseItem.content = errorContent
+          setChatList(produce(getChatList(), (draft) => {
+            const idx = draft.findIndex(item => item.id === placeholderAnswerId)
+            if (idx !== -1) { draft[idx] = { ...draft[idx], content: errorContent } }
+          }))
+          if (localConvId) {
+            await saveAssistantMessage({
+              conversation_id: localConvId,
+              content: errorContent,
+              agent_id: agentKey,
+              agent_name: agentInfo?.name || null,
+              message_files: [],
+              agent_thoughts: [],
+            })
+          }
+          setRespondingFalse()
+          return
+        }
 
         // Save assistant message
         if (responseItem.content) {
@@ -1065,10 +1096,6 @@ const Main: FC<IMainProps> = (props) => {
       },
       onError() {
         setRespondingFalse()
-        // role back placeholder answer
-        setChatList(produce(getChatList(), (draft) => {
-          draft.splice(draft.findIndex(item => item.id === placeholderAnswerId), 1)
-        }))
       },
       onWorkflowStarted: ({ workflow_run_id, task_id }) => {
         // taskIdRef.current = task_id

@@ -25,19 +25,29 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { id, name, icon, description, backend_type, api_key, api_url, model, extra_config, is_default, is_enabled } = body
+    const { name, icon, description, backend_type, api_key, api_url, model, extra_config, is_default, is_enabled } = body
 
-    if (!id || !name) {
-      return NextResponse.json({ error: 'ID and name are required' }, { status: 400 })
+    if (!name) {
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
 
     const db = getDatabaseProvider()
 
-    // Check ID uniqueness
-    const existing = await db.getAgentById(id)
-    if (existing) {
-      return NextResponse.json({ error: 'Agent ID already exists' }, { status: 409 })
+    // Check name uniqueness
+    const allAgents = await db.getAgents()
+    if (allAgents.some(a => a.name === name)) {
+      return NextResponse.json({ error: 'Agent name already exists' }, { status: 400 })
     }
+
+    // Auto-generate ID: agent-{name_slug}-{random4}
+    const slug = name
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .slice(0, 30)
+      .replace(/-+$/, '')
+    const rand = Math.random().toString(16).slice(2, 6)
+    const id = `agent-${slug}-${rand}`
 
     const now = Math.floor(Date.now() / 1000)
     const agent: AgentRecord = {
@@ -87,6 +97,14 @@ export async function PUT(request: NextRequest) {
     const existing = await db.getAgentById(id)
     if (!existing) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+    }
+
+    // Check name uniqueness (exclude current agent)
+    if (name && name !== existing.name) {
+      const allAgents = await db.getAgents()
+      if (allAgents.some(a => a.name === name && a.id !== id)) {
+        return NextResponse.json({ error: 'Agent name already exists' }, { status: 400 })
+      }
     }
 
     const now = Math.floor(Date.now() / 1000)
