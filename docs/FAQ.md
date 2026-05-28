@@ -899,6 +899,42 @@ if (activeAgent) {
 
 **注意**：若指定的 `agentId` 不在 API Key 的 `allowed_agent_ids` 列表中，UI 会选中该智能体，但发送消息时 API 返回 403。嵌入方应确保 `agentId` 与 API Key 的权限匹配。
 
+### 19.12 嵌入模式下 AI 指令解析与宿主通信
+
+**需求**：AI 回复中包含操作指令（如"打开某个面板"），嵌入弹窗需要解析指令并通知宿主页面执行。
+
+**方案**：采用 HTML 注释嵌入格式。AI 后端在回复中插入 `<!-- COMMAND:{...} -->` 格式的指令。
+
+**数据流**：
+1. AI 返回：`"我来为您打开监控。\n\n<!-- COMMAND:{\"action\":\"openPanel\",\"params\":{\"url\":\"...\"}} -->"`
+2. `onCompleted` 回调中，`extractCommands()` 提取指令，`stripCommands()` 清理文本
+3. 清理后的文本存入 DB（不含指令）
+4. 嵌入模式下，通过 `window.parent.postMessage` 发送指令给宿主
+5. `embed.min.js` 接收后，优先调用 `config.onCommand` 回调；若无则触发 `com.openchat.embed` DOM 事件
+
+**存储清理**：指令在保存前已剥离，历史消息渲染时 `StreamdownMarkdown` 组件也会兜底 `stripCommands()`，不会出现重复执行。
+
+**宿主接收**：
+- 纯 HTML / 多页应用：用 `openChatConfig.onCommand` 回调
+- Vue / React SPA：监听 `window.addEventListener('com.openchat.embed', (e) => { e.detail.commands })`
+
+**指令格式**：
+```html
+<!-- 单条指令 -->
+<!-- COMMAND:{"action":"openPanel","params":{"url":"https://..."}} -->
+
+<!-- 多条指令：每个指令独立一个注释块 -->
+<!-- COMMAND:{"action":"openPanel","params":{"url":"https://www.baidu.com"}} -->
+<!-- COMMAND:{"action":"openPanel","params":{"url":"https://www.google.com"}} -->
+```
+
+**postMessage 协议**：
+```javascript
+{ type: 'com.openchat.embed', action: 'command', commands: [{ action, params }] }
+```
+
+**测试**：`test-projects/public/embed-integration.html` 提供指令测试 UI（注册监听、模拟指令、日志显示、弹窗打开）。
+
 ---
 
 ## 20. 认证系统与会话管理

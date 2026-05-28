@@ -341,10 +341,12 @@ embed.min.js (外层, ~450行 vanilla JS)
 **核心文件**:
 | 文件 | 作用 |
 |------|------|
-| `webapp/public/embed.min.js` | 外层脚本（浮动按钮、标题栏、拖拽、resize、postMessage） |
+| `webapp/public/embed.min.js` | 外层脚本（浮动按钮、标题栏、拖拽、resize、postMessage、指令分发） |
 | `webapp/app/embed/page.tsx` | `/embed` 页面入口（读取 URL 参数、应用 theme） |
 | `webapp/app/embed/main-embed.tsx` | 纯 Main 渲染包装（无标题栏） |
-| `webapp/app/components/index.tsx` | `isEmbed` 模式 + `openchat:toggle-sidebar` 监听 |
+| `webapp/app/components/index.tsx` | `isEmbed` 模式 + `com.openchat.embed` 监听 + 指令提取/postMessage |
+| `webapp/app/components/base/streamdown-markdown.tsx` | Markdown 渲染（含指令注释兜底清理） |
+| `webapp/lib/command-parser.ts` | 指令解析工具（`extractCommands` + `stripCommands`） |
 | `webapp/app/api/utils/common.ts` | `getAdapterForRequest()` — 适配器获取 + 认证校验 |
 | `webapp/lib/db/sqlite.ts` | `app_integrations` + `api_keys` 表（替代旧 `embed_tokens`） |
 | `webapp/public/images/embed-icons/` | 14 个内置 SVG 图标（robot/bot/chat/sparkle/headset/message/brain/wand/rocket/puzzle/eye/code/gear） |
@@ -353,7 +355,9 @@ embed.min.js (外层, ~450行 vanilla JS)
 
 **嵌入测试**: `test-projects/public/embed-integration.html` — 模拟真实网站，配置 `window.openChatConfig` 后引入 `embed.min.js`。
 
-**配置接口**: `window.openChatConfig = { baseUrl, apiKey, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, bubblePosition?, inputs? }`
+**配置接口**: `window.openChatConfig = { baseUrl, apiKey, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, bubblePosition?, onCommand?, inputs? }`
+
+**AI 指令**: AI 回复中 `<!-- COMMAND:{...} -->` 注释格式的操作指令，`onCompleted` 中提取并剥离后存储；嵌入模式通过 postMessage 发送给宿主（`onCommand` 回调优先，否则触发 `com.openchat.embed` DOM 事件）。
 
 **相关文档**:
 - `docs/开发指南/嵌入式对话组件.md` — 技术方案全文

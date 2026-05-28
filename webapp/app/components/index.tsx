@@ -30,6 +30,7 @@ import { getMessageService } from '@/lib/services/message'
 import { stopReadAloud } from '@/app/components/chat/text-to-speech'
 import ConfirmDialog from '@/app/components/base/confirm-dialog'
 import { getAgentParamsSync, saveAgentParamsSync, getBackendConvIdSync, saveBackendConvIdSync } from '@/lib/conversation-storage'
+import { extractCommands, stripCommands } from '@/lib/command-parser'
 
 // 超时工具函数
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -973,9 +974,20 @@ const Main: FC<IMainProps> = (props) => {
 
         // Save assistant message
         if (responseItem.content) {
+          const commands = extractCommands(responseItem.content)
+          const cleanContent = stripCommands(responseItem.content)
+
+          if (isEmbed && commands.length > 0) {
+            window.parent.postMessage({
+              type: 'com.openchat.embed',
+              action: 'command',
+              commands,
+            }, '*')
+          }
+
           await saveAssistantMessage({
             conversation_id: localConvId,
-            content: responseItem.content,
+            content: cleanContent,
             agent_id: agentKey,
             agent_name: agentInfo?.name || null,
             message_files: responseItem.message_files || [],
