@@ -8,6 +8,7 @@ export interface EmbedConfig {
   theme: string
   locale: string
   windowTitle: string
+  bubblePosition?: string | { right?: number, bottom?: number, left?: number, top?: number }
 }
 
 const EmbedConfigContext = createContext<EmbedConfig | null>(null)

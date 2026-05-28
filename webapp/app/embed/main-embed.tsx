@@ -18,7 +18,7 @@ const MainEmbed: FC<MainEmbedProps> = ({ config }) => {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 min-h-0">
-        <Main params={{ isEmbed: true, apiKey: config.apiKey }} />
+        <Main params={{ isEmbed: true, apiKey: config.apiKey, embedAgentId: config.agentId }} />
       </div>
     </div>
   )

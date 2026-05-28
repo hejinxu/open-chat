@@ -872,6 +872,69 @@ if (left < 8) { left = 8 }
 3. 监听 `resize` 事件，窗口大小变化时重新定位
 4. 主应用和嵌入模式都使用 `fixed` 定位，兼容两者
 
+### 19.11 嵌入指定 agentId 不生效
+
+**现象**：`window.openChatConfig` 中设置了 `agentId`，但嵌入窗口始终使用默认智能体。
+
+**根因**：`agentId` 在 `embed.min.js` → iframe URL → `EmbedConfig` 层层传递，但在 `main-embed.tsx` 中未传入 `Main` 组件的 `params`，导致 `selectedAgentId` 始终为 `null`，回退到默认智能体。
+
+**修复**：
+1. `main-embed.tsx` 将 `config.agentId` 作为 `embedAgentId` 传入 `Main params`
+2. `Main` 组件读取 `embedAgentId`，在 init 阶段校验该 ID 是否存在于可用智能体列表中
+3. 若存在，设为 `selectedAgentId`；若不存在或已被禁用，回退到默认智能体
+
+```typescript
+// main-embed.tsx
+<Main params={{ isEmbed: true, apiKey: config.apiKey, embedAgentId: config.agentId }} />
+
+// Main 组件 init effect
+const activeAgent = embedAgentId
+  ? agentsRes.agents?.find((a: any) => a.id === embedAgentId)
+  : null
+if (activeAgent) {
+  setSelectedAgentId(activeAgent.id)
+  setIsDirectLLM(activeAgent.backend_type === 'direct_llm')
+}
+```
+
+**注意**：若指定的 `agentId` 不在 API Key 的 `allowed_agent_ids` 列表中，UI 会选中该智能体，但发送消息时 API 返回 403。嵌入方应确保 `agentId` 与 API Key 的权限匹配。
+
+### 19.12 嵌入模式下 AI 指令解析与宿主通信
+
+**需求**：AI 回复中包含操作指令（如"打开某个面板"），嵌入弹窗需要解析指令并通知宿主页面执行。
+
+**方案**：采用 HTML 注释嵌入格式。AI 后端在回复中插入 `<!-- COMMAND:{...} -->` 格式的指令。
+
+**数据流**：
+1. AI 返回：`"我来为您打开监控。\n\n<!-- COMMAND:{\"action\":\"openPanel\",\"params\":{\"url\":\"...\"}} -->"`
+2. `onCompleted` 回调中，`extractCommands()` 提取指令，`stripCommands()` 清理文本
+3. 清理后的文本存入 DB（不含指令）
+4. 嵌入模式下，通过 `window.parent.postMessage` 发送指令给宿主
+5. `embed.min.js` 接收后，优先调用 `config.onCommand` 回调；若无则触发 `com.openchat.embed` DOM 事件
+
+**存储清理**：指令在保存前已剥离，历史消息渲染时 `StreamdownMarkdown` 组件也会兜底 `stripCommands()`，不会出现重复执行。
+
+**宿主接收**：
+- 纯 HTML / 多页应用：用 `openChatConfig.onCommand` 回调
+- Vue / React SPA：监听 `window.addEventListener('com.openchat.embed', (e) => { e.detail.commands })`
+
+**指令格式**：
+```html
+<!-- 单条指令 -->
+<!-- COMMAND:{"action":"openPanel","params":{"url":"https://..."}} -->
+
+<!-- 多条指令：每个指令独立一个注释块 -->
+<!-- COMMAND:{"action":"openPanel","params":{"url":"https://www.baidu.com"}} -->
+<!-- COMMAND:{"action":"openPanel","params":{"url":"https://www.google.com"}} -->
+```
+
+**postMessage 协议**：
+```javascript
+{ type: 'com.openchat.embed', action: 'command', commands: [{ action, params }] }
+```
+
+**测试**：`test-projects/public/embed-integration.html` 提供指令测试 UI（注册监听、模拟指令、日志显示、弹窗打开）。
+
 ---
 
 ## 20. 认证系统与会话管理

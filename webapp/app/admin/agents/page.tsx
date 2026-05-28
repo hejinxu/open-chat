@@ -30,7 +30,6 @@ export default function AgentsPage() {
   const [showDialog, setShowDialog] = useState(false)
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
   const [form, setForm] = useState({
-    id: '',
     name: '',
     icon: '🤖',
     description: '',
@@ -66,7 +65,6 @@ export default function AgentsPage() {
   const openCreate = () => {
     setEditingAgent(null)
     setForm({
-      id: '',
       name: '',
       icon: '🤖',
       description: '',
@@ -85,7 +83,6 @@ export default function AgentsPage() {
   const openEdit = (agent: Agent) => {
     setEditingAgent(agent)
     setForm({
-      id: agent.id,
       name: agent.name,
       icon: agent.icon,
       description: agent.description,
@@ -128,7 +125,7 @@ export default function AgentsPage() {
         const res = await fetch(`${BASE_PATH}/api/admin/agents`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ id: editingAgent!.id, ...payload }),
         })
         const data = await res.json()
         if (!res.ok) {
@@ -214,6 +211,7 @@ export default function AgentsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-content-secondary">
+              <th className="px-4 py-2">{t('common.auth.agentId')}</th>
               <th className="px-4 py-2">{t('common.auth.name')}</th>
               <th className="px-4 py-2">{t('common.auth.backendType')}</th>
               <th className="px-4 py-2">{t('common.auth.status')}</th>
@@ -224,6 +222,7 @@ export default function AgentsPage() {
           <tbody>
             {agents.map(agent => (
               <tr key={agent.id} className="border-b border-border last:border-0">
+                <td className="px-4 py-2 text-content-secondary text-xs font-mono">{agent.id}</td>
                 <td className="px-4 py-2 text-content">
                   <span className="mr-2">{agent.icon}</span>
                   {agent.name}
@@ -257,7 +256,7 @@ export default function AgentsPage() {
               </tr>
             ))}
             {agents.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-4 text-center text-content-secondary">{t('common.auth.noAgents')}</td></tr>
+              <tr><td colSpan={6} className="px-4 py-4 text-center text-content-secondary">{t('common.auth.noAgents')}</td></tr>
             )}
           </tbody>
         </table>
@@ -273,70 +272,85 @@ export default function AgentsPage() {
       >
         {error && <div className="mb-3 p-2 bg-red-50 text-red-700 text-sm rounded">{error}</div>}
         <div className="space-y-3">
-          {!isEditing && (
-            <input
-              type="text"
-              placeholder="ID (e.g. my-agent)"
-              value={form.id}
-              onChange={e => setForm({ ...form, id: e.target.value })}
-              className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
-              required
-            />
-          )}
           <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs text-content-secondary mb-1">{t('common.auth.name')}</label>
+              <input
+                type="text"
+                placeholder={t('common.auth.name')}
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
+                required
+              />
+            </div>
+            <div className="w-16">
+              <label className="block text-xs text-content-secondary mb-1">{t('common.auth.icon')}</label>
+              <input
+                type="text"
+                placeholder="🤖"
+                value={form.icon}
+                onChange={e => setForm({ ...form, icon: e.target.value })}
+                className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm text-center"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-content-secondary mb-1">{t('common.auth.description')}</label>
             <input
               type="text"
-              placeholder={t('common.auth.name')}
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              className="flex-1 px-3 py-2 bg-surface border border-border rounded text-content text-sm"
-              required
-            />
-            <input
-              type="text"
-              placeholder="Icon"
-              value={form.icon}
-              onChange={e => setForm({ ...form, icon: e.target.value })}
-              className="w-16 px-3 py-2 bg-surface border border-border rounded text-content text-sm text-center"
+              placeholder={t('common.auth.description')}
+              value={form.description}
+              onChange={e => setForm({ ...form, description: e.target.value })}
+              className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
             />
           </div>
-          <input
-            type="text"
-            placeholder={t('common.auth.description')}
-            value={form.description}
-            onChange={e => setForm({ ...form, description: e.target.value })}
-            className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
-          />
-          <select
-            value={form.backend_type}
-            onChange={e => setForm({ ...form, backend_type: e.target.value })}
-            className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
-          >
-            {backendTypes.map(bt => (
-              <option key={bt} value={bt}>{t(`common.auth.backend${bt === 'dify' ? 'Dify' : bt === 'direct_llm' ? 'DirectLlm' : bt === 'fastgpt' ? 'Fastgpt' : 'N8n'}`)}</option>
-            ))}
-          </select>
-          <input
-            type="text"
-            placeholder="API URL"
-            value={form.api_url}
-            onChange={e => setForm({ ...form, api_url: e.target.value })}
-            className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
-          />
-          <input
-            type="password"
-            placeholder="API Key"
-            value={form.api_key}
-            onChange={e => setForm({ ...form, api_key: e.target.value })}
-            className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
-          />
-          <input
-            type="text"
-            placeholder="Model (required for direct_llm)"
-            value={form.model}
-            onChange={e => setForm({ ...form, model: e.target.value })}
-            className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
-          />
+          <div>
+            <label className="block text-xs text-content-secondary mb-1">{t('common.auth.backendType')}</label>
+            <select
+              value={form.backend_type}
+              onChange={e => setForm({ ...form, backend_type: e.target.value })}
+              className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
+            >
+              {backendTypes.map(bt => (
+                <option key={bt} value={bt}>{t(`common.auth.backend${bt === 'dify' ? 'Dify' : bt === 'direct_llm' ? 'DirectLlm' : bt === 'fastgpt' ? 'Fastgpt' : 'N8n'}`)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-content-secondary mb-1">{t('common.auth.apiUrl')}</label>
+              <input
+                type="text"
+                placeholder="https://api.example.com/v1"
+                value={form.api_url}
+                onChange={e => setForm({ ...form, api_url: e.target.value })}
+                className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
+                name="agent-apiurl"
+                autoComplete="off"
+              />
+          </div>
+          <div>
+            <label className="block text-xs text-content-secondary mb-1">{t('common.auth.apiKey')}</label>
+              <input
+                type="password"
+                placeholder="sk-..."
+                value={form.api_key}
+                onChange={e => setForm({ ...form, api_key: e.target.value })}
+                className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
+                name="agent-apikey"
+                autoComplete="new-password"
+              />
+          </div>
+          <div>
+            <label className="block text-xs text-content-secondary mb-1">{t('common.auth.model')}</label>
+            <input
+              type="text"
+              placeholder="gpt-4o"
+              value={form.model}
+              onChange={e => setForm({ ...form, model: e.target.value })}
+              className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
+            />
+          </div>
           <div>
             <label className="block text-xs text-content-secondary mb-1">{t('common.auth.extraConfig')}</label>
             <textarea

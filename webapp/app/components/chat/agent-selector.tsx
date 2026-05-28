@@ -79,7 +79,7 @@ export function AgentSelector({ value, onChange, apiKey }: AgentSelectorProps) {
               <span className="text-base leading-none shrink-0">{agent.icon}</span>
               <div className="min-w-0">
                 <div className="font-medium truncate">{agent.name}</div>
-                <div className="text-xs text-content-quaternary truncate">{agent.description}</div>
+                <div className="text-xs text-content-quaternary truncate min-h-[1.25rem]">{agent.description || '\u00A0'}</div>
               </div>
               {value === agent.id && (
                 <svg className="w-4 h-4 ml-auto shrink-0 text-primary" viewBox="0 0 24 24" fill="none">

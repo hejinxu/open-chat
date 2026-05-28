@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Open Chat Embed Test</title>
+  <title>Open Chat 嵌入集成测试</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -91,31 +91,44 @@
       border-top: 1px solid #e5e5e5;
       background: #fff;
     }
+
+    .cmd-test-btns { display: flex; gap: 8px; margin-bottom: 12px; }
+    .cmd-test-btns button {
+      padding: 6px 14px; font-size: 13px; border: 1px solid #d1d5db;
+      border-radius: 6px; background: #fff; cursor: pointer;
+    }
+    .cmd-test-btns button:hover { background: #f3f4f6; }
+    #command-log {
+      background: #1e1e2e; color: #cdd6f4; padding: 12px 16px;
+      border-radius: 6px; font-size: 12px; line-height: 1.6;
+      font-family: 'Fira Code', 'Consolas', monospace;
+      max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
 
   <header class="site-header">
-    <div class="logo">ExampleSite</div>
+    <div class="logo">示例网站</div>
     <nav>
-      <a href="#">Home</a>
-      <a href="#">Products</a>
-      <a href="#">Docs</a>
-      <a href="#">About</a>
-      <a href="#">Contact</a>
+      <a href="#">首页</a>
+      <a href="#">产品</a>
+      <a href="#">文档</a>
+      <a href="#">关于</a>
+      <a href="#">联系我们</a>
     </nav>
   </header>
 
   <main class="site-main">
 
     <div class="hero">
-      <h1>Welcome to ExampleSite</h1>
-      <p>This is a demo page showing the Open Chat embeddable widget in action.</p>
-      <p>The floating chat button should appear in the <strong>bottom-right</strong> corner. Click it to open the chat window. Drag the icon to reposition it.</p>
+      <h1>欢迎访问示例网站</h1>
+      <p>这是一个演示页面，展示 Open Chat 嵌入式组件的实际效果。</p>
+      <p>浮动聊天按钮应出现在页面<strong>右下角</strong>，点击可打开对话窗口，拖动图标可重新定位。</p>
     </div>
 
     <div class="config-card">
-      <h2>Embed Configuration</h2>
+      <h2>嵌入配置</h2>
       <pre><code>window.openChatConfig = {
   baseUrl: 'http://localhost:3000',
   apiKey: '<span style="color:#f9e2af">REPLACE_WITH_YOUR_API_KEY</span>',
@@ -138,48 +151,67 @@
   },
 }</code></pre>
       <div class="note">
-        <strong>Setup:</strong> Replace <code>REPLACE_WITH_YOUR_API_KEY</code> with an API key generated in the admin panel.
-        <br><strong>Built-in icons (14):</strong> robot · bot · chat · sparkle · headset · message · brain · wand · rocket · puzzle · eye · code · gear.
-        Set <code>icon: 'chat'</code> to switch, or use <code>iconUrl</code> for custom images.
+        <strong>配置说明：</strong>将 <code>REPLACE_WITH_YOUR_API_KEY</code> 替换为管理面板生成的 API Key。
+        <br><strong>内置图标（14 个）：</strong>robot · bot · chat · sparkle · headset · message · brain · wand · rocket · puzzle · eye · code · gear。
+        设置 <code>icon: 'chat'</code> 切换图标，或使用 <code>iconUrl</code> 指定自定义图片。
       </div>
     </div>
 
     <div class="content-section">
-      <h2>Feature Tests</h2>
-      <p>Use this page to verify the following embed behaviors:</p>
+      <h2>功能测试</h2>
+      <p>使用此页面验证以下嵌入功能：</p>
       <ul>
-        <li><strong>Floating button:</strong> Should appear at bottom-right with a robot icon</li>
-        <li><strong>Drag:</strong> Click and drag the button to reposition it on screen</li>
-        <li><strong>Open:</strong> Click the button (without dragging) to open the chat window</li>
-        <li><strong>Window drag:</strong> Drag the title bar to move the chat window</li>
-        <li><strong>Resize:</strong> Drag the bottom-right corner handle to resize the window</li>
-        <li><strong>Close:</strong> Click the &times; button to close and restore the floating icon</li>
-        <li><strong>Mobile:</strong> Use DevTools device emulation to test fullscreen mode</li>
+        <li><strong>浮动按钮：</strong>应出现在右下角，显示机器人图标</li>
+        <li><strong>拖拽：</strong>点击并拖拽按钮可重新定位</li>
+        <li><strong>打开：</strong>点击按钮（非拖拽）打开对话窗口</li>
+        <li><strong>窗口拖拽：</strong>拖拽标题栏可移动窗口</li>
+        <li><strong>调整大小：</strong>拖拽右下角手柄可调整窗口大小</li>
+        <li><strong>关闭：</strong>点击 × 按钮关闭窗口，恢复浮动图标</li>
+        <li><strong>移动端：</strong>使用 DevTools 设备模拟测试全屏模式</li>
+        <li><strong>指令：</strong>点击下方"注册监听"，然后在对话中发送指令</li>
       </ul>
     </div>
 
+    <div class="config-card">
+      <h2>指令测试</h2>
+      <p>测试 AI 指令解析与宿主通信（HTML 注释嵌入方案）：</p>
+      <ol>
+        <li>点击<strong>注册监听</strong>开始监听来自对话 iframe 的指令</li>
+        <li>在对话窗口中发送触发 AI 返回指令的消息<br>
+          示例提示词：<em>"请帮我打开百度"</em></li>
+        <li>当 AI 回复中包含 <code>&lt;!-- COMMAND:{...} --&gt;</code> 时，指令将被解析并显示在下方，同时打开弹窗</li>
+      </ol>
+      <div class="cmd-test-btns">
+        <button id="start-listen">注册监听</button>
+        <button id="simulate-cmd">模拟指令</button>
+        <button id="clear-log">清除日志</button>
+      </div>
+      <div id="command-log">// 等待注册指令监听...</div>
+    </div>
+
     <div class="content-section">
-      <h2>Lorem Ipsum</h2>
-      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+      <h2>占位内容</h2>
+      <p>这是一段用于测试页面滚动的占位文本。嵌入弹窗打开后，页面仍可正常滚动。</p>
+      <p>此处填充了足够的内容，用于验证嵌入弹窗不会影响宿主页面的正常交互行为。</p>
     </div>
 
   </main>
 
   <footer class="site-footer">
-    &copy; 2026 ExampleSite. All rights reserved.
+    &copy; 2026 示例网站。保留所有权利。
   </footer>
 
   <script>
-    // ======= Open Chat Embed Configuration =======
-    // Replace the apiKey below with an API key generated in the admin panel
+    // ======= Open Chat 嵌入配置 =======
+    // 将下方 apiKey 替换为管理面板生成的 API Key
     //
-    // If NEXT_PUBLIC_BASE_PATH is set (e.g. '/chat'), update baseUrl and script src accordingly:
+    // 如果设置了 NEXT_PUBLIC_BASE_PATH（如 '/chat'），baseUrl 和脚本 src 都需要加上前缀：
     //   baseUrl: 'http://localhost:3000/chat'
     //   script src: 'http://localhost:3000/chat/embed.min.js'
     window.openChatConfig = {
       baseUrl: 'http://localhost:3000/chat',
       apiKey: 'sk-embed-default-2fbc2e86',
+      agentId: 'siliconflow-deepseek-v4-flash',
       windowTitle: 'AI Assistant',
       theme: 'tech-blue',
       windowSize: {
@@ -196,9 +228,74 @@
         iconColor: '#ffffff',
         buttonHoverBg: 'rgba(255,255,255,0.15)',
       },
+      bubblePosition: { bottom: 24, right: 24 },
     }
   </script>
   <script src="http://localhost:3000/chat/embed.min.js" defer></script>
+
+  <script>
+    // ======= 指令测试逻辑 =======
+    var logEl = document.getElementById('command-log')
+    var listenerRegistered = false
+
+    function log(msg) {
+      var time = new Date().toLocaleTimeString()
+      logEl.textContent += '\n[' + time + '] ' + msg
+      logEl.scrollTop = logEl.scrollHeight
+    }
+
+    function openCommandPopup(url) {
+      var overlay = document.createElement('div')
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;'
+      var box = document.createElement('div')
+      box.style.cssText = 'width:80%;height:80%;background:#fff;border-radius:8px;overflow:hidden;position:relative;'
+      var closeBtn = document.createElement('button')
+      closeBtn.textContent = '\u00d7'
+      closeBtn.style.cssText = 'position:absolute;top:8px;right:8px;z-index:1;width:28px;height:28px;border:none;background:#f3f4f6;border-radius:4px;cursor:pointer;font-size:16px;'
+      closeBtn.onclick = function () { overlay.remove() }
+      var iframe = document.createElement('iframe')
+      iframe.src = url
+      iframe.style.cssText = 'width:100%;height:100%;border:none;'
+      box.appendChild(closeBtn)
+      box.appendChild(iframe)
+      overlay.appendChild(box)
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove() })
+      document.body.appendChild(overlay)
+    }
+
+    function handleCommands(commands) {
+      log('收到 ' + commands.length + ' 条指令：')
+      commands.forEach(function (cmd, i) {
+        log('  [' + i + '] action: ' + cmd.action + ', params: ' + JSON.stringify(cmd.params || {}))
+        if (cmd.action === 'openPanel' || cmd.action === 'openUrl') {
+          var url = (cmd.params && cmd.params.url) || 'https://www.baidu.com'
+          log('  -> 打开弹窗：' + url)
+          openCommandPopup(url)
+        }
+      })
+    }
+
+    document.getElementById('start-listen').addEventListener('click', function () {
+      if (listenerRegistered) { log('监听已注册。'); return }
+      listenerRegistered = true
+      log('监听已注册，等待来自对话 iframe 的指令...')
+
+      window.addEventListener('message', function onCommand(e) {
+        if (e.data?.type !== 'com.openchat.embed' || e.data?.action !== 'command') return
+        if (!e.data.commands || !e.data.commands.length) return
+        handleCommands(e.data.commands)
+      })
+    })
+
+    document.getElementById('simulate-cmd').addEventListener('click', function () {
+      log('模拟指令（绕过 AI）...')
+      handleCommands([{ action: 'openPanel', params: { url: 'https://www.baidu.com' } }])
+    })
+
+    document.getElementById('clear-log').addEventListener('click', function () {
+      logEl.textContent = '// 日志已清除'
+    })
+  </script>
 
 </body>
 </html>
