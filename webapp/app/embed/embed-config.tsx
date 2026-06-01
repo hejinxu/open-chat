@@ -9,6 +9,7 @@ export interface EmbedConfig {
   locale: string
   windowTitle: string
   bubblePosition?: string | { right?: number, bottom?: number, left?: number, top?: number }
+  getAgentParams?: (context: { agentId: string, agentName: string, backendType: string, paramKeys: string[] }) => Promise<Record<string, any>>
 }
 
 const EmbedConfigContext = createContext<EmbedConfig | null>(null)

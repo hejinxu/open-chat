@@ -53,6 +53,7 @@ const Main: FC<IMainProps> = (props) => {
   const isEmbed = !!(props?.params?.isEmbed)
   const apiKey = props?.params?.apiKey || ''
   const embedAgentId = props?.params?.embedAgentId as string | null
+  const getAgentParamsCallback = props?.params?.getAgentParams as ((ctx: { agentId: string, agentName: string, backendType: string, paramKeys: string[] }) => Promise<Record<string, any>>) | undefined
 
   /*
   * app info
@@ -101,6 +102,63 @@ const Main: FC<IMainProps> = (props) => {
     fetchingPromisesRef.current[key] = promise
     await promise
   }, [apiKey])
+
+  // ---- Utility: call host's getAgentParams callback ----
+  const callHostGetAgentParams = useCallback(async (
+    agentId: string,
+    agentName: string,
+    backendType: string,
+    paramKeys: string[],
+  ): Promise<Record<string, any> | null> => {
+    const ctx = { agentId, agentName, backendType, paramKeys }
+
+    // 1. Direct callback (same-origin, from props)
+    if (getAgentParamsCallback) {
+      try { return await getAgentParamsCallback(ctx) } catch { return null }
+    }
+
+    // 2. Same-origin: read from window directly
+    if (typeof window !== 'undefined') {
+      const globalCallback = (window as any).__getAgentParams || (window as any).__getAgentConversationParams
+      if (globalCallback) {
+        try { return await globalCallback(ctx) } catch { return null }
+      }
+    }
+
+    // 3. Cross-origin: postMessage request-response
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+      return new Promise((resolve) => {
+        const requestId = Math.random().toString(36).slice(2)
+        let resolved = false
+        const handler = (e: MessageEvent) => {
+          if (e.data?.type === 'com.openchat.embed'
+            && e.data?.action === 'params-response'
+            && e.data?.requestId === requestId
+            && !resolved) {
+            resolved = true
+            window.removeEventListener('message', handler)
+            resolve(e.data.params || null)
+          }
+        }
+        window.addEventListener('message', handler)
+        window.parent.postMessage({
+          type: 'com.openchat.embed',
+          action: 'params-request',
+          requestId,
+          context: ctx,
+        }, '*')
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true
+            window.removeEventListener('message', handler)
+            resolve(null)
+          }
+        }, 5000)
+      })
+    }
+
+    return null
+  }, [getAgentParamsCallback])
 
   // ---- Utility: sync clean params against latest prompt_variables ----
   function syncAndCleanParams(convId: string, agentId: string, promptVars: { key: string }[]): Record<string, any> | null {
@@ -638,6 +696,14 @@ const Main: FC<IMainProps> = (props) => {
       const cleaned = agentInputsCacheRef.current[agentKey] || null
       setCurrInputs(cleaned ? { ...cleaned } : null)
       setPromptConfig({ prompt_template: promptTemplate, prompt_variables: [] } as PromptConfig)
+
+      // Call host for param values
+      const agentName = agentTypeMapRef.current[agentKey] || ''
+      callHostGetAgentParams(agentKey, agentName, 'direct_llm', []).then((hostParams) => {
+        if (hostParams && Object.keys(hostParams).length > 0) {
+          setCurrInputs(prev => ({ ...(prev || {}), ...hostParams }))
+        }
+      })
     }
     else {
       // Always fetch latest prompt_variables from backend, then sync + restore
@@ -646,6 +712,15 @@ const Main: FC<IMainProps> = (props) => {
         const cleaned = await syncAndCleanParamsAsync(realConvId, agentKey, vars)
         setCurrInputs(cleaned ? { ...cleaned } : null)
         setPromptConfig({ prompt_template: promptTemplate, prompt_variables: vars } as PromptConfig)
+
+        // Call host for param values
+        const agentName = agentTypeMapRef.current[agentKey] || ''
+        const paramKeys = vars.map(v => v.key)
+        callHostGetAgentParams(agentKey, agentName, agentTypeMapRef.current[agentKey] || '', paramKeys).then((hostParams) => {
+          if (hostParams && Object.keys(hostParams).length > 0) {
+            setCurrInputs(prev => ({ ...(prev || {}), ...hostParams }))
+          }
+        })
       })
     }
 
@@ -793,9 +868,22 @@ const Main: FC<IMainProps> = (props) => {
     }
 
     // Load agent-specific params: cache → localStorage → empty
-    const resolvedInputs: Record<string, any> = agentInputsCacheRef.current[agentKey]
+    let resolvedInputs: Record<string, any> = agentInputsCacheRef.current[agentKey]
       || (realConvId ? getAgentParamsSync(realConvId, agentKey) : null)
       || {}
+
+    // Call host for param values (override with host values, keep user values for unreturned keys)
+    const hostBackendType = agentTypeMapRef.current[agentKey] || ''
+    const hostParamKeys = promptConfig.prompt_variables.map(v => v.key)
+    const hostParams = await callHostGetAgentParams(agentKey, '', hostBackendType, hostParamKeys)
+    if (hostParams && Object.keys(hostParams).length > 0) {
+      resolvedInputs = { ...resolvedInputs }
+      for (const key of Object.keys(hostParams)) {
+        if (hostParams[key] !== undefined && hostParams[key] !== null) {
+          resolvedInputs[key] = hostParams[key]
+        }
+      }
+    }
 
     // Validate required prompt variables (skip if agent has no params)
     if (promptConfig.prompt_variables.length) {

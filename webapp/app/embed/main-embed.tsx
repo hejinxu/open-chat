@@ -11,6 +11,7 @@ interface MainEmbedProps {
     theme: string
     locale: string
     windowTitle: string
+    getAgentParams?: (context: { agentId: string, agentName: string, backendType: string, paramKeys: string[] }) => Promise<Record<string, any>>
   }
 }
 
@@ -18,7 +19,7 @@ const MainEmbed: FC<MainEmbedProps> = ({ config }) => {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 min-h-0">
-        <Main params={{ isEmbed: true, apiKey: config.apiKey, embedAgentId: config.agentId }} />
+        <Main params={{ isEmbed: true, apiKey: config.apiKey, embedAgentId: config.agentId, getAgentParams: config.getAgentParams }} />
       </div>
     </div>
   )

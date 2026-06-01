@@ -355,9 +355,11 @@ embed.min.js (外层, ~450行 vanilla JS)
 
 **嵌入测试**: `test-projects/public/embed-integration.html` — 模拟真实网站，配置 `window.openChatConfig` 后引入 `embed.min.js`。
 
-**配置接口**: `window.openChatConfig = { baseUrl, apiKey, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, bubblePosition?, onCommand?, inputs? }`
+**配置接口**: `window.openChatConfig = { baseUrl, apiKey, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, bubblePosition?, onCommand?, getAgentParams?, inputs? }`
 
 **AI 指令**: AI 回复中 `<!-- COMMAND:{...} -->` 注释格式的操作指令，`onCompleted` 中提取并剥离后存储；嵌入模式通过 postMessage 发送给宿主（`onCommand` 回调优先，否则触发 `com.openchat.embed` DOM 事件）。
+
+**参数注入**: `getAgentParams` 回调在切换智能体、切换会话、每次发送前调用，宿主返回参数值与表单合并。Vue/React SPA 可注册 `window.__getAgentConversationParams` 全局桥接函数。
 
 **相关文档**:
 - `docs/开发指南/嵌入式对话组件.md` — 技术方案全文
