@@ -319,27 +319,27 @@ export default function AgentsPage() {
           </div>
           <div>
             <label className="block text-xs text-content-secondary mb-1">{t('common.auth.apiUrl')}</label>
-              <input
-                type="text"
-                placeholder="https://api.example.com/v1"
-                value={form.api_url}
-                onChange={e => setForm({ ...form, api_url: e.target.value })}
-                className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
-                name="agent-apiurl"
-                autoComplete="off"
-              />
+            <input
+              type="text"
+              placeholder="https://api.example.com/v1"
+              value={form.api_url}
+              onChange={e => setForm({ ...form, api_url: e.target.value })}
+              className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
+              name="agent-apiurl"
+              autoComplete="off"
+            />
           </div>
           <div>
             <label className="block text-xs text-content-secondary mb-1">{t('common.auth.apiKey')}</label>
-              <input
-                type="password"
-                placeholder="sk-..."
-                value={form.api_key}
-                onChange={e => setForm({ ...form, api_key: e.target.value })}
-                className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
-                name="agent-apikey"
-                autoComplete="new-password"
-              />
+            <input
+              type="password"
+              placeholder="sk-..."
+              value={form.api_key}
+              onChange={e => setForm({ ...form, api_key: e.target.value })}
+              className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
+              name="agent-apikey"
+              autoComplete="new-password"
+            />
           </div>
           <div>
             <label className="block text-xs text-content-secondary mb-1">{t('common.auth.model')}</label>
