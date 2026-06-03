@@ -6,13 +6,13 @@ import { VOICE_INPUT_CONFIG } from '@/config/voice-input'
 import type { WhisperModel } from '@/app/components/chat/voice-recognition/whisper-recognition'
 
 function getSavedBoolean(key: string, fallback: boolean): boolean {
-  if (typeof window === 'undefined') return fallback
+  if (typeof window === 'undefined') { return fallback }
   const saved = localStorage.getItem(key)
   return saved !== null ? saved === 'true' : fallback
 }
 
 function getSavedNumber(key: string, fallback: number): number {
-  if (typeof window === 'undefined') return fallback
+  if (typeof window === 'undefined') { return fallback }
   const saved = localStorage.getItem(key)
   return saved !== null ? Number(saved) : fallback
 }
@@ -37,9 +37,9 @@ export function useVoiceSettings() {
   )
 
   const [voiceEngine, setVoiceEngine] = useState<VoiceRecognitionEngine>(() => {
-    if (typeof window === 'undefined') return VOICE_INPUT_CONFIG.DEFAULT_ENGINE
+    if (typeof window === 'undefined') { return VOICE_INPUT_CONFIG.DEFAULT_ENGINE }
     const saved = localStorage.getItem('voice-engine')
-    if (saved === 'browser' || saved === 'whisper') return saved
+    if (saved === 'browser' || saved === 'whisper') { return saved }
     return VOICE_INPUT_CONFIG.DEFAULT_ENGINE
   })
 
@@ -50,7 +50,7 @@ export function useVoiceSettings() {
   })
 
   const [whisperModel, setWhisperModel] = useState<WhisperModel>(() => {
-    if (typeof window === 'undefined') return 'whisper-tiny'
+    if (typeof window === 'undefined') { return 'whisper-tiny' }
     const saved = localStorage.getItem('whisper-model')
     const validModels: WhisperModel[] = ['whisper-tiny', 'whisper-base', 'whisper-small', 'funasr-paraformer-zh', 'funasr-sensevoice']
     return validModels.includes(saved as WhisperModel) ? (saved as WhisperModel) : 'whisper-tiny'

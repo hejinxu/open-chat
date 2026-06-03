@@ -37,8 +37,8 @@ export const sendChatMessage = async (
 ) => {
   const { agent_id, apiKey, messages: _messages, ...rest } = body
   const headers: Record<string, string> = {}
-  if (agent_id) headers['x-agent-id'] = agent_id
-  if (apiKey) headers['x-api-key'] = apiKey
+  if (agent_id) { headers['x-agent-id'] = agent_id }
+  if (apiKey) { headers['x-api-key'] = apiKey }
   return ssePost('chat-messages', {
     body: {
       ...rest,
@@ -103,8 +103,8 @@ export const updateFeedback = async ({ url, body }: { url: string, body: Feedbac
 
 export const stopChatMessage = async (taskId: string, agentId?: string, apiKey?: string) => {
   const headers: Record<string, string> = {}
-  if (agentId) headers['x-agent-id'] = agentId
-  if (apiKey) headers['x-api-key'] = apiKey
+  if (agentId) { headers['x-agent-id'] = agentId }
+  if (apiKey) { headers['x-api-key'] = apiKey }
   return post(`chat-messages/${taskId}/stop`, { headers })
 }
 

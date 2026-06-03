@@ -23,22 +23,13 @@ import AppUnavailable from '@/app/components/app-unavailable'
 import { API_KEY, APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/config'
 import type { Annotation as AnnotationType } from '@/types/log'
 import { addFileInfos, sortAgentSorts } from '@/utils/tools'
-import { getStorageProvider, getStorageBackend } from '@/lib/storage'
+import { getStorageProvider } from '@/lib/storage'
 import { RemoteStorageProvider } from '@/lib/storage/remote-storage'
 import { getConversationService } from '@/lib/services/conversation'
 import { getMessageService } from '@/lib/services/message'
 import { stopReadAloud } from '@/app/components/chat/text-to-speech'
 import ConfirmDialog from '@/app/components/base/confirm-dialog'
-import { getAgentParamsSync, saveAgentParamsSync, getBackendConvIdSync, saveBackendConvIdSync } from '@/lib/conversation-storage'
 import { extractCommands, stripCommands } from '@/lib/command-parser'
-
-// 超时工具函数
-function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
-  ])
-}
 
 export interface IMainProps {
   params: any
@@ -77,8 +68,6 @@ const Main: FC<IMainProps> = (props) => {
   const hasSavedBackendConvIdRef = useRef<Record<string, boolean>>({})
   const [currentUser, setCurrentUser] = useState<{ name: string, role: string } | null>(null)
 
-  const storageBackend = getStorageBackend()
-
   // ---- Utility: fetch & cache prompt_variables ----
   const fetchAndCachePromptVars = useCallback(async (agentId: string | null) => {
     const key = agentId || ''
@@ -89,8 +78,8 @@ const Main: FC<IMainProps> = (props) => {
     const promise = (async () => {
       try {
         const headers: Record<string, string> = {}
-        if (agentId) headers['x-agent-id'] = agentId
-        if (apiKey) headers['x-api-key'] = apiKey
+        if (agentId) { headers['x-agent-id'] = agentId }
+        if (apiKey) { headers['x-api-key'] = apiKey }
         const res = await fetch(`${BASE_PATH}/api/parameters`, { headers })
         const data = await res.json()
         promptVariablesCacheRef.current[key] = userInputsFormToPromptVariables(data.user_input_form || [])
@@ -162,24 +151,16 @@ const Main: FC<IMainProps> = (props) => {
 
   // ---- Utility: sync clean params against latest prompt_variables ----
   function syncAndCleanParams(convId: string, agentId: string, promptVars: { key: string }[]): Record<string, any> | null {
-    if (!convId || convId === '-1') {
-      const cleaned = agentInputsCacheRef.current[agentId] || null
-      return cleaned
-    }
-    const saved = getAgentParamsSync(convId, agentId)
+    const saved = agentInputsCacheRef.current[agentId] || null
     const validKeys = new Set(promptVars.map(v => v.key))
     const cleaned: Record<string, any> = {}
-    let dirty = false
     if (saved) {
       for (const [k, v] of Object.entries(saved)) {
         if (validKeys.has(k)) {
           cleaned[k] = v
-        } else {
-          dirty = true
         }
       }
     }
-    if (dirty) saveAgentParamsSync(convId, agentId, cleaned)
     if (Object.keys(cleaned).length > 0) {
       agentInputsCacheRef.current[agentId] = { ...cleaned }
       return cleaned
@@ -189,30 +170,15 @@ const Main: FC<IMainProps> = (props) => {
   }
 
   // ---- Async version: sync clean params with remote storage support ----
-  async function syncAndCleanParamsAsync(convId: string, agentId: string, promptVars: { key: string }[]): Promise<Record<string, any> | null> {
+  async function syncAndCleanParamsAsync(convId: string | null, agentId: string, promptVars: { key: string }[]): Promise<Record<string, any> | null> {
     if (!convId || convId === '-1') {
       return agentInputsCacheRef.current[agentId] || null
     }
 
-    // 获取参数（优先远程，超时降级本地）
-    let saved: Record<string, any> | null = null
-    if (storageBackend !== 'local') {
-      try {
-        const provider = getStorageProvider()
-        const conv = await withTimeout(
-          provider.getConversationById(convId),
-          10000,
-          null
-        )
-        saved = conv?.agents?.[agentId]?.params || null
-      } catch {
-        console.warn('Failed to get params from remote, falling back to localStorage')
-        Toast.notify({ type: 'warning', message: '获取参数超时，使用本地缓存' })
-        saved = getAgentParamsSync(convId, agentId)
-      }
-    } else {
-      saved = getAgentParamsSync(convId, agentId)
-    }
+    // 获取参数（远程，超时直接抛错）
+    const provider = getStorageProvider()
+    const conv = await provider.getConversationById(convId)
+    const saved = conv?.agents?.[agentId]?.params || null
 
     // 清洗逻辑
     const validKeys = new Set(promptVars.map(v => v.key))
@@ -229,7 +195,7 @@ const Main: FC<IMainProps> = (props) => {
     }
 
     if (dirty) {
-      saveAgentParamsSync(convId, agentId, cleaned)
+      getConversationService().saveAgentParams(convId, agentId, cleaned).catch(console.error)
     }
 
     if (Object.keys(cleaned).length > 0) {
@@ -250,75 +216,39 @@ const Main: FC<IMainProps> = (props) => {
       return backendConvIdCacheRef.current[cacheKey]
     }
 
-    // 2. 远程存储（10s 超时）
-    if (storageBackend !== 'local') {
-      try {
-        const provider = getStorageProvider()
-        const conv = await withTimeout(
-          provider.getConversationById(convId),
-          10000,
-          null
-        )
-        if (conv) {
-          const backendConvId = conv.agents?.[agentId]?.backend_conversation_id || null
-          if (backendConvId) {
-            backendConvIdCacheRef.current[cacheKey] = backendConvId
-          }
-          return backendConvId
-        }
-      } catch {
-        console.warn('Failed to get backend_conv_id from remote, falling back to localStorage')
-        Toast.notify({ type: 'warning', message: '获取会话ID超时，使用本地缓存' })
-      }
-    }
+    // 2. 远程存储（超时直接 throw，不 fallback）
+    const provider = getStorageProvider()
+    const conv = await provider.getConversationById(convId)
+    if (!conv) { return null }
 
-    // 3. localStorage fallback
-    return getBackendConvIdSync(convId, agentId)
+    const backendConvId = conv.agents?.[agentId]?.backend_conversation_id || null
+    if (backendConvId) {
+      backendConvIdCacheRef.current[cacheKey] = backendConvId
+    }
+    return backendConvId
   }
 
-  // ---- Save backend_conversation_id (双写) ----
+  // ---- Save backend_conversation_id ----
   function saveBackendConvId(convId: string, agentId: string, backendId: string) {
     const cacheKey = `${convId}:${agentId}`
 
     // 1. 立即更新 ref 缓存
     backendConvIdCacheRef.current[cacheKey] = backendId
 
-    // 2. 同步写入 localStorage
-    saveBackendConvIdSync(convId, agentId, backendId)
-
-    // 3. 异步写入远程存储
-    if (storageBackend !== 'local') {
-      getConversationService().saveBackendConversationId(convId, agentId, backendId)
-        .catch((error) => {
-          console.error('Failed to sync backend_conv_id to remote:', error)
-        })
-    }
+    // 2. 异步写入远程存储（静默失败，不打断流式响应）
+    getConversationService().saveBackendConversationId(convId, agentId, backendId).catch((error) => {
+      console.error('Failed to sync backend_conv_id to remote:', error)
+    })
   }
 
-  // ---- Save agent params (优先远程，成功后写本地) ----
+  // ---- Save agent params ----
   async function saveAgentParams(convId: string, agentId: string, params: Record<string, any>) {
     // 1. 立即更新 ref 缓存
     agentInputsCacheRef.current[agentId] = { ...params }
 
-    // 2. 同步写入 localStorage
-    saveAgentParamsSync(convId, agentId, params)
-
-    // 3. 异步写入远程存储
-    if (storageBackend !== 'local') {
-      try {
-        const provider = getStorageProvider()
-        const conv = await provider.getConversationById(convId)
-        if (conv) {
-          if (!conv.agents) conv.agents = {}
-          if (!conv.agents[agentId]) conv.agents[agentId] = { params: {} }
-          conv.agents[agentId].params = { ...params }
-          conv.updated_at = Math.floor(Date.now() / 1000)
-          await provider.saveConversation(conv)
-        }
-      } catch (error) {
-        console.error('Failed to sync agent params to remote:', error)
-      }
-    }
+    // 2. 写入远程存储（失败直接抛错，由调用方处理）
+    const provider = getStorageProvider()
+    await provider.updateConversationAgentParams(convId, agentId, JSON.stringify(params))
   }
 
   // in mobile, show sidebar by click button
@@ -419,16 +349,16 @@ const Main: FC<IMainProps> = (props) => {
       setCurrInputs(notSyncToStateInputs)
     }
 
-    // Sync agent params when switching conversations
+    // Sync agent params when switching conversations (async load from remote)
     if (!isNewConversation && currConversationId && currConversationId !== '-1') {
       const agentKey = selectedAgentId || defaultAgentId
       const promptVars = promptVariablesCacheRef.current[agentKey]
       if (promptVars && agentKey) {
-        const cleaned = syncAndCleanParams(currConversationId, agentKey, promptVars)
-        if (cleaned) {
-          setCurrInputs(cleaned)
-          notSyncToStateInputs = cleaned
-        }
+        syncAndCleanParamsAsync(currConversationId, agentKey, promptVars).then((cleaned) => {
+          if (cleaned) {
+            setCurrInputs(cleaned)
+          }
+        }).catch(console.error)
       }
     }
 
@@ -439,7 +369,7 @@ const Main: FC<IMainProps> = (props) => {
       chatListFetchIdRef.current += 1
       const fetchId = chatListFetchIdRef.current
       fetchChatList(currConversationId).then((res: any) => {
-        if (chatListFetchIdRef.current !== fetchId) return
+        if (chatListFetchIdRef.current !== fetchId) { return }
         const { data } = res
         const newChatList: ChatItem[] = generateNewChatListWithOpenStatement(notSyncToStateIntroduction, notSyncToStateInputs)
 
@@ -463,7 +393,7 @@ const Main: FC<IMainProps> = (props) => {
         setChatList(newChatList)
         setIsChatListLoading(false)
       }).catch(() => {
-        if (chatListFetchIdRef.current !== fetchId) return
+        if (chatListFetchIdRef.current !== fetchId) { return }
         setIsChatListLoading(false)
       })
     }
@@ -666,7 +596,7 @@ const Main: FC<IMainProps> = (props) => {
   }, [])
 
   useEffect(() => {
-    if (!inited) return
+    if (!inited) { return }
 
     stopReadAloud()
 
@@ -674,9 +604,8 @@ const Main: FC<IMainProps> = (props) => {
     const prevKey = prevId || defaultAgentId
     const realConvId = currConversationId && currConversationId !== '-1' ? currConversationId : null
 
-    // Save previous agent's params synchronously
-    if (currInputs && realConvId && prevKey) {
-      saveAgentParamsSync(realConvId, prevKey, currInputs)
+    // Save previous agent's params to ref cache
+    if (currInputs && prevKey) {
       agentInputsCacheRef.current[prevKey] = { ...currInputs }
     }
 
@@ -685,7 +614,7 @@ const Main: FC<IMainProps> = (props) => {
     setPromptConfig(null)
 
     const agentKey = selectedAgentId || defaultAgentId
-    if (!agentKey) return
+    if (!agentKey) { return }
 
     const isDirectLLM = agentTypeMapRef.current[agentKey] === 'direct_llm'
     setIsDirectLLM(isDirectLLM)
@@ -732,11 +661,8 @@ const Main: FC<IMainProps> = (props) => {
     if (inited && currInputs && Object.keys(currInputs).length > 0) {
       const realConvId = currConversationId && currConversationId !== '-1' ? currConversationId : null
       const agentKey = selectedAgentId || defaultAgentId
-      if (!agentKey) return
+      if (!agentKey) { return }
       agentInputsCacheRef.current[agentKey] = { ...currInputs }
-      if (realConvId) {
-        saveAgentParamsSync(realConvId, agentKey, currInputs)
-      }
     }
   }, [currInputs, inited])
 
@@ -756,11 +682,14 @@ const Main: FC<IMainProps> = (props) => {
 
     if (!currInputs || !promptConfig?.prompt_variables) { return true }
 
-    const inputLens = Object.values(currInputs).length
-    const promptVariablesLens = promptConfig.prompt_variables.length
+    const missingRequired = promptConfig.prompt_variables
+      .filter(v => v.required)
+      .filter((v) => {
+        const val = currInputs[v.key]
+        return val === undefined || val === null || val === ''
+      })
 
-    const emptyInput = inputLens < promptVariablesLens || Object.values(currInputs).some(v => !v)
-    if (emptyInput) {
+    if (missingRequired.length > 0) {
       logError(t('app.errorMessage.valueOfVarRequired'))
       return false
     }
@@ -775,7 +704,7 @@ const Main: FC<IMainProps> = (props) => {
   const agentInfoCacheRef = useRef<Record<string, { name: string, icon: string }>>({})
 
   const fetchAgentInfo = async (agentId: string) => {
-    if (agentInfoCacheRef.current[agentId]) return agentInfoCacheRef.current[agentId]
+    if (agentInfoCacheRef.current[agentId]) { return agentInfoCacheRef.current[agentId] }
     try {
       const headers = apiKey ? { 'x-api-key': apiKey } : undefined
       const res = await fetch(`${BASE_PATH}/api/config/agents`, { headers })
@@ -867,10 +796,8 @@ const Main: FC<IMainProps> = (props) => {
       return
     }
 
-    // Load agent-specific params: cache → localStorage → empty
-    let resolvedInputs: Record<string, any> = agentInputsCacheRef.current[agentKey]
-      || (realConvId ? getAgentParamsSync(realConvId, agentKey) : null)
-      || {}
+    // Load agent-specific params: cache → empty
+    let resolvedInputs: Record<string, any> = agentInputsCacheRef.current[agentKey] || {}
 
     // Call host for param values (override with host values, keep user values for unreturned keys)
     const hostBackendType = agentTypeMapRef.current[agentKey] || ''
@@ -904,10 +831,10 @@ const Main: FC<IMainProps> = (props) => {
       else { toServerInputs[key] = value }
     })
 
-    // Save to agent-specific storage for next send (sync)
+    // Save to agent-specific storage for next send
     if (Object.keys(toServerInputs).length > 0) {
       agentInputsCacheRef.current[agentKey] = { ...toServerInputs }
-      if (realConvId) saveAgentParamsSync(realConvId, agentKey, toServerInputs)
+      if (realConvId) { saveAgentParams(realConvId, agentKey, toServerInputs).catch(console.error) }
     }
 
     // question
@@ -1094,7 +1021,7 @@ const Main: FC<IMainProps> = (props) => {
           const aKey = selectedAgentId || defaultAgentId
           agentInputsCacheRef.current[aKey] = { ...currInputs }
           if (localConvId && localConvId !== '-1') {
-            saveAgentParams(localConvId, aKey, currInputs)
+            saveAgentParams(localConvId, aKey, currInputs).catch(console.error)
           }
         }
         resetNewConversationInputs()
@@ -1249,16 +1176,7 @@ const Main: FC<IMainProps> = (props) => {
   const handleFeedback = async (messageId: string, feedback: Feedbacktype) => {
     try {
       const storage = getStorageProvider()
-      const conversations = await storage.getConversations()
-      for (const conv of conversations) {
-        const messages = await storage.getMessages(conv.id)
-        const target = messages.find(m => m.id === messageId)
-        if (target) {
-          target.feedback = { rating: feedback.rating }
-          await storage.saveMessage(target)
-          break
-        }
-      }
+      await storage.updateMessageFeedback(messageId, JSON.stringify({ rating: feedback.rating }))
     }
     catch { /* ignore */ }
     const newChatList = chatList.map((item) => {
@@ -1316,7 +1234,7 @@ const Main: FC<IMainProps> = (props) => {
   }
 
   const handleDeleteConfirm = async () => {
-    if (!deleteConfirmTarget) return
+    if (!deleteConfirmTarget) { return }
     const answerId = deleteConfirmTarget
     setDeleteConfirmTarget(null)
 
@@ -1324,7 +1242,7 @@ const Main: FC<IMainProps> = (props) => {
 
     const list = getChatList()
     const aIndex = list.findIndex(item => item.id === answerId && item.isAnswer)
-    if (aIndex < 0) return
+    if (aIndex < 0) { return }
 
     let qIndex = aIndex - 1
     while (qIndex >= 0 && list[qIndex].isAnswer) {
@@ -1337,7 +1255,7 @@ const Main: FC<IMainProps> = (props) => {
 
     try {
       const idsToDelete = [answerId]
-      if (qItem) idsToDelete.push(qItem.id)
+      if (qItem) { idsToDelete.push(qItem.id) }
       await getMessageService().deleteMessagesByIds(idsToDelete)
       notify({ type: 'success', message: '消息已删除' })
     } catch {
@@ -1395,18 +1313,18 @@ const Main: FC<IMainProps> = (props) => {
         {/* main */}
         <div className='flex-grow flex flex-col overflow-hidden h-screen'>
           {inited && (
-          <ConfigSence
-            conversationName={conversationName}
-            hasSetInputs={hasSetInputs}
-            isPublicVersion={isShowPrompt && agentTypeMapRef.current[selectedAgentId || defaultAgentId] !== 'direct_llm'}
-            siteInfo={APP_INFO}
-            promptConfig={promptConfig}
-            onStartChat={handleStartChat}
-            canEditInputs={canEditInputs}
-            savedInputs={(currInputs as Record<string, any>) ?? agentInputsCacheRef.current[selectedAgentId || defaultAgentId]}
-            onInputsChange={setCurrInputs}
-            isDirectLLM={isDirectLLM}
-          ></ConfigSence>
+            <ConfigSence
+              conversationName={conversationName}
+              hasSetInputs={hasSetInputs}
+              isPublicVersion={isShowPrompt && agentTypeMapRef.current[selectedAgentId || defaultAgentId] !== 'direct_llm'}
+              siteInfo={APP_INFO}
+              promptConfig={promptConfig}
+              onStartChat={handleStartChat}
+              canEditInputs={canEditInputs}
+              savedInputs={(currInputs as Record<string, any>) ?? agentInputsCacheRef.current[selectedAgentId || defaultAgentId]}
+              onInputsChange={setCurrInputs}
+              isDirectLLM={isDirectLLM}
+            ></ConfigSence>
           )}
 
           {

@@ -50,22 +50,22 @@ const Sidebar: FC<ISidebarProps> = ({
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   useEffect(() => {
-    if (openMenuId === null) return
+    if (openMenuId === null) { return }
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       if (!target.closest(`[data-menu-id="${openMenuId}"]`))
-        setOpenMenuId(null)
+      { setOpenMenuId(null) }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [openMenuId])
 
   useEffect(() => {
-    if (!userMenuOpen) return
+    if (!userMenuOpen) { return }
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       if (!target.closest('[data-user-menu]'))
-        setUserMenuOpen(false)
+      { setUserMenuOpen(false) }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -205,12 +205,12 @@ const Sidebar: FC<ISidebarProps> = ({
                 </div>
               )}
             </div>
-            )
+          )
           : (
             <div className="text-content-quaternary font-normal text-xs">
               © {copyRight} {(new Date()).getFullYear()}
             </div>
-            )}
+          )}
       </div>
     </div>
   )

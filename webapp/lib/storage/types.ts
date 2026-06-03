@@ -26,13 +26,16 @@ export interface MessageRecord {
 }
 
 export interface StorageProvider {
-  getConversations(): Promise<ConversationRecord[]>
-  getConversationById(id: string): Promise<ConversationRecord | null>
-  saveConversation(conv: ConversationRecord): Promise<void>
-  deleteConversation(id: string): Promise<void>
+  getConversations: () => Promise<ConversationRecord[]>
+  getConversationById: (id: string) => Promise<ConversationRecord | null>
+  saveConversation: (conv: ConversationRecord) => Promise<void>
+  deleteConversation: (id: string) => Promise<void>
+  updateConversationAgentParams: (convId: string, agentId: string, paramsJson: string) => Promise<void>
+  updateConversationBackendConvId: (convId: string, agentId: string, backendConvId: string) => Promise<void>
 
-  getMessages(conversationId: string): Promise<MessageRecord[]>
-  saveMessage(msg: MessageRecord): Promise<void>
-  deleteMessages(conversationId: string): Promise<void>
-  deleteMessagesByIds(ids: string[]): Promise<void>
+  getMessages: (conversationId: string) => Promise<MessageRecord[]>
+  saveMessage: (msg: MessageRecord) => Promise<void>
+  deleteMessages: (conversationId: string) => Promise<void>
+  deleteMessagesByIds: (ids: string[]) => Promise<void>
+  updateMessageFeedback: (id: string, feedback: string) => Promise<void>
 }

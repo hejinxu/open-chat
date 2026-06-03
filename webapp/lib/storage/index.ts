@@ -1,8 +1,6 @@
 export type { ConversationRecord, MessageRecord, StorageProvider, AgentSessionState } from './types'
-export { LocalStorageProvider } from './local-storage'
 export { RemoteStorageProvider } from './remote-storage'
 export { createStorageProvider, getStorageBackend, type StorageBackend } from './factory'
-export { getTabLock, TabLock } from './tab-lock'
 
 // 保持向后兼容的单例访问
 import { createStorageProvider } from './factory'

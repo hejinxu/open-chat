@@ -1257,7 +1257,7 @@ export async function GET(
 
 **现象**：管理面板创建的 API Key 无法通过 middleware 验证，始终返回 401。
 
-**根因**：旧 `embed_tokens` 表迁移到 `api_keys` 时，key 以**明文**存储而非 bcrypt hash。middleware 用 `bcrypt.compare(plainKey, hash)` 验证，明文无法匹配。
+**根因**：旧 `embed_tokens` 表迁移到 `api_keys` 时，key 以**明文**存储而非 bcrypt hash。middleware 用 `bcrypt.compare(plainKey, hash)` 验证，明文无法匹配。（注：`embed_tokens` 表及相关迁移代码已移除）
 
 **排查**：
 

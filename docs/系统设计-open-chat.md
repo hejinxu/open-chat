@@ -353,7 +353,6 @@ open-chat/
 │   │   │   └── index.ts                # 存储工厂
 │   │   ├── storage/
 │   │   │   ├── types.ts                # StorageProvider 接口
-│   │   │   ├── local-storage.ts        # localStorage 实现
 │   │   │   ├── remote-storage.ts       # HTTP API 实现
 │   │   │   └── factory.ts              # 存储工厂
 │   │   └── adapters/
@@ -363,8 +362,7 @@ open-chat/
 │   │       └── llm.ts                  # 直连 LLM 适配器
 │   ├── middleware.ts                    # 认证中间件（Node.js runtime）
 │   ├── config/
-│   │   ├── index.ts                    # BASE_PATH, APP_ID 等配置
-│   │   └── agents.config.json          # 智能体配置（可选，已迁移至 DB）
+│   │   └── index.ts                    # BASE_PATH, APP_ID 等配置
 │   ├── app/
 │   │   ├── login/                      # 登录页面
 │   │   ├── setup/                      # 初始设置（Server Component）
@@ -409,7 +407,7 @@ open-chat/
 │   ├── types/
 │   │   ├── agent.ts                    # AgentConfig, AgentRecord
 │   │   ├── auth.ts                     # UserRecord, ApiKeyRecord
-│   │   └── embed.ts                    # EmbedTokenRecord
+│   │   └── model.ts                    # ModelProvider, Model
 │   ├── i18n/lang/
 │   │   ├── common.zh.ts
 │   │   └── common.en.ts
@@ -530,7 +528,9 @@ getAllAgents()
 
 #### 5.2.3 自动迁移
 
-首次启动时检测 DB agents 表为空 + 旧 `agents.config.json` 存在 → 自动导入所有智能体到 DB。
+- 旧 `agents.config.json` 迁移已移除（文件已删除）
+- 旧 `agents.model` 文本字段迁移：首次启动时自动匹配 `model_name` → `model_id`
+- 旧 `embed_tokens` 表迁移：已移除（表及相关代码已清理）
 
 ### 5.3 服务端统一代理
 
@@ -720,8 +720,9 @@ DELETE /api/storage/conversations    # 删除对话
 GET    /api/storage/messages         # 消息列表
 POST   /api/storage/messages         # 保存消息
 DELETE /api/storage/messages         # 删除消息
-
-POST   /api/storage/merge            # 合并远程+本地数据
+PATCH  /api/storage/messages/feedback # 更新消息反馈
+PATCH  /api/storage/conversations/agent-params # 更新智能体参数
+PATCH  /api/storage/conversations/backend-conv-id # 更新后端会话 ID
 ```
 
 ---

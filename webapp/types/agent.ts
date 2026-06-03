@@ -9,12 +9,13 @@ export interface AgentConfig {
   api_key: string
   api_url: string
   model?: string
+  model_id?: string
   is_default: boolean
   is_enabled: boolean
   extra_config?: Record<string, any>
 }
 
-export type AgentInfo = Omit<AgentConfig, 'api_key' | 'api_url' | 'model' | 'extra_config'>
+export type AgentInfo = Omit<AgentConfig, 'api_key' | 'api_url' | 'model' | 'model_id' | 'extra_config'>
 
 export interface AgentRecord {
   id: string
@@ -24,7 +25,7 @@ export interface AgentRecord {
   backend_type: BackendType
   api_key: string
   api_url: string
-  model: string | null
+  model_id: string | null
   extra_config: string // JSON string
   is_default: boolean
   is_enabled: boolean
@@ -41,7 +42,7 @@ export function dbToAgentConfig(record: AgentRecord): AgentConfig {
     backend_type: record.backend_type,
     api_key: record.api_key,
     api_url: record.api_url,
-    model: record.model || undefined,
+    model_id: record.model_id || undefined,
     is_default: record.is_default,
     is_enabled: record.is_enabled,
     extra_config: record.extra_config ? JSON.parse(record.extra_config) : undefined,
@@ -57,7 +58,7 @@ export function agentConfigToDb(config: Omit<AgentConfig, 'extra_config'> & { ex
     backend_type: config.backend_type,
     api_key: config.api_key,
     api_url: config.api_url,
-    model: config.model || null,
+    model_id: config.model_id || null,
     extra_config: config.extra_config ? JSON.stringify(config.extra_config) : '{}',
     is_default: config.is_default,
     is_enabled: config.is_enabled,

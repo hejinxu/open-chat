@@ -58,7 +58,9 @@ export async function middleware(request: NextRequest) {
     if (payload) {
       headers.set('x-auth-user-id', payload.sub)
       headers.set('x-auth-user-type', payload.type)
-      if (payload.role) headers.set('x-auth-user-role', payload.role)
+      if (payload.role) {
+        headers.set('x-auth-user-role', payload.role)
+      }
       return NextResponse.next({ request: { headers } })
     }
     // Invalid JWT — clear cookie
@@ -80,7 +82,9 @@ export async function middleware(request: NextRequest) {
       for (const integration of allIntegrations) {
         const keys = await db.getApiKeysByIntegration(integration.id)
         for (const key of keys) {
-          if (!key.is_enabled) continue
+          if (!key.is_enabled) {
+            continue
+          }
           const matches = await verifyApiKey(apiKey, key.key_hash)
           if (matches) {
             matchedKey = {
@@ -94,7 +98,9 @@ export async function middleware(request: NextRequest) {
             break
           }
         }
-        if (matchedKey) break
+        if (matchedKey) {
+          break
+        }
       }
 
       if (matchedKey) {

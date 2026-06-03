@@ -14,11 +14,27 @@ interface Agent {
   api_key: string
   api_url: string
   model: string | null
+  model_id: string | null
   extra_config: string
   is_default: boolean
   is_enabled: boolean
   created_at: number
   updated_at: number
+}
+
+interface ModelProvider {
+  id: string
+  name: string
+  provider_type: string
+  is_enabled: boolean
+}
+
+interface ModelItem {
+  id: string
+  provider_id: string
+  model_name: string
+  display_name: string
+  is_enabled: boolean
 }
 
 const backendTypes = ['dify', 'direct_llm', 'fastgpt', 'n8n'] as const
@@ -36,13 +52,15 @@ export default function AgentsPage() {
     backend_type: 'dify',
     api_key: '',
     api_url: '',
-    model: '',
+    model_id: '',
     extra_config: '{}',
     is_default: false,
     is_enabled: true,
   })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [providers, setProviders] = useState<ModelProvider[]>([])
+  const [allModels, setAllModels] = useState<ModelItem[]>([])
 
   const isEditing = !!editingAgent
 
@@ -60,9 +78,25 @@ export default function AgentsPage() {
     }
   }
 
+  const loadModelData = async () => {
+    try {
+      const [providersRes, modelsRes] = await Promise.all([
+        fetch(`${BASE_PATH}/api/admin/model-providers`),
+        fetch(`${BASE_PATH}/api/admin/models`),
+      ])
+      const providersData = await providersRes.json()
+      const modelsData = await modelsRes.json()
+      setProviders((providersData.providers || []).filter((p: ModelProvider) => p.is_enabled))
+      setAllModels((modelsData.models || []).filter((m: ModelItem) => m.is_enabled))
+    }
+    catch {
+      // ignore
+    }
+  }
+
   useEffect(() => { loadAgents() }, [])
 
-  const openCreate = () => {
+  const openCreate = async () => {
     setEditingAgent(null)
     setForm({
       name: '',
@@ -71,16 +105,17 @@ export default function AgentsPage() {
       backend_type: 'dify',
       api_key: '',
       api_url: '',
-      model: '',
+      model_id: '',
       extra_config: '{}',
       is_default: false,
       is_enabled: true,
     })
     setError('')
+    await loadModelData()
     setShowDialog(true)
   }
 
-  const openEdit = (agent: Agent) => {
+  const openEdit = async (agent: Agent) => {
     setEditingAgent(agent)
     setForm({
       name: agent.name,
@@ -89,12 +124,13 @@ export default function AgentsPage() {
       backend_type: agent.backend_type,
       api_key: agent.api_key,
       api_url: agent.api_url,
-      model: agent.model || '',
+      model_id: agent.model_id || '',
       extra_config: agent.extra_config || '{}',
       is_default: agent.is_default,
       is_enabled: agent.is_enabled,
     })
     setError('')
+    await loadModelData()
     setShowDialog(true)
   }
 
@@ -117,7 +153,7 @@ export default function AgentsPage() {
     try {
       const payload = {
         ...form,
-        model: form.model || null,
+        model_id: form.model_id || null,
         extra_config: extraConfig,
       }
 
@@ -214,6 +250,7 @@ export default function AgentsPage() {
               <th className="px-4 py-2">{t('common.auth.agentId')}</th>
               <th className="px-4 py-2">{t('common.auth.name')}</th>
               <th className="px-4 py-2">{t('common.auth.backendType')}</th>
+              <th className="px-4 py-2">{t('common.auth.model')}</th>
               <th className="px-4 py-2">{t('common.auth.status')}</th>
               <th className="px-4 py-2">{t('common.auth.isDefault')}</th>
               <th className="px-4 py-2 text-right">{t('common.auth.actions')}</th>
@@ -228,6 +265,7 @@ export default function AgentsPage() {
                   {agent.name}
                 </td>
                 <td className="px-4 py-2 text-content-secondary text-xs">{agent.backend_type}</td>
+                <td className="px-4 py-2 text-content-secondary text-xs font-mono">{agent.model || '-'}</td>
                 <td className="px-4 py-2">
                   <span className={`text-xs px-2 py-0.5 rounded ${agent.is_enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                     {agent.is_enabled ? t('common.auth.active') : t('common.auth.disabled')}
@@ -256,7 +294,7 @@ export default function AgentsPage() {
               </tr>
             ))}
             {agents.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-4 text-center text-content-secondary">{t('common.auth.noAgents')}</td></tr>
+              <tr><td colSpan={7} className="px-4 py-4 text-center text-content-secondary">{t('common.auth.noAgents')}</td></tr>
             )}
           </tbody>
         </table>
@@ -309,7 +347,7 @@ export default function AgentsPage() {
             <label className="block text-xs text-content-secondary mb-1">{t('common.auth.backendType')}</label>
             <select
               value={form.backend_type}
-              onChange={e => setForm({ ...form, backend_type: e.target.value })}
+              onChange={e => setForm({ ...form, backend_type: e.target.value, model_id: '' })}
               className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
             >
               {backendTypes.map(bt => (
@@ -317,6 +355,32 @@ export default function AgentsPage() {
               ))}
             </select>
           </div>
+          {form.backend_type === 'direct_llm' && (
+            <div>
+              <label className="block text-xs text-content-secondary mb-1">{t('common.auth.model')}</label>
+              <select
+                value={form.model_id}
+                onChange={e => setForm({ ...form, model_id: e.target.value, api_key: '', api_url: '' })}
+                className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
+              >
+                <option value="">{t('common.auth.selectModel')}</option>
+                {providers.map((p) => {
+                  const providerModels = allModels.filter(m => m.provider_id === p.id)
+                  if (providerModels.length === 0) { return null }
+                  return (
+                    <optgroup key={p.id} label={`${p.name} (${p.provider_type})`}>
+                      {providerModels.map(m => (
+                        <option key={m.id} value={m.id}>{m.display_name} ({m.model_name})</option>
+                      ))}
+                    </optgroup>
+                  )
+                })}
+              </select>
+              {providers.length === 0 && (
+                <p className="text-xs text-yellow-600 mt-1">{t('common.auth.noProvidersFirst')}</p>
+              )}
+            </div>
+          )}
           <div>
             <label className="block text-xs text-content-secondary mb-1">{t('common.auth.apiUrl')}</label>
             <input
@@ -339,16 +403,6 @@ export default function AgentsPage() {
               className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
               name="agent-apikey"
               autoComplete="new-password"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-content-secondary mb-1">{t('common.auth.model')}</label>
-            <input
-              type="text"
-              placeholder="gpt-4o"
-              value={form.model}
-              onChange={e => setForm({ ...form, model: e.target.value })}
-              className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm font-mono"
             />
           </div>
           <div>
