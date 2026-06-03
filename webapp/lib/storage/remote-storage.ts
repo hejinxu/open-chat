@@ -1,17 +1,7 @@
 import type { ConversationRecord, MessageRecord, StorageProvider } from './types'
-import { LocalStorageProvider } from './local-storage'
-import { getTabLock } from './tab-lock'
 import { BASE_PATH } from '@/config'
 
-const TIMEOUT_MS = 10000  // 10 秒超时
-
-let notifyWarning: (msg: string) => void = (msg) => console.warn(msg)
-let notifyError: (msg: string) => void = (msg) => console.error(msg)
-
-export function setStorageNotifyCallbacks(opts: { warn?: (msg: string) => void; error?: (msg: string) => void }) {
-  if (opts.warn) notifyWarning = opts.warn
-  if (opts.error) notifyError = opts.error
-}
+const TIMEOUT_MS = 10000
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
@@ -21,7 +11,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export class RemoteStorageProvider implements StorageProvider {
-  private localStorageProvider = new LocalStorageProvider()
   private apiKey: string | null = null
   private get baseUrl() { return `${BASE_PATH}/api/storage` }
 
@@ -32,234 +21,136 @@ export class RemoteStorageProvider implements StorageProvider {
   private getHeaders(): Record<string, string> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (this.apiKey)
-      headers['x-api-key'] = this.apiKey
+    { headers['x-api-key'] = this.apiKey }
     return headers
   }
 
-  // 读操作：优先远程，失败降级本地
   async getConversations(): Promise<ConversationRecord[]> {
-    try {
-      const res = await withTimeout(
-        fetch(`${this.baseUrl}/conversations`, { headers: this.getHeaders() }),
-        TIMEOUT_MS
-      )
-      if (!res.ok) throw new Error('API failed')
-      const data = await res.json()
-      if (!data.success) throw new Error(data.error)
-
-      // 更新 localStorage 缓存
-      for (const conv of data.data) {
-        await this.localStorageProvider.saveConversation(conv)
-      }
-
-      return data.data
-    }
-    catch (error) {
-      console.warn('Remote storage failed, falling back to localStorage:', error)
-      notifyWarning('远程存储不可用，使用本地数据')
-      return this.localStorageProvider.getConversations()
-    }
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/conversations`, { headers: this.getHeaders() }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
+    const data = await res.json()
+    if (!data.success) { throw new Error(data.error) }
+    return data.data
   }
 
   async getConversationById(id: string): Promise<ConversationRecord | null> {
-    try {
-      const res = await withTimeout(
-        fetch(`${this.baseUrl}/conversations?id=${encodeURIComponent(id)}`, { headers: this.getHeaders() }),
-        TIMEOUT_MS
-      )
-      if (!res.ok) throw new Error('API failed')
-      const data = await res.json()
-      if (!data.success) throw new Error(data.error)
-      return data.data
-    }
-    catch (error) {
-      console.warn('Remote storage failed, falling back to localStorage:', error)
-      return this.localStorageProvider.getConversationById(id)
-    }
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/conversations?id=${encodeURIComponent(id)}`, { headers: this.getHeaders() }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
+    const data = await res.json()
+    if (!data.success) { throw new Error(data.error) }
+    return data.data
   }
 
-  // 写操作：优先远程，成功后写本地
   async saveConversation(conv: ConversationRecord): Promise<void> {
-    const lock = getTabLock()
-    const hasLock = await lock.acquireLock()
-    if (!hasLock) {
-      throw new Error('获取写锁超时')
-    }
-
-    try {
-      const res = await withTimeout(
-        fetch(`${this.baseUrl}/conversations`, {
-          method: 'POST',
-          headers: this.getHeaders(),
-          body: JSON.stringify(conv),
-        }),
-        TIMEOUT_MS
-      )
-      if (!res.ok) throw new Error('API failed')
-
-      // 成功后写本地缓存
-      await this.localStorageProvider.saveConversation(conv)
-    }
-    catch (error) {
-      console.error('Failed to save to remote:', error)
-      notifyError('保存到远程失败，已降级到本地存储')
-      // 降级到本地
-      await this.localStorageProvider.saveConversation(conv)
-      throw error
-    }
-    finally {
-      lock.releaseLock()
-    }
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/conversations`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(conv),
+      }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
   }
 
-  // 删除操作：优先删远程，成功后删本地
   async deleteConversation(id: string): Promise<void> {
-    const lock = getTabLock()
-    const hasLock = await lock.acquireLock()
-    if (!hasLock) {
-      throw new Error('获取写锁超时')
-    }
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/conversations`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ id }),
+      }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
+  }
 
-    try {
-      const res = await withTimeout(
-        fetch(`${this.baseUrl}/conversations`, {
-          method: 'DELETE',
-          headers: this.getHeaders(),
-          body: JSON.stringify({ id }),
-        }),
-        TIMEOUT_MS
-      )
-      if (!res.ok) throw new Error('API failed')
+  async updateConversationAgentParams(convId: string, agentId: string, paramsJson: string): Promise<void> {
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/conversations/agent-params`, {
+        method: 'PATCH',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ convId, agentId, paramsJson }),
+      }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
+  }
 
-      // 成功后删本地
-      await this.localStorageProvider.deleteConversation(id)
-    }
-    catch (error) {
-      console.error('Failed to delete from remote:', error)
-      notifyError('删除远程数据失败，本地数据已保留')
-      throw error
-    }
-    finally {
-      lock.releaseLock()
-    }
+  async updateConversationBackendConvId(convId: string, agentId: string, backendConvId: string): Promise<void> {
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/conversations/backend-conv-id`, {
+        method: 'PATCH',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ convId, agentId, backendConvId }),
+      }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
   }
 
   async getMessages(conversationId: string): Promise<MessageRecord[]> {
-    try {
-      const res = await withTimeout(
-        fetch(`${this.baseUrl}/messages?conversation_id=${encodeURIComponent(conversationId)}`, { headers: this.getHeaders() }),
-        TIMEOUT_MS
-      )
-      if (!res.ok) throw new Error('API failed')
-      const data = await res.json()
-      if (!data.success) throw new Error(data.error)
-
-      // 更新 localStorage 缓存
-      for (const msg of data.data) {
-        await this.localStorageProvider.saveMessage(msg)
-      }
-
-      return data.data
-    }
-    catch (error) {
-      console.warn('Remote storage failed, falling back to localStorage:', error)
-      notifyWarning('远程存储不可用，使用本地数据')
-      return this.localStorageProvider.getMessages(conversationId)
-    }
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/messages?conversation_id=${encodeURIComponent(conversationId)}`, { headers: this.getHeaders() }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
+    const data = await res.json()
+    if (!data.success) { throw new Error(data.error) }
+    return data.data
   }
 
   async saveMessage(msg: MessageRecord): Promise<void> {
-    const lock = getTabLock()
-    const hasLock = await lock.acquireLock()
-    if (!hasLock) {
-      throw new Error('获取写锁超时')
-    }
-
-    try {
-      const res = await withTimeout(
-        fetch(`${this.baseUrl}/messages`, {
-          method: 'POST',
-          headers: this.getHeaders(),
-          body: JSON.stringify(msg),
-        }),
-        TIMEOUT_MS
-      )
-      if (!res.ok) throw new Error('API failed')
-
-      // 成功后写本地缓存
-      await this.localStorageProvider.saveMessage(msg)
-    }
-    catch (error) {
-      console.error('Failed to save to remote:', error)
-      notifyError('保存到远程失败，已降级到本地存储')
-      // 降级到本地
-      await this.localStorageProvider.saveMessage(msg)
-      throw error
-    }
-    finally {
-      lock.releaseLock()
-    }
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/messages`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(msg),
+      }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
   }
 
   async deleteMessages(conversationId: string): Promise<void> {
-    const lock = getTabLock()
-    const hasLock = await lock.acquireLock()
-    if (!hasLock) {
-      throw new Error('获取写锁超时')
-    }
-
-    try {
-      const res = await withTimeout(
-        fetch(`${this.baseUrl}/messages`, {
-          method: 'DELETE',
-          headers: this.getHeaders(),
-          body: JSON.stringify({ conversation_id: conversationId }),
-        }),
-        TIMEOUT_MS
-      )
-      if (!res.ok) throw new Error('API failed')
-
-      // 成功后删本地
-      await this.localStorageProvider.deleteMessages(conversationId)
-    }
-    catch (error) {
-      console.error('Failed to delete from remote:', error)
-      notifyError('删除远程数据失败，本地数据已保留')
-      throw error
-    }
-    finally {
-      lock.releaseLock()
-    }
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/messages`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ conversation_id: conversationId }),
+      }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
   }
 
   async deleteMessagesByIds(ids: string[]): Promise<void> {
-    const lock = getTabLock()
-    const hasLock = await lock.acquireLock()
-    if (!hasLock) {
-      throw new Error('获取写锁超时')
-    }
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/messages`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ ids }),
+      }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
+  }
 
-    try {
-      const res = await withTimeout(
-        fetch(`${this.baseUrl}/messages`, {
-          method: 'DELETE',
-          headers: this.getHeaders(),
-          body: JSON.stringify({ ids }),
-        }),
-        TIMEOUT_MS
-      )
-      if (!res.ok) throw new Error('API failed')
-
-      // 成功后删本地
-      await this.localStorageProvider.deleteMessagesByIds(ids)
-    }
-    catch (error) {
-      console.error('Failed to delete from remote:', error)
-      notifyError('删除远程数据失败，本地数据已保留')
-      throw error
-    }
-    finally {
-      lock.releaseLock()
-    }
+  async updateMessageFeedback(id: string, feedback: string): Promise<void> {
+    const res = await withTimeout(
+      fetch(`${this.baseUrl}/messages/feedback`, {
+        method: 'PATCH',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ id, feedback }),
+      }),
+      TIMEOUT_MS,
+    )
+    if (!res.ok) { throw new Error('API failed') }
   }
 }

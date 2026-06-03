@@ -935,6 +935,34 @@ if (activeAgent) {
 
 **测试**：`test-projects/public/embed-integration.html` 提供指令测试 UI（注册监听、模拟指令、日志显示、弹窗打开）。
 
+### 19.13 嵌入模式下宿主参数注入
+
+**需求**：宿主系统需要向嵌入弹窗提供参数值（如用户信息、会话 token 等）。
+
+**方案**：通过 `openChatConfig.getAgentParams` 回调注入，或注册全局桥接函数 `window.__getAgentConversationParams`。
+
+**调用时机**：切换智能体、切换会话、每次发送消息前。
+
+**回调参数**：
+```typescript
+{ agentId: string, agentName: string, backendType: string, paramKeys: string[] }
+```
+
+**两种集成方式**：
+- **固定参数值**（不需要访问框架状态）：直接在 `openChatConfig` 中定义 `getAgentParams` 回调，适用于所有工程类型
+- **动态参数值**（需要访问 Vue/React 状态）：在应用入口注册 `window.__getAgentConversationParams` 全局桥接函数，`openChatConfig` 中不写 `getAgentParams`
+
+**查找优先级**：`openChatConfig.getAgentParams`（优先） → `window.__getAgentConversationParams`（备选）。如果配置了 `getAgentParams`，则始终调用它；只有当 `getAgentParams` 为 `undefined` 时才调用 `__getAgentConversationParams`，两者不会同时调用。
+
+**时序问题**：不要在 `openChatConfig` 中写 `getAgentParams: window.__getAgentConversationParams`，因为此时 Vue 尚未 mount，求值结果为 `undefined`。直接定义函数则无此问题。
+
+**合并策略**：
+- 宿主返回的 key 覆盖表单值，用户可再次修改
+- 宿主未返回的 key 保持用户已填值
+- 调用失败或无回调则用表单现有值
+
+**测试**：`test-projects/public/embed-integration.html` 提供参数注入测试 UI。
+
 ---
 
 ## 20. 认证系统与会话管理
@@ -1229,7 +1257,7 @@ export async function GET(
 
 **现象**：管理面板创建的 API Key 无法通过 middleware 验证，始终返回 401。
 
-**根因**：旧 `embed_tokens` 表迁移到 `api_keys` 时，key 以**明文**存储而非 bcrypt hash。middleware 用 `bcrypt.compare(plainKey, hash)` 验证，明文无法匹配。
+**根因**：旧 `embed_tokens` 表迁移到 `api_keys` 时，key 以**明文**存储而非 bcrypt hash。middleware 用 `bcrypt.compare(plainKey, hash)` 验证，明文无法匹配。（注：`embed_tokens` 表及相关迁移代码已移除）
 
 **排查**：
 

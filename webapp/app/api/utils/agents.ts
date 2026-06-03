@@ -14,7 +14,35 @@ async function loadAgents(): Promise<AgentConfig[]> {
     const db = getDatabaseProvider()
     const records = await db.getAgents()
     if (records.length > 0) {
-      _cachedAgents = records.filter(r => r.is_enabled).map(dbToAgentConfig)
+      const configs = records.filter(r => r.is_enabled).map(dbToAgentConfig)
+
+      // Batch-resolve model_id: populate model, api_key, api_url from model/provider
+      const modelIds = configs.map(a => a.model_id).filter(Boolean) as string[]
+      if (modelIds.length > 0) {
+        const allModels = await db.getModels()
+        const modelMap = new Map(allModels.map(m => [m.id, m]))
+        const allProviders = await db.getModelProviders()
+        const providerMap = new Map(allProviders.map(p => [p.id, p]))
+
+        for (const agent of configs) {
+          if (!agent.model_id) { continue }
+          const model = modelMap.get(agent.model_id)
+          if (!model || !model.is_enabled) { continue }
+          const provider = providerMap.get(model.provider_id)
+          if (!provider || !provider.is_enabled) { continue }
+          agent.model = model.model_name
+          // direct_llm 类型始终用 Provider 凭证覆盖，避免旧值残留
+          if (agent.backend_type === 'direct_llm') {
+            agent.api_key = provider.api_key
+            agent.api_url = provider.api_base_url
+          } else {
+            if (!agent.api_key) { agent.api_key = provider.api_key }
+            if (!agent.api_url) { agent.api_url = provider.api_base_url }
+          }
+        }
+      }
+
+      _cachedAgents = configs
       return _cachedAgents!
     }
   }
@@ -50,8 +78,8 @@ export async function getAgentById(id: string): Promise<AgentConfig | undefined>
   return (await getAllAgents()).find(a => a.id === id)
 }
 
-export async function getAgentInfoList(): Promise<Omit<AgentConfig, 'api_key' | 'api_url' | 'model' | 'extra_config'>[]> {
-  return (await getAllAgents()).map(({ api_key: _, api_url: __, model: ___, extra_config: ____, ...rest }) => rest)
+export async function getAgentInfoList(): Promise<Omit<AgentConfig, 'api_key' | 'api_url' | 'model' | 'model_id' | 'extra_config'>[]> {
+  return (await getAllAgents()).map(({ api_key: _, api_url: __, model: ___, model_id: ____, extra_config: _____, ...rest }) => rest)
 }
 
 export function reloadConfig() {

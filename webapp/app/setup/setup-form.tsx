@@ -67,7 +67,7 @@ export default function SetupForm() {
         setCountdown((prev) => {
           if (prev <= 1) {
             if (countdownTimer.current)
-              clearInterval(countdownTimer.current)
+            { clearInterval(countdownTimer.current) }
             router.push('/login')
             return 0
           }

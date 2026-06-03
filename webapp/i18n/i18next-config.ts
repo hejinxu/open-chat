@@ -23,7 +23,7 @@ import type { Locale } from '.'
 import { i18n as i18nConfig } from '.'
 
 function getInitialLocale(): Locale {
-  if (typeof document === 'undefined') return i18nConfig.defaultLocale
+  if (typeof document === 'undefined') { return i18nConfig.defaultLocale }
   const match = document.cookie.match(/(?:^|;\s*)locale=([^;]*)/)
   const cookieLocale = match?.[1] as Locale | undefined
   if (cookieLocale && i18nConfig.locales.includes(cookieLocale)) {

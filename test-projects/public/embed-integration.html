@@ -104,6 +104,12 @@
       font-family: 'Fira Code', 'Consolas', monospace;
       max-height: 200px; overflow-y: auto; white-space: pre-wrap;
     }
+    #param-log {
+      background: #1e1e2e; color: #a6e3a1; padding: 12px 16px;
+      border-radius: 6px; font-size: 12px; line-height: 1.6;
+      font-family: 'Fira Code', 'Consolas', monospace;
+      max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
@@ -189,6 +195,20 @@
       <div id="command-log">// 等待注册指令监听...</div>
     </div>
 
+    <div class="config-card">
+      <h2>参数注入测试</h2>
+      <p>测试宿主系统向嵌入弹窗注入智能体参数值：</p>
+      <ol>
+        <li>上方配置中已设置 <code>getAgentParams</code> 回调，每次切换智能体或发送消息时自动调用</li>
+        <li>宿主返回 <code>user_name</code> 和 <code>current_time</code> 两个参数值</li>
+        <li>在对话窗口的参数表单中可查看注入的值</li>
+      </ol>
+      <div class="cmd-test-btns">
+        <button id="clear-param-log">清除日志</button>
+      </div>
+      <div id="param-log">// 参数注入日志</div>
+    </div>
+
     <div class="content-section">
       <h2>占位内容</h2>
       <p>这是一段用于测试页面滚动的占位文本。嵌入弹窗打开后，页面仍可正常滚动。</p>
@@ -215,8 +235,8 @@
       windowTitle: 'AI Assistant',
       theme: 'tech-blue',
       windowSize: {
-        width: 420,
-        height: 640,
+        width: 480,
+        height: 720,
         minWidth: 320,
         minHeight: 400,
         maxWidth: 800,
@@ -228,7 +248,17 @@
         iconColor: '#ffffff',
         buttonHoverBg: 'rgba(255,255,255,0.15)',
       },
-      bubblePosition: { bottom: 24, right: 24 },
+      bubblePosition: { bottom: 50, right: 50 },
+      getAgentParams: async function(ctx) {
+        // 模拟宿主系统提供参数值
+        paramLog(ctx)
+        var result = {
+          user_name: '测试用户1234',
+          current_time: new Date().toLocaleString(),
+        }
+        paramLogReturn(result)
+        return result
+      },
     }
   </script>
   <script src="http://localhost:3000/chat/embed.min.js" defer></script>
@@ -236,7 +266,24 @@
   <script>
     // ======= 指令测试逻辑 =======
     var logEl = document.getElementById('command-log')
+    var paramLogEl = document.getElementById('param-log')
     var listenerRegistered = false
+
+    function paramLog(ctx) {
+      var time = new Date().toLocaleTimeString()
+      paramLogEl.textContent += '\n[' + time + '] agentId: ' + ctx.agentId + ', backendType: ' + ctx.backendType + ', paramKeys: [' + ctx.paramKeys.join(', ') + ']'
+      paramLogEl.scrollTop = paramLogEl.scrollHeight
+    }
+
+    function paramLogReturn(result) {
+      var time = new Date().toLocaleTimeString()
+      paramLogEl.textContent += '\n[' + time + '] 返回值: ' + JSON.stringify(result)
+      paramLogEl.scrollTop = paramLogEl.scrollHeight
+    }
+
+    document.getElementById('clear-param-log').addEventListener('click', function () {
+      paramLogEl.textContent = '// 参数注入日志'
+    })
 
     function log(msg) {
       var time = new Date().toLocaleTimeString()

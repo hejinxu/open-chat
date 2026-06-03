@@ -10,12 +10,12 @@ export interface SendMessageParams {
 
 export interface ChatAdapter {
   type: string
-  sendMessage(params: SendMessageParams): Promise<any>
-  stopMessage(taskId: string, user: string): Promise<void>
-  getConversations(user: string): Promise<any>
-  getMessages(conversationId: string, user: string): Promise<any>
-  getParameters(user: string): Promise<any>
-  renameConversation(id: string, name: string, user: string, autoGenerate?: boolean): Promise<any>
-  messageFeedback(messageId: string, rating: string, user: string): Promise<any>
-  fileUpload(formData: FormData): Promise<any>
+  sendMessage: (params: SendMessageParams) => Promise<any>
+  stopMessage: (taskId: string, user: string) => Promise<void>
+  getConversations: (user: string) => Promise<any>
+  getMessages: (conversationId: string, user: string) => Promise<any>
+  getParameters: (user: string) => Promise<any>
+  renameConversation: (id: string, name: string, user: string, autoGenerate?: boolean) => Promise<any>
+  messageFeedback: (messageId: string, rating: string, user: string) => Promise<any>
+  fileUpload: (formData: FormData) => Promise<any>
 }

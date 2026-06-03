@@ -49,7 +49,7 @@ Pre-commit hook 运行 `pnpm lint-staged`（ESLint on staged `.ts`/`.tsx` files�
 
 ### Multi-Agent System
 - **适配器模式**: `lib/adapters/` 定义 `ChatAdapter` 接口，不同后端类型有独立适配器实现
-- **智能体配置**: `webapp/config/agents.config.json`（gitignored）配置多个智能体的 API key、URL、后端类型
+- **智能体配置**: 智能体存储在 SQLite 数据库中，通过 Admin UI 管理（CRUD），支持动态增删改查无需重启
 - **配置读取**: `app/api/utils/agents.ts` 提供 `getAllAgents()`、`getDefaultAgent()`、`getAgentById()` 等函数
 - **API 路由**: 所有 API 路由通过 `getAdapterForRequest()` 获取适配器，根据 `x-agent-id` header 选择智能体
 - **前端选择器**: `app/components/chat/agent-selector.tsx` 在输入框内提供智能体选择下拉菜单
@@ -72,17 +72,11 @@ interface ConversationRecord {
 }
 ```
 
-**localStorage 布局：**
-| Key | 结构 | 说明 |
-|-----|------|------|
-| `open_chat_conversations` | `ConversationRecord[]` | 会话 + 参数 + backend convId 统一在一处 |
-| `open_chat_messages` | `MessageRecord[]` | 消息独立存储，通过 conversation_id 关联 |
-
 **agentKey 规则：永远使用实际智能体 ID**，不使用 `'__default__'` 魔术字符串。`agentKey = selectedAgentId || defaultAgentId`。切换默认智能体时 key 自然变化，旧参数不会泄漏。
 
 **消息保存中的 agent_id**：始终使用 `agentKey`（而非 `agentId`），确保未显式选择智能体时也能正确绑定到默认智能体。涉及 `saveUserMessage`、`sendData`、`responseItem` 三处。
 
-**参数同步不变式：** `表单值 == agentInputsCacheRef[agentKey] == localStorage conv.agents[agentKey].params`，三者永远相等。
+**参数同步不变式：** `表单值 == agentInputsCacheRef[agentKey]`，两者永远相等。参数持久化到远程存储（SQLite），无 localStorage 缓存。
 
 **参数定义懒加载：** 使用到哪个 Agent 才 fetch 其 `prompt_variables`，取后缓存到 `promptVariablesCacheRef`，再次使用时从缓存同步读取。
 
@@ -103,7 +97,7 @@ interface ConversationRecord {
 - **类型感知**：`agentTypeMapRef`（`Record<string, string>`）在 init 时填充每个 Agent 的 `backend_type`，切换智能体 effect 中检查 `=== 'direct_llm'` 做分支
 - **`isDirectLLM` 状态**：控制 `hasSetInputs`（直接返回 true，跳过欢迎页）、`ConfigSence`（强制 `isPublicVersion = false`，不显示提示词模板面板）
 - **会话上下文**：直连 LLM API 无状态，每次请求需携带完整对话历史。`handleSend` 从 `chatList` 构建 OpenAI 格式 `messages` 数组（过滤 `isOpeningStatement`，user/assistant 交替）→ `SendMessageParams.messages` → `route.ts` 转发 → `LLMAdapter.sendMessage()` 拼接历史 + 当前 query 后调用 API
-- **配置示例**：config 中需含 `model` 字段指定模型名
+- **模型关联**：通过 `model_id` 外键严格关联模型库，`loadAgents()` 解析 `model_id` → 填充 `model`（模型名）、`api_key`、`api_url`（Agent 自身字段优先于 Provider 默认值）
 
 **会话切换加载状态：**
 - **同步清空**：`handleConversationIdChange` 中先执行 `setChatList([])` + `setIsChatListLoading(true)`，再 `setCurrConversationId`，React 18 批处理合并为单帧
@@ -119,29 +113,27 @@ interface ConversationRecord {
 - `lib/services/conversation.ts` — `ConversationService`（对话 CRUD）
 - `lib/services/message.ts` — `MessageService`（消息保存/删除，区分用户消息和 AI 回复；`deleteMessagesByIds` 按 ID 精确删除）
 
-#### 存储层（多后端支持）
+#### 存储层（远程存储优先）
 - **StorageProvider 接口**: `lib/storage/types.ts` 定义统一的存储接口
-- **LocalStorageProvider**: `lib/storage/local-storage.ts` 实现 localStorage 存储（默认）
-- **RemoteStorageProvider**: `lib/storage/remote-storage.ts` 实现 HTTP API 存储，通过 `setStorageNotifyCallbacks` 注入通知（避免依赖客户端 Toast）
-- **全局写锁**: `lib/storage/tab-lock.ts` 防止多标签页并发写入，5s 锁超时 + 10s 最大等待
+- **RemoteStorageProvider**: `lib/storage/remote-storage.ts` 实现 HTTP API 存储（客户端使用）
 - **存储工厂**: `lib/storage/factory.ts` 根据 `typeof window` 区分服务端（直接用 DB）/ 客户端（HTTP API）
 - **数据库适配器**: `lib/db/sqlite.ts` 使用 `sql.js`（纯 JS WebAssembly，无需原生编译）；`lib/db/postgres.ts` 预留
-- **API 路由**: `app/api/storage/` 提供存储 API（conversations, messages, merge）
+- **API 路由**: `app/api/storage/` 提供存储 API（conversations, messages, feedback, agent-params, backend-conv-id）
 
-**存储后端切换**: 通过 `NEXT_PUBLIC_STORAGE_BACKEND` 环境变量选择（local/sqlite/postgres）。SQLite 使用时需在 `next.config.js` 中配置 `serverExternalPackages: ['sql.js']` 避免 ESM/CJS 互操作冲突。
+**存储后端切换**: 通过 `NEXT_PUBLIC_STORAGE_BACKEND` 环境变量选择（sqlite/postgres）。SQLite 使用时需在 `next.config.js` 中配置 `serverExternalPackages: ['sql.js']` 避免 ESM/CJS 互操作冲突。
 
-**数据流原则**: 以远程存储为主，本地存储只是远程存储失效时的备份来源。新增、编辑、删除、查询都是优先操作远程存储。
+**数据流原则**: 客户端只使用远程存储，无 localStorage 缓存。服务端不可用时页面功能受限。
 
 **服务端 vs 客户端路径**:
 ```
-客户端: Component → ConversationService → RemoteStorageProvider → HTTP → /api/storage/xxx → SqliteProvider → SQLite
-服务端: API Route → ConversationService → SqliteProvider → SQLite
+客户端: Component → RemoteStorageProvider → HTTP → /api/storage/xxx → SqliteProvider → SQLite
+服务端: API Route → SqliteProvider → SQLite
 ```
 
-**读操作流程**: ref 缓存 → 远程存储（10s 超时） → localStorage 降级
-**写操作流程**: ref 缓存 → 全局写锁 → 优先远程存储 → 成功后写 localStorage 缓存
-**删除操作流程**: 全局写锁 → 优先删除远程 → 成功后删除 localStorage
-**初始化流程**: 优先远程获取 → 失败降级到 localStorage
+**读操作流程**: ref 缓存 → 远程存储（10s 超时，超时直接 throw）
+**写操作流程**: ref 缓存 → 远程存储（关键路径 throw，非关键路径静默失败）
+**删除操作流程**: 远程删除（失败 throw）
+**初始化流程**: 远程获取（失败 throw，页面不可用）
 
 **会话 ID 隔离**: 同一本地会话中的同一智能体共享 `backend_conversation_id`，不同本地会话中的同一智能体各自独立。
 
@@ -162,7 +154,7 @@ interface ConversationRecord {
   → 适配器调用对应的后端 API
   → 返回 SSE 流
   → 前端统一处理响应
-  → 保存消息到本地存储（携带 agent_id）
+  → 保存消息到远程存储（携带 agent_id）
   → 更新界面显示
 ```
 
@@ -234,7 +226,7 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 - **Theme colors**: Use semantic CSS custom property classes (`text-content-accent`, `border-border`, `hover:bg-surface-hover`) exclusively. Never hardcode theme-specific colors — this includes Tailwind literals (`text-indigo-600`, `bg-red-50`, `border-indigo-100`), SVG fills (`fill="#444CE7"`), and `dark:` variant overrides. When a component needs a color not covered by existing variables: (1) add the CSS variable to all three theme files (`light.css`, `dark.css`, `tech-blue.css`), (2) register it in `tailwind.config.js` under the appropriate semantic group, (3) use the generated class in components. Hover/danger/interactive states each need their own variable — avoid piggybacking on existing variables that happen to share a value.
 - **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom. Scrollbar at screen edge via full-width scrollable container. Auto-scroll: `ResizeObserver` on inner content wrapper (no overflow) triggers `scrollTop = scrollHeight` on outer scroll container — handles message loading, streaming, async markdown rendering.
 - **Build**: `next.config.js` disables ESLint and TypeScript errors during build.
-- **Multi-Agent**: 后端 API 通过 `x-agent-id` header 选择智能体；前端 `AgentSelector` 组件在输入框内与语音按钮同排；`agents.config.json` 包含 API key 不可提交 git。
+- **Multi-Agent**: 后端 API 通过 `x-agent-id` header 选择智能体；前端 `AgentSelector` 组件在输入框内与语音按钮同排；
 - **After coding**: 每次编写完代码后，运行 `pnpm lint` 和 `pnpm typecheck` 检查，主动询问用户是否需要更新 AGENTS.md。
 
 ### basePath 路由规则
@@ -276,43 +268,22 @@ NEXT_PUBLIC_API_URL=https://api.dify.ai/v1
 # 项目前缀路径（留空则无前缀，例如 /chat）
 NEXT_PUBLIC_BASE_PATH=
 
-# 存储后端：local | sqlite | postgres
-NEXT_PUBLIC_STORAGE_BACKEND=local
+# 存储后端：sqlite | postgres
+NEXT_PUBLIC_STORAGE_BACKEND=sqlite
 # SQLite 数据库路径（仅服务端，相对于 webapp 目录或绝对路径）
 SQLITE_DB_PATH=data/openchat.db
 # PostgreSQL 连接字符串（仅服务端，后续实现）
 # POSTGRES_URL=postgresql://user:password@localhost:5432/openchat
 ```
 
-### webapp/config/agents.config.json（gitignored）
-```json
-{
-  "agents": [
-    {
-      "id": "default",
-      "name": "Dify AI 助手",
-      "icon": "🤖",
-      "backend_type": "dify",
-      "api_key": "app-xxxxx",
-      "api_url": "https://api.dify.ai/v1",
-      "is_default": true,
-      "is_enabled": true
-    },
-    {
-      "id": "siliconflow-deepseek-v4-flash",
-      "name": "硅基流动 · DeepSeek V4 Flash",
-      "icon": "💧",
-      "backend_type": "direct_llm",
-      "api_key": "sk-xxxxx",
-      "api_url": "https://api.siliconflow.cn/v1",
-      "model": "deepseek-ai/DeepSeek-V4-Flash",
-      "is_default": false,
-      "is_enabled": true
-    }
-  ]
-}
-```
-模板文件：`webapp/config/agents.config.json.example`（已提交 git）
+### Model Management
+- **模型提供商**: `model_providers` 表存储 AI 提供商配置（API key、端点），通过 Admin UI 管理
+- **模型库**: `models` 表存储可用模型（关联提供商），支持能力标签、定价、默认参数等完整配置
+- **Agent 关联**: `direct_llm` 类型 Agent 通过 `model_id` 外键严格关联模型库，不允许手动输入
+- **凭证解析**: `app/api/utils/agents.ts` 的 `loadAgents()` 在加载时自动解析 `model_id` → 填充 `model`、`api_key`、`api_url`（`direct_llm` 类型始终用 Provider 凭证覆盖，避免旧值残留；其他类型 Agent 自身字段优先于 Provider 默认值）
+- **Admin UI**: 后台管理新增"模型提供商"和"模型库"两个 tab
+- **预置数据**: 首次启动时自动插入 13 个供应商 + 45 个模型（OpenAI、Anthropic、DeepSeek、硅基流动、Google、阿里云百炼、智谱、Kimi、MiniMax、零一万物、百川、小米 MiMo、腾讯混元），仅在表为空时插入
+- **DB 迁移**: 旧 `agents.model` 文本字段已移除，迁移时自动匹配 `model_name` → `model_id`；`embed_tokens` 表及相关代码已清理
 
 ### ws-server
 ```
@@ -348,16 +319,18 @@ embed.min.js (外层, ~450行 vanilla JS)
 | `webapp/app/components/base/streamdown-markdown.tsx` | Markdown 渲染（含指令注释兜底清理） |
 | `webapp/lib/command-parser.ts` | 指令解析工具（`extractCommands` + `stripCommands`） |
 | `webapp/app/api/utils/common.ts` | `getAdapterForRequest()` — 适配器获取 + 认证校验 |
-| `webapp/lib/db/sqlite.ts` | `app_integrations` + `api_keys` 表（替代旧 `embed_tokens`） |
+| `webapp/lib/db/sqlite.ts` | `app_integrations` + `api_keys` 表 |
 | `webapp/public/images/embed-icons/` | 14 个内置 SVG 图标（robot/bot/chat/sparkle/headset/message/brain/wand/rocket/puzzle/eye/code/gear） |
 
 **认证流程**: 嵌入请求携带 `x-api-key: sk-xxx` header → 中间件验证 API Key → 查找 `api_keys` 表 → 校验 `is_enabled` + `expires_at` + `allowed_agent_ids`。详见 `docs/开发指南/认证系统.md`。
 
 **嵌入测试**: `test-projects/public/embed-integration.html` — 模拟真实网站，配置 `window.openChatConfig` 后引入 `embed.min.js`。
 
-**配置接口**: `window.openChatConfig = { baseUrl, apiKey, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, bubblePosition?, onCommand?, inputs? }`
+**配置接口**: `window.openChatConfig = { baseUrl, apiKey, agentId?, icon?, iconUrl?, windowTitle?, theme?, locale?, windowSize?, headerStyle?, bubbleStyle?, bubblePosition?, onCommand?, getAgentParams?, inputs? }`
 
 **AI 指令**: AI 回复中 `<!-- COMMAND:{...} -->` 注释格式的操作指令，`onCompleted` 中提取并剥离后存储；嵌入模式通过 postMessage 发送给宿主（`onCommand` 回调优先，否则触发 `com.openchat.embed` DOM 事件）。
+
+**参数注入**: `getAgentParams` 回调在切换智能体、切换会话、每次发送前调用，宿主返回参数值与表单合并。Vue/React SPA 可注册 `window.__getAgentConversationParams` 全局桥接函数。
 
 **相关文档**:
 - `docs/开发指南/嵌入式对话组件.md` — 技术方案全文

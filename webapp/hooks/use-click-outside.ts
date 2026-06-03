@@ -12,7 +12,7 @@ export function useClickOutside<T extends HTMLElement>(
   onClose: () => void,
 ): void {
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) { return }
 
     const handleClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {

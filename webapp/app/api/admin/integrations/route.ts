@@ -6,7 +6,7 @@ import { requireAdmin } from '@/app/api/utils/auth-guard'
 
 export async function GET(request: NextRequest) {
   const authError = requireAdmin(request)
-  if (authError) return authError
+  if (authError) { return authError }
 
   try {
     const db = getDatabaseProvider()
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const authError = requireAdmin(request)
-  if (authError) return authError
+  if (authError) { return authError }
 
   try {
     const body = await request.json()
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   const authError = requireAdmin(request)
-  if (authError) return authError
+  if (authError) { return authError }
 
   try {
     const body = await request.json()
@@ -88,7 +88,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const authError = requireAdmin(request)
-  if (authError) return authError
+  if (authError) { return authError }
 
   try {
     const body = await request.json()

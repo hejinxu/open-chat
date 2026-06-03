@@ -10,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ integrationId: string }> },
 ) {
   const authError = requireAdmin(request)
-  if (authError) return authError
+  if (authError) { return authError }
 
   try {
     const { integrationId } = await params
@@ -40,7 +40,7 @@ export async function POST(
   { params }: { params: Promise<{ integrationId: string }> },
 ) {
   const authError = requireAdmin(request)
-  if (authError) return authError
+  if (authError) { return authError }
 
   try {
     const { integrationId } = await params
@@ -94,7 +94,7 @@ export async function DELETE(
   { params: _params }: { params: Promise<{ integrationId: string }> },
 ) {
   const authError = requireAdmin(request)
-  if (authError) return authError
+  if (authError) { return authError }
 
   try {
     const body = await request.json()
