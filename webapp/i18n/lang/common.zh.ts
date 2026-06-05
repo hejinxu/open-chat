@@ -145,6 +145,15 @@ const translation = {
     pricingOutput: '输出价格 ($/1M tokens)',
     defaultParams: '默认参数',
     selectModel: '选择模型',
+    // Captcha
+    captcha: '验证码',
+    refreshCaptcha: '点击刷新验证码',
+    invalidCaptcha: '验证码错误',
+  },
+  error: {
+    noAgentsConfigured: '未配置智能体，请在后台管理中添加智能体。',
+    agentNotFound: '智能体不存在。',
+    unauthorized: '未授权，请重新登录。',
   },
 }
 

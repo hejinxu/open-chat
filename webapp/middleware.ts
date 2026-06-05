@@ -17,6 +17,7 @@ const PUBLIC_PATHS = [
   '/api/auth/setup',
   '/api/auth/exchange',
   '/api/auth/verify-token',
+  '/api/auth/captcha',
   '/login',
   '/embed',
   '/_next',
@@ -41,11 +42,6 @@ export async function middleware(request: NextRequest) {
 
   // Skip public paths
   if (isPublicPath(pathname)) {
-    return NextResponse.next()
-  }
-
-  // Auth disabled — pass through
-  if (process.env.AUTH_ENABLED !== 'true') {
     return NextResponse.next()
   }
 

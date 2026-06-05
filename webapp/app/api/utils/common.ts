@@ -1,18 +1,22 @@
 import type { NextRequest } from 'next/server'
 import { v4 } from 'uuid'
-import { APP_INFO, APP_ID } from '@/config'
+import { APP_INFO } from '@/config'
 import { getAgentById, getDefaultAgent } from './agents'
 import { createAdapter } from '@/lib/adapters'
 import type { ChatAdapter } from '@/lib/adapters/types'
-
-const userPrefix = `user_${APP_ID}:`
+import { AgentNotFoundError, NoAgentsConfiguredError, UnauthorizedError } from '@/lib/errors'
 
 export const getInfo = (request: NextRequest) => {
+  const userId = request.headers.get('x-auth-user-id')
+  const integrationId = request.headers.get('x-auth-integration-id')
   const sessionId = request.cookies.get('session_id')?.value || v4()
-  const user = userPrefix + sessionId
+
+  // Dify user 优先级：登录用户 > API Key 集成 > session_id
+  const difyUser = userId || integrationId || sessionId
+
   return {
     sessionId,
-    user,
+    user: difyUser,
   }
 }
 
@@ -30,15 +34,9 @@ export function getAgentIdFromRequest(request: NextRequest): string | null {
 
 /**
  * Check if the request is authenticated via middleware-injected headers.
- * When AUTH_ENABLED=false, the middleware passes all requests through,
- * so this check is a no-op (returns true).
- * When AUTH_ENABLED=true, the middleware injects x-auth-user-id or x-auth-integration-id.
+ * The middleware always validates JWT or API Key and injects x-auth-user-id or x-auth-integration-id.
  */
 export function isRequestAuthenticated(request: NextRequest): boolean {
-  if (process.env.AUTH_ENABLED !== 'true') {
-    return true
-  }
-
   const userId = request.headers.get('x-auth-user-id')
   const integrationId = request.headers.get('x-auth-integration-id')
   return !!(userId || integrationId)
@@ -46,11 +44,15 @@ export function isRequestAuthenticated(request: NextRequest): boolean {
 
 export async function getAdapterForRequest(request: NextRequest): Promise<ChatAdapter> {
   if (!isRequestAuthenticated(request)) {
-    throw new Error('Unauthorized')
+    throw new UnauthorizedError()
   }
 
   const agentId = getAgentIdFromRequest(request)
   const agent = agentId ? await getAgentById(agentId) : await getDefaultAgent()
-  if (!agent) { throw new Error(`Agent not found: ${agentId}`) }
+  if (!agent) {
+    throw agentId
+      ? new AgentNotFoundError(agentId)
+      : new NoAgentsConfiguredError()
+  }
   return createAdapter(agent)
 }

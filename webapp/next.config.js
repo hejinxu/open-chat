@@ -7,10 +7,7 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
   outputFileTracingRoot: path.join(__dirname, '../'),
-  serverExternalPackages: ['sql.js'],
-  experimental: {
-    nodeMiddleware: true,
-  },
+  serverExternalPackages: ['sql.js', 'svg-captcha'],
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -19,26 +16,12 @@ const nextConfig = {
   },
   output: 'standalone',
   transpilePackages: ['langium', 'vscode-jsonrpc', '@mermaid-js/parser'],
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        path: false,
-        crypto: false,
-      }
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        'vscode-languageserver-types': false,
-        'vscode-languageserver': false,
-        'vscode-uri': false,
-      }
-    }
-    config.stats = config.stats || {}
-    config.stats.warningsFilter = [
-      /node_modules\/langium/,
-    ]
-    return config
+  turbopack: {
+    resolveAlias: {
+      'vscode-languageserver-types': '',
+      'vscode-languageserver': '',
+      'vscode-uri': '',
+    },
   },
 }
 

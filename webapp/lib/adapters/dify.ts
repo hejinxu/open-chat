@@ -1,6 +1,13 @@
 import { ChatClient } from 'dify-client'
 import type { ChatAdapter, SendMessageParams } from './types'
 
+export class ConversationNotFoundError extends Error {
+  constructor() {
+    super('Conversation not found on backend')
+    this.name = 'ConversationNotFoundError'
+  }
+}
+
 export class DifyAdapter implements ChatAdapter {
   type = 'dify'
   private client: ChatClient
@@ -12,14 +19,28 @@ export class DifyAdapter implements ChatAdapter {
   async sendMessage(params: SendMessageParams) {
     const { inputs, query, user, conversation_id, files, response_mode } = params
     const isStreaming = (response_mode || 'streaming') === 'streaming'
-    const res = await this.client.createChatMessage(inputs, query, user, isStreaming, conversation_id, files)
-    // dify-client returns Axios response; for streaming, .data is a Node.js Readable stream
-    if (isStreaming) {
-      return new Response(res.data as any, {
-        headers: { 'Content-Type': 'text/event-stream' },
-      })
+    try {
+      const res = await this.client.createChatMessage(inputs, query, user, isStreaming, conversation_id, files)
+      // dify-client returns Axios response; for streaming, .data is a Node.js Readable stream
+      if (isStreaming) {
+        return new Response(res.data as any, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      }
+      return res.data
     }
-    return res.data
+    catch (error: any) {
+      // Dify returns 404 with code "not_found" when conversation_id does not exist on backend
+      // Only retry when conversation_id was provided and the error is specifically about conversation not found
+      const isConversationNotFound = error.response?.status === 404
+        && conversation_id
+        && error.response?.data?.code === 'not_found'
+        && error.response?.data?.message?.includes('Conversation Not Exists')
+      if (isConversationNotFound) {
+        throw new ConversationNotFoundError()
+      }
+      throw error
+    }
   }
 
   async stopMessage(taskId: string, user: string) {

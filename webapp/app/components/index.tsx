@@ -20,7 +20,7 @@ import Loading from '@/app/components/base/loading'
 import { replaceVarWithValues, userInputsFormToPromptVariables } from '@/utils/prompt'
 import { BASE_PATH } from '@/config'
 import AppUnavailable from '@/app/components/app-unavailable'
-import { API_KEY, APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/config'
+import { APP_INFO, isShowPrompt, promptTemplate } from '@/config'
 import type { Annotation as AnnotationType } from '@/types/log'
 import { addFileInfos, sortAgentSorts } from '@/utils/tools'
 import { getStorageProvider } from '@/lib/storage'
@@ -39,7 +39,6 @@ const Main: FC<IMainProps> = (props) => {
   const { t } = useTranslation()
   const media = useBreakpoints()
   const isMobile = media === MediaType.mobile
-  const hasSetAppConfig = APP_ID && API_KEY
 
   const isEmbed = !!(props?.params?.isEmbed)
   const apiKey = props?.params?.apiKey || ''
@@ -58,6 +57,7 @@ const Main: FC<IMainProps> = (props) => {
   const [isDirectLLM, setIsDirectLLM] = useState<boolean>(false)
   const [isChatListLoading, setIsChatListLoading] = useState<boolean>(false)
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<string | null>(null)
+  const [deleteConversationConfirmTarget, setDeleteConversationConfirmTarget] = useState<string | null>(null)
   const agentInputsCacheRef = useRef<Record<string, Record<string, any>>>({})
   const skipChatListFetchRef = useRef(false)
   const chatListFetchIdRef = useRef(0)
@@ -405,12 +405,20 @@ const Main: FC<IMainProps> = (props) => {
   useEffect(handleConversationSwitch, [currConversationId, inited])
 
   const handleDeleteConversation = async (id: string) => {
+    setDeleteConversationConfirmTarget(id)
+  }
+
+  const handleDeleteConversationConfirm = async () => {
+    if (!deleteConversationConfirmTarget) { return }
+    const id = deleteConversationConfirmTarget
+    setDeleteConversationConfirmTarget(null)
+
     await getConversationService().deleteConversation(id)
     const { data: allConversations } = await fetchConversations()
     if (currConversationId === id) {
       setConversationList(allConversations as any)
       stopReadAloud()
-      setCurrConversationId('-1', APP_ID)
+      setCurrConversationId('-1')
       setConversationIdChangeBecauseOfNew(true)
       hideSidebar()
     }
@@ -432,7 +440,7 @@ const Main: FC<IMainProps> = (props) => {
       setIsChatListLoading(true)
     }
     // trigger handleConversationSwitch
-    setCurrConversationId(id, APP_ID)
+    setCurrConversationId(id)
     hideSidebar()
   }
 
@@ -478,10 +486,6 @@ const Main: FC<IMainProps> = (props) => {
 
   // init
   useEffect(() => {
-    if (!hasSetAppConfig) {
-      setAppUnavailable(true)
-      return
-    }
     (async () => {
       try {
         const embedHeaders = apiKey ? { 'x-api-key': apiKey } : undefined
@@ -503,7 +507,7 @@ const Main: FC<IMainProps> = (props) => {
           throw new Error(error)
           return
         }
-        const _conversationId = getConversationIdFromStorage(APP_ID)
+        const _conversationId = getConversationIdFromStorage() || ''
         const currentConversation = conversations.find(item => item.id === _conversationId)
         const isNotNewConversation = !!currentConversation
 
@@ -571,7 +575,7 @@ const Main: FC<IMainProps> = (props) => {
           if (defaultAgent) {
             syncAndCleanParams(_conversationId, defaultAgent.id, prompt_variables)
           }
-          setCurrConversationId(_conversationId, APP_ID, false)
+          setCurrConversationId(_conversationId, false)
         }
 
         setInited(true)
@@ -965,9 +969,16 @@ const Main: FC<IMainProps> = (props) => {
           questionItem,
         })
       },
-      async onCompleted(hasError?: boolean, errorMessage?: string) {
+      async onCompleted(hasError?: boolean, errorMessage?: string, errorCode?: string) {
         if (hasError) {
-          const errorContent = `⚠ ${errorMessage || 'Request failed'}`
+          // 根据错误码翻译错误消息
+          const errorCodeMap: Record<string, string> = {
+            NO_AGENTS_CONFIGURED: t('common.error.noAgentsConfigured'),
+            AGENT_NOT_FOUND: t('common.error.agentNotFound'),
+            UNAUTHORIZED: t('common.error.unauthorized'),
+          }
+          const translatedError = errorCode ? (errorCodeMap[errorCode] || errorMessage) : errorMessage
+          const errorContent = `⚠ ${translatedError || 'Request failed'}`
           responseItem.content = errorContent
           setChatList(produce(getChatList(), (draft) => {
             const idx = draft.findIndex(item => item.id === placeholderAnswerId)
@@ -1028,7 +1039,7 @@ const Main: FC<IMainProps> = (props) => {
         setChatNotStarted()
         if (localConvId) {
           skipChatListFetchRef.current = true
-          setCurrConversationId(localConvId, APP_ID, true)
+          setCurrConversationId(localConvId, true)
         }
         setRespondingFalse()
       },
@@ -1264,7 +1275,7 @@ const Main: FC<IMainProps> = (props) => {
   }
 
   const renderSidebar = () => {
-    if (!APP_ID || !APP_INFO) { return null }
+    if (!APP_INFO) { return null }
     return (
       <Sidebar
         list={conversationList}
@@ -1280,9 +1291,9 @@ const Main: FC<IMainProps> = (props) => {
     )
   }
 
-  if (appUnavailable) { return <AppUnavailable isUnknownReason={isUnknownReason} errMessage={!hasSetAppConfig ? 'Please set APP_ID and API_KEY in config/index.tsx' : ''} /> }
+  if (appUnavailable) { return <AppUnavailable isUnknownReason={isUnknownReason} errMessage="" /> }
 
-  if (!APP_ID || !APP_INFO) { return <Loading type='app' /> }
+  if (!APP_INFO) { return <Loading type='app' /> }
 
   return (
     <div className='bg-surface'>
@@ -1354,6 +1365,14 @@ const Main: FC<IMainProps> = (props) => {
         onConfirm={handleDeleteConfirm}
         title="确认删除"
         message="确定要删除这条消息吗？删除后无法恢复。"
+        variant="danger"
+      />
+      <ConfirmDialog
+        open={deleteConversationConfirmTarget !== null}
+        onClose={() => setDeleteConversationConfirmTarget(null)}
+        onConfirm={handleDeleteConversationConfirm}
+        title="确认删除会话"
+        message="确定要删除这个会话吗？删除后无法恢复。"
         variant="danger"
       />
     </div>

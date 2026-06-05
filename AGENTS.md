@@ -38,7 +38,7 @@ Pre-commit hook 运行 `pnpm lint-staged`（ESLint on staged `.ts`/`.tsx` files�
 - **State**: Zustand + immer for state management; ahooks for utility hooks
 - **Config**: `config/index.ts` holds `APP_ID`, `API_KEY`, `API_URL` from env vars
 - **basePath**: `NEXT_PUBLIC_BASE_PATH` 环境变量驱动 `next.config.js` 的 `basePath`（页面路由 + 静态资源）和 `config/index.ts` 的 `BASE_PATH` 常量（客户端 API 调用），默认为空（根路径）。所有客户端 `fetch('/api/...')` 统一使用 `${BASE_PATH}/api/...` 格式
-- **认证系统**: JWT + bcrypt，Next.js Middleware 全局验证。支持两种认证级别：Level 1 (API Key: `sk-xxx`) 用于简单嵌入集成，Level 2 (OAuth: `app_id` + `app_secret`) 用于服务端到服务端用户身份映射。通过 `AUTH_ENABLED` 环境变量控制是否启用（默认关闭，向后兼容）。认证 cookie 为 session cookie（无 maxAge），关闭浏览器后自动过期。详见 `docs/开发指南/认证系统.md`
+- **认证系统**: JWT + bcrypt，Next.js Middleware 全局验证。支持两种认证级别：Level 1 (API Key: `sk-xxx`) 用于简单嵌入集成，Level 2 (OAuth: `app_id` + `app_secret`) 用于服务端到服务端用户身份映射。认证始终启用，对话页面必须登录，嵌入式弹窗必须携带 apiKey。认证 cookie 为 session cookie（无 maxAge），关闭浏览器后自动过期。详见 `docs/开发指南/认证系统.md`
 - **多租户**: 组织级数据隔离（规划中，`users` 表已预留 `org_id` 字段）
 
 ### Setup & Login
@@ -226,8 +226,100 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 - **Theme colors**: Use semantic CSS custom property classes (`text-content-accent`, `border-border`, `hover:bg-surface-hover`) exclusively. Never hardcode theme-specific colors — this includes Tailwind literals (`text-indigo-600`, `bg-red-50`, `border-indigo-100`), SVG fills (`fill="#444CE7"`), and `dark:` variant overrides. When a component needs a color not covered by existing variables: (1) add the CSS variable to all three theme files (`light.css`, `dark.css`, `tech-blue.css`), (2) register it in `tailwind.config.js` under the appropriate semantic group, (3) use the generated class in components. Hover/danger/interactive states each need their own variable — avoid piggybacking on existing variables that happen to share a value.
 - **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom. Scrollbar at screen edge via full-width scrollable container. Auto-scroll: `ResizeObserver` on inner content wrapper (no overflow) triggers `scrollTop = scrollHeight` on outer scroll container — handles message loading, streaming, async markdown rendering.
 - **Build**: `next.config.js` disables ESLint and TypeScript errors during build.
+- **Turbopack**: 开发模式使用 Turbopack（`next dev --turbopack`），编译速度比 Webpack 快 5-20 倍。注意：CSS `@import` 规则必须在所有规则之前（Turbopack 使用 Lightning CSS，规范要求更严格）。
 - **Multi-Agent**: 后端 API 通过 `x-agent-id` header 选择智能体；前端 `AgentSelector` 组件在输入框内与语音按钮同排；
 - **After coding**: 每次编写完代码后，运行 `pnpm lint` 和 `pnpm typecheck` 检查，主动询问用户是否需要更新 AGENTS.md。
+
+### Dify 智能体 user 参数规范
+
+Dify 的会话是按 `user` 参数隔离的。**必须使用登录用户 ID 作为 `user` 参数**，不能使用 `session_id` 或其他随机值。
+
+**原因**：Dify 的 `conversation_id` 与 `user` 绑定，不同 `user` 无法访问同一个会话。
+
+**实现**（`app/api/utils/common.ts`）：
+```typescript
+export const getInfo = (request: NextRequest) => {
+  const userId = request.headers.get('x-auth-user-id')
+  const integrationId = request.headers.get('x-auth-integration-id')
+  const sessionId = request.cookies.get('session_id')?.value || v4()
+
+  // Dify user 优先级：登录用户 > API Key 集成 > session_id
+  const difyUser = userId || integrationId || sessionId
+
+  return { sessionId, user: difyUser }
+}
+```
+
+**容错处理**：当 Dify 返回 `Conversation Not Exists`（404）时，后端应自动重试（不带 `conversation_id`），让 Dify 创建新会话。详见 `lib/adapters/dify.ts` 的 `ConversationNotFoundError`。
+
+### 删除操作确认提示规范
+
+所有删除操作（删除会话、删除消息等）**必须在执行前显示确认对话框**，防止用户误操作。
+
+**实现方式**：使用 `ConfirmDialog` 组件（`app/components/base/confirm-dialog/index.tsx`）。
+
+**示例**：
+```tsx
+// 1. 添加状态
+const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<string | null>(null)
+
+// 2. 删除按钮点击时显示确认
+const handleDelete = (id: string) => {
+  setDeleteConfirmTarget(id)
+}
+
+// 3. 确认后执行删除
+const handleDeleteConfirm = async () => {
+  if (!deleteConfirmTarget) { return }
+  const id = deleteConfirmTarget
+  setDeleteConfirmTarget(null)
+  // 执行删除逻辑
+}
+
+// 4. 渲染确认对话框
+<ConfirmDialog
+  open={deleteConfirmTarget !== null}
+  onClose={() => setDeleteConfirmTarget(null)}
+  onConfirm={handleDeleteConfirm}
+  title="确认删除"
+  message="确定要删除吗？删除后无法恢复。"
+  variant="danger"
+/>
+```
+
+### API 错误响应格式
+
+所有 API 错误响应必须使用标准化格式，包含 `code` 字段供前端翻译：
+
+```typescript
+// 正确 ✓
+return NextResponse.json(
+  { error: 'Invalid captcha', code: 'INVALID_CAPTCHA' },
+  { status: 400 }
+)
+
+// 错误 ✗ — 硬编码英文字符串，前端无法翻译
+return NextResponse.json(
+  { error: 'Invalid captcha' },
+  { status: 400 }
+)
+```
+
+**规则**：
+- `error`：英文错误描述（用于服务端日志和调试）
+- `code`：错误代码常量（用于前端国际化翻译）
+- 前端根据 `code` 查找翻译，fallback 到 `error` 或默认提示
+- 错误代码使用 UPPER_SNAKE_CASE 命名
+
+**前端处理模式**：
+```tsx
+const errorCodeMap: Record<string, string> = {
+  'INVALID_CAPTCHA': t('common.auth.invalidCaptcha'),
+  'INVALID_CREDENTIALS': t('common.auth.invalidCredentials'),
+  'ACCOUNT_DISABLED': t('common.auth.accountDisabled'),
+}
+setError(errorCodeMap[data.code] || data.error || t('common.auth.defaultError'))
+```
 
 ### basePath 路由规则
 - `router.push()` / `redirect()` **自动处理 basePath**，不要手动拼接 `BASE_PATH`
@@ -249,21 +341,16 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 
 ### Next.js 15
 - Route handler 的 `params` 是 Promise 类型，必须先 `await` 再访问属性
+- **Turbopack 配置**：`next.config.js` 中使用 `turbopack` 字段（非 `webpack`），`resolveAlias` 使用空字符串 `''` 替代 `false`
+- **CSS @import 规则**：必须在所有规则之前（`@tailwind`、自定义规则等），Turbopack 使用 Lightning CSS，规范要求更严格
 
 ## Environment
 
 ### webapp (.env.local)
 ```
-DATABASE_URL="postgresql://user:password@localhost:5432/openchat"
 JWT_SECRET="your-secret-key-here"
 
-# 认证系统开关（默认关闭，向后兼容）
-AUTH_ENABLED=false
-
 NEXT_PUBLIC_DEFAULT_THEME=tech-blue
-NEXT_PUBLIC_APP_ID=<dify-app-id>
-NEXT_PUBLIC_APP_KEY=<dify-api-key>
-NEXT_PUBLIC_API_URL=https://api.dify.ai/v1
 
 # 项目前缀路径（留空则无前缀，例如 /chat）
 NEXT_PUBLIC_BASE_PATH=
@@ -293,8 +380,21 @@ AUTH_ENABLED=true       # false = 跳过认证（向后兼容）
 AUTH_MODE=remote        # self | remote（主应用使用 remote）
 VERIFY_ENDPOINT=http://127.0.0.1:3000/chat/api/auth/verify-token  # remote 模式必填，需包含 basePath
 VERIFY_TIMEOUT=5000     # 远程验证超时 ms
+SPEECH_OFFLINE=true     # 禁止启动时自动下载模型
 ```
 配置文件：`ws-server/.env`（从 `.env.example` 复制创建，gitignored）
+
+**语音模型下载**：
+
+启动时不会自动下载模型，需预先下载到 `ws-server/models/` 目录：
+
+```bash
+# 下载 Whisper 模型（whisper-tiny、whisper-base、whisper-small）
+pnpm download-whisper
+
+# 下载 FunASR 模型（funasr-paraformer-zh、funasr-sensevoice）
+pnpm download-funasr
+```
 
 ### 嵌入式对话组件 (Embed)
 

@@ -107,7 +107,7 @@ export type IOnFile = (file: VisionFile) => void
 export type IOnMessageEnd = (messageEnd: MessageEnd) => void
 export type IOnMessageReplace = (messageReplace: MessageReplace) => void
 export type IOnAnnotationReply = (messageReplace: AnnotationReply) => void
-export type IOnCompleted = (hasError?: boolean, errorMessage?: string) => void
+export type IOnCompleted = (hasError?: boolean, errorMessage?: string, errorCode?: string) => void
 export type IOnError = (msg: string, code?: string) => void
 export type IOnWorkflowStarted = (workflowStarted: WorkflowStartedResponse) => void
 export type IOnWorkflowFinished = (workflowFinished: WorkflowFinishedResponse) => void
@@ -190,7 +190,7 @@ const handleStream = (
                 errorCode: bufferObj?.code,
               })
               hasError = true
-              onCompleted?.(true, bufferObj?.message || 'Request failed')
+              onCompleted?.(true, bufferObj?.message || 'Request failed', bufferObj?.code)
               return
             }
             if (bufferObj.event === 'message' || bufferObj.event === 'agent_message') {
@@ -237,7 +237,7 @@ const handleStream = (
           errorMessage: `${e}`,
         })
         hasError = true
-        onCompleted?.(true)
+        onCompleted?.(true, `${e}`)
         return
       }
       if (!hasError) { read() }
@@ -408,13 +408,15 @@ export const ssePost = (
     .then(async (res: any) => {
       if (!/^(2|3)\d{2}$/.test(res.status)) {
         let msg = 'Server Error'
+        let code = ''
         try {
           const data = await res.json()
           msg = data.message || msg
+          code = data.code || ''
         }
         catch {}
         Toast.notify({ type: 'error', message: msg })
-        onCompleted?.(true, msg)
+        onCompleted?.(true, msg, code)
         return
       }
       return handleStream(res, (str: string, isFirstMessage: boolean, moreInfo: IOnDataMoreInfo) => {
@@ -423,8 +425,8 @@ export const ssePost = (
           return
         }
         onData?.(str, isFirstMessage, moreInfo)
-      }, (hasError?: boolean, errorMessage?: string) => {
-        onCompleted?.(hasError, errorMessage)
+      }, (hasError?: boolean, errorMessage?: string, errorCode?: string) => {
+        onCompleted?.(hasError, errorMessage, errorCode)
       }, onThought, onMessageEnd, onMessageReplace, onFile, onWorkflowStarted, onWorkflowFinished, onNodeStarted, onNodeFinished)
     })
     .catch((e) => {

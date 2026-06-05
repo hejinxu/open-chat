@@ -3,14 +3,20 @@ import { NextResponse } from 'next/server'
 import { getDatabaseProvider } from '@/lib/db'
 import { comparePassword } from '@/lib/auth/password'
 import { signJwt } from '@/lib/auth/jwt'
+import { verifyCaptcha } from '@/lib/auth/captcha-store'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { identifier, password } = body
+    const { identifier, password, captchaId, captcha } = body
 
     if (!identifier || !password) {
-      return NextResponse.json({ error: 'Identifier and password are required' }, { status: 400 })
+      return NextResponse.json({ error: 'Identifier and password are required', code: 'MISSING_FIELDS' }, { status: 400 })
+    }
+
+    // 验证码校验（服务端验证）
+    if (!captchaId || !captcha || !verifyCaptcha(captchaId, captcha)) {
+      return NextResponse.json({ error: 'Invalid captcha', code: 'INVALID_CAPTCHA' }, { status: 400 })
     }
 
     const db = getDatabaseProvider()
@@ -19,27 +25,27 @@ export async function POST(request: NextRequest) {
     // Find account by identifier
     const account = await db.getUserAccountByIdentifier(identifier)
     if (!account) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+      return NextResponse.json({ error: 'Invalid credentials', code: 'INVALID_CREDENTIALS' }, { status: 401 })
     }
 
     // Check password
     if (!account.password_hash) {
-      return NextResponse.json({ error: 'This account does not have a password set' }, { status: 401 })
+      return NextResponse.json({ error: 'This account does not have a password set', code: 'NO_PASSWORD' }, { status: 401 })
     }
 
     const valid = await comparePassword(password, account.password_hash)
     if (!valid) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+      return NextResponse.json({ error: 'Invalid credentials', code: 'INVALID_CREDENTIALS' }, { status: 401 })
     }
 
     // Get user
     const user = await db.getUserById(account.user_id)
     if (!user) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+      return NextResponse.json({ error: 'Invalid credentials', code: 'INVALID_CREDENTIALS' }, { status: 401 })
     }
 
     if (!user.is_enabled) {
-      return NextResponse.json({ error: 'Account is disabled' }, { status: 403 })
+      return NextResponse.json({ error: 'Account is disabled', code: 'ACCOUNT_DISABLED' }, { status: 403 })
     }
 
     // Sign JWT
@@ -64,6 +70,6 @@ export async function POST(request: NextRequest) {
   }
   catch (error: any) {
     console.error('Login error:', error)
-    return NextResponse.json({ error: error.message || 'Login failed' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error', code: 'INTERNAL_ERROR' }, { status: 500 })
   }
 }

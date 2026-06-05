@@ -1,13 +1,13 @@
+/* Theme CSS Variables */
+@import './themes/light.css';
+@import './themes/dark.css';
+@import './themes/tech-blue.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @source "../../node_modules/streamdown/dist/index.js";
-
-/* Theme CSS Variables */
-@import './themes/light.css';
-@import './themes/dark.css';
-@import './themes/tech-blue.css';
 
 /* Base Styles */
 * {

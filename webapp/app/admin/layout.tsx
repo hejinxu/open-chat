@@ -49,11 +49,11 @@ export default function AdminLayout({
   }
 
   const tabs = [
-    { name: t('common.auth.users'), href: '/admin/users' },
     { name: t('common.auth.agents'), href: '/admin/agents' },
     { name: t('common.auth.modelProviders'), href: '/admin/model-providers' },
     { name: t('common.auth.models'), href: '/admin/models' },
     { name: t('common.auth.integrations'), href: '/admin/integrations' },
+    { name: t('common.auth.users'), href: '/admin/users' },
   ] as const
 
   return (

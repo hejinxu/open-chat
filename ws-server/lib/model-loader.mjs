@@ -73,16 +73,17 @@ export async function loadModel(modelName) {
   console.log(`[ModelLoader] Loading model: ${modelName}...`)
 
   try {
+    let logged = false
     const transcriber = await pipeline(
       'automatic-speech-recognition',
       modelConfig.hub,
       {
         dtype: modelConfig.dtype,
         progress_callback: (progress) => {
-          if (progress.status === 'progress' && progress.progress) {
-            process.stdout.write(`\r[ModelLoader] Loading ${modelName}: ${Math.round(progress.progress)}%`)
-          } else if (progress.status === 'done') {
-            process.stdout.write(`\r[ModelLoader] Loading ${modelName}: 100%\n`)
+          // Only log once when model is fully loaded
+          if (progress.status === 'done' && !logged) {
+            logged = true
+            console.log(`[ModelLoader] ${modelName} ready`)
           }
         },
       },

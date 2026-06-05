@@ -145,6 +145,15 @@ const translation = {
     pricingOutput: 'Output Price ($/1M tokens)',
     defaultParams: 'Default Params',
     selectModel: 'Select Model',
+    // Captcha
+    captcha: 'Captcha',
+    refreshCaptcha: 'Click to refresh captcha',
+    invalidCaptcha: 'Invalid captcha',
+  },
+  error: {
+    noAgentsConfigured: 'No agents configured. Please add an agent via the admin UI.',
+    agentNotFound: 'Agent not found.',
+    unauthorized: 'Unauthorized. Please log in again.',
   },
 }
 
