@@ -1,16 +1,43 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BASE_PATH } from '@/config'
+import { useTheme } from '@/hooks/use-theme'
 import '@/i18n/i18next-config'
 
 export default function LoginPage() {
   const { t } = useTranslation()
+  const { resolvedTheme } = useTheme()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
+  const [captchaInput, setCaptchaInput] = useState('')
+  const [captchaId, setCaptchaId] = useState('')
+  const [captchaSvg, setCaptchaSvg] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const fetchCaptcha = useCallback(async () => {
+    try {
+      const isDark = resolvedTheme === 'dark' || resolvedTheme === 'tech-blue'
+      const res = await fetch(`${BASE_PATH}/api/auth/captcha?theme=${isDark ? 'dark' : 'light'}`)
+      const data = await res.json()
+      setCaptchaId(data.captchaId)
+      setCaptchaSvg(data.svg)
+      setCaptchaInput('')
+    }
+    catch {
+      console.error('Failed to fetch captcha')
+    }
+  }, [resolvedTheme])
+
+  useEffect(() => {
+    fetchCaptcha()
+  }, [fetchCaptcha])
+
+  const refreshCaptcha = () => {
+    fetchCaptcha()
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -21,13 +48,19 @@ export default function LoginPage() {
       const res = await fetch(`${BASE_PATH}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password }),
+        body: JSON.stringify({ identifier, password, captchaId, captcha: captchaInput }),
       })
 
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || t('common.auth.invalidCredentials'))
+        const errorCodeMap: Record<string, string> = {
+          INVALID_CAPTCHA: t('common.auth.invalidCaptcha'),
+          INVALID_CREDENTIALS: t('common.auth.invalidCredentials'),
+          ACCOUNT_DISABLED: t('common.auth.accountDisabled'),
+        }
+        setError(errorCodeMap[data.code] || data.error || t('common.auth.invalidCredentials'))
+        refreshCaptcha()
         return
       }
 
@@ -64,6 +97,7 @@ export default function LoginPage() {
               className="w-full px-3 py-2 bg-surface border border-border rounded-md text-content focus:outline-none focus:ring-2 focus:ring-accent"
               required
               autoFocus
+              autoComplete="off"
             />
           </div>
 
@@ -77,7 +111,31 @@ export default function LoginPage() {
               onChange={e => setPassword(e.target.value)}
               className="w-full px-3 py-2 bg-surface border border-border rounded-md text-content focus:outline-none focus:ring-2 focus:ring-accent"
               required
+              autoComplete="new-password"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-content-secondary mb-1">
+              {t('common.auth.captcha')}
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={captchaInput}
+                onChange={e => setCaptchaInput(e.target.value)}
+                className="flex-1 px-3 py-2 bg-surface border border-border rounded-md text-content focus:outline-none focus:ring-2 focus:ring-accent"
+                required
+                maxLength={4}
+                autoComplete="off"
+              />
+              <div
+                className="h-10 cursor-pointer rounded"
+                onClick={refreshCaptcha}
+                title={t('common.auth.refreshCaptcha')}
+                dangerouslySetInnerHTML={{ __html: captchaSvg }}
+              />
+            </div>
           </div>
 
           <button

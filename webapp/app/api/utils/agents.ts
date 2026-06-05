@@ -1,6 +1,5 @@
 import type { AgentConfig } from '@/types/agent'
 import { dbToAgentConfig } from '@/types/agent'
-import { API_KEY, API_URL } from '@/config'
 import { getDatabaseProvider } from '@/lib/db'
 
 let _cachedAgents: AgentConfig[] | null = null
@@ -46,32 +45,24 @@ async function loadAgents(): Promise<AgentConfig[]> {
       return _cachedAgents!
     }
   }
-  catch {
-    // DB not available, fall through to env vars
+  catch (error) {
+    // DB not available, don't cache empty result — allow retry on next call
+    console.error('[agents] Failed to load agents:', error)
+    return []
   }
 
-  // Fallback: use env vars as a single default agent (Dify)
-  _cachedAgents = [{
-    id: 'default',
-    name: 'AI 助手',
-    icon: '🤖',
-    description: '默认 AI 对话助手',
-    backend_type: 'dify',
-    api_key: API_KEY,
-    api_url: API_URL,
-    is_default: true,
-    is_enabled: true,
-  }]
-  return _cachedAgents!
+  // No fallback: return empty array, user must configure agents via admin UI
+  // Don't cache empty array — allow retry when DB becomes available
+  return []
 }
 
 export async function getAllAgents(): Promise<AgentConfig[]> {
   return loadAgents()
 }
 
-export async function getDefaultAgent(): Promise<AgentConfig> {
+export async function getDefaultAgent(): Promise<AgentConfig | undefined> {
   const agents = await getAllAgents()
-  return agents.find(a => a.is_default) || agents[0]
+  return agents.find(a => a.is_default) || agents[0] || undefined
 }
 
 export async function getAgentById(id: string): Promise<AgentConfig | undefined> {

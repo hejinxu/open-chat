@@ -45,25 +45,20 @@ cd ws-server && npm install && cd ..
 创建 `.env.local` 文件：
 
 ```bash
-# Dify App ID（从应用详情页 URL 获取）
-NEXT_PUBLIC_APP_ID=your_app_id
-
-# Dify API Key（从 "API Access" 页面生成）
-NEXT_PUBLIC_APP_KEY=your_api_key
-
-# Dify API 地址
-NEXT_PUBLIC_API_URL=https://api.dify.ai/v1
-
 # 项目前缀路径（留空则无前缀，例如 /chat）
 NEXT_PUBLIC_BASE_PATH=
 
-# 认证系统开关（默认关闭，向后兼容）
-AUTH_ENABLED=false
 JWT_SECRET=your-secret-key-here
 
 # 默认主题
 NEXT_PUBLIC_DEFAULT_THEME=tech-blue
+
+# 存储后端：sqlite | postgres
+NEXT_PUBLIC_STORAGE_BACKEND=sqlite
+SQLITE_DB_PATH=data/openchat.db
 ```
+
+> 智能体配置（Dify、FastGPT、直连大模型等）通过后台管理界面进行配置，无需在环境变量中设置。
 
 ### 3. 启动开发服务器
 
