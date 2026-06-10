@@ -195,6 +195,22 @@
       <div id="command-log">// 等待注册指令监听...</div>
     </div>
 
+    <div class="content-section">
+      <h2>页面内容读取测试</h2>
+      <p>测试 AI 读取宿主页面内容的能力（需要使用支持工具调用的 Agent）：</p>
+      <ul>
+        <li><strong>页面内容：</strong>询问 AI "当前页面展示了什么内容？"</li>
+        <li><strong>选中文本：</strong>先选中一段文字，然后询问 AI "我选中了什么内容？"</li>
+        <li><strong>元素内容：</strong>询问 AI "请获取页面中 class 为 hero 的元素内容"</li>
+      </ul>
+      <div class="note">
+        <strong>前置条件：</strong>
+        <br>1. 创建一个 direct_llm 类型的 Agent，设置执行模式为 "ReAct 模式"
+        <br>2. 关联一个支持 function calling 的模型（如 GPT-4）
+        <br>3. 在对话窗口中选择该 Agent 进行测试
+      </div>
+    </div>
+
     <div class="config-card">
       <h2>参数注入测试</h2>
       <p>测试宿主系统向嵌入弹窗注入智能体参数值：</p>
@@ -207,6 +223,23 @@
         <button id="clear-param-log">清除日志</button>
       </div>
       <div id="param-log">// 参数注入日志</div>
+    </div>
+
+    <div class="config-card">
+      <h2>浮动按钮权限测试</h2>
+      <p>测试 <code>canShowBubble</code> 回调控制浮动按钮是否显示：</p>
+      <div style="margin: 12px 0;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="bubble-toggle" checked style="width: 18px; height: 18px;">
+          <span>显示浮动按钮</span>
+        </label>
+      </div>
+      <p class="note">
+        <strong>说明：</strong>
+        <br>1. 取消勾选后，关闭对话窗口，浮动按钮将隐藏
+        <br>2. 重新勾选后，需要刷新页面或关闭/打开对话窗口才能恢复
+        <br>3. 测试异步回调：可修改 <code>canShowBubble</code> 函数模拟异步权限检查
+      </p>
     </div>
 
     <div class="content-section">
@@ -259,8 +292,16 @@
         paramLogReturn(result)
         return result
       },
+      // 浮动按钮权限控制
+      canShowBubble: async function() {
+        var toggle = document.getElementById('bubble-toggle')
+        var result = toggle ? toggle.checked : true
+        console.log('[canShowBubble] result:', result)
+        return result
+      },
     }
   </script>
+  <script src="http://localhost:3000/chat/openchat-page-reader.js" defer></script>
   <script src="http://localhost:3000/chat/embed.min.js" defer></script>
 
   <script>

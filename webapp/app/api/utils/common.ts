@@ -4,6 +4,7 @@ import { APP_INFO } from '@/config'
 import { getAgentById, getDefaultAgent } from './agents'
 import { createAdapter } from '@/lib/adapters'
 import type { ChatAdapter } from '@/lib/adapters/types'
+import type { AgentConfig } from '@/types/agent'
 import { AgentNotFoundError, NoAgentsConfiguredError, UnauthorizedError } from '@/lib/errors'
 
 export const getInfo = (request: NextRequest) => {
@@ -40,6 +41,21 @@ export function isRequestAuthenticated(request: NextRequest): boolean {
   const userId = request.headers.get('x-auth-user-id')
   const integrationId = request.headers.get('x-auth-integration-id')
   return !!(userId || integrationId)
+}
+
+export async function getAgentForRequest(request: NextRequest): Promise<AgentConfig> {
+  if (!isRequestAuthenticated(request)) {
+    throw new UnauthorizedError()
+  }
+
+  const agentId = getAgentIdFromRequest(request)
+  const agent = agentId ? await getAgentById(agentId) : await getDefaultAgent()
+  if (!agent) {
+    throw agentId
+      ? new AgentNotFoundError(agentId)
+      : new NoAgentsConfiguredError()
+  }
+  return agent
 }
 
 export async function getAdapterForRequest(request: NextRequest): Promise<ChatAdapter> {

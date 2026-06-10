@@ -24,6 +24,11 @@
 - 多主题支持（浅色 / 深色 / 科技蓝）
 - 多语言 i18n
 - Docker 部署
+- **多智能体支持**：Dify、FastGPT、n8n、直连大模型等多种后端
+- **Agent 执行模式**：纯对话、ReAct、Plan-And-Execute 三种模式
+- **工具系统**：内置工具 + MCP 工具 + 自定义工具
+- **客户端工具**：通过 SSE 协议支持客户端执行（如读取宿主页面 DOM）
+- **LangGraph 集成**：基于 LangGraph.js 的 Agent 编排框架
 
 ## 前置要求
 
@@ -109,7 +114,10 @@ docker run -p 3000:3000 webapp-conversation:latest
 
 ```
 ├── app/                          # Next.js App Router
-│   ├── api/                      # API 路由（代理 Dify 后端）
+│   ├── api/                      # API 路由
+│   │   ├── chat-messages/        # 对话消息 API
+│   │   ├── tools/                # 工具管理 API
+│   │   └── admin/                # 后台管理 API
 │   ├── components/               # UI 组件
 │   │   └── chat/
 │   │       ├── voice-input.tsx   # 语音输入核心组件
@@ -117,6 +125,10 @@ docker run -p 3000:3000 webapp-conversation:latest
 │   │       └── voice-recognition/ # 语音识别引擎
 │   │           ├── browser-recognition.ts
 │   │           └── whisper-recognition.ts
+│   ├── admin/                    # 后台管理页面
+│   │   ├── agents/               # 智能体管理
+│   │   ├── tools/                # 工具管理
+│   │   └── mcp-servers/          # MCP Server 管理
 │   ├── i18n/                     # 国际化配置
 │   └── styles/
 │       ├── globals.css           # 全局样式（导入主题文件）
@@ -125,10 +137,20 @@ docker run -p 3000:3000 webapp-conversation:latest
 │       │   ├── dark.css          # 深色主题
 │       │   └── tech-blue.css     # 科技蓝主题
 │       └── markdown.scss         # Markdown 样式
+├── lib/                          # 核心库
+│   ├── langgraph/                # LangGraph Agent 编排
+│   │   ├── state.ts              # 状态定义
+│   │   ├── prompts.ts            # 统一提示词管理
+│   │   ├── tiktoken-preload.ts   # tiktoken 预加载
+│   │   └── graphs/               # Agent 图定义
+│   ├── tools/                    # 工具系统
+│   │   ├── types.ts              # 工具类型
+│   │   ├── registry.ts           # 工具注册中心
+│   │   └── builtin/              # 内置工具
+│   ├── mcp/                      # MCP 集成
+│   ├── adapters/                 # 后端适配器
+│   └── db/                       # 数据库适配器
 ├── config/                       # 应用配置
-│   ├── index.ts                  # App ID、API Key、API URL
-│   ├── theme.ts                  # 主题配置
-│   └── voice-input.ts            # 语音配置常量
 ├── i18n/                         # 多语言文件
 ├── service/                      # API 服务层
 ├── stores/                       # Zustand 状态管理
@@ -142,6 +164,42 @@ docker run -p 3000:3000 webapp-conversation:latest
 | `pnpm dev` | 启动 Next.js 开发服务器（端口 3000） |
 | `pnpm build` | 生产构建 |
 | `pnpm lint` | 代码检查 |
+| `pnpm fix` | 自动修复 lint |
+| `pnpm typecheck` | TypeScript 类型检查 |
+
+## Agent 执行模式
+
+支持三种执行模式，通过 Admin UI 配置：
+
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| `chat` | 纯对话模式，不使用工具 | 简单问答 |
+| `react` | ReAct 模式，支持工具调用 | 单步查询，动态决策 |
+| `plan_and_execute` | Plan-And-Execute 模式 | 复杂多步任务 |
+
+## 工具系统
+
+### 内置工具
+
+| 工具名称 | 执行位置 | 描述 |
+|----------|----------|------|
+| `get_page_content` | 客户端 | 获取宿主页面 DOM 内容 |
+| `get_selected_text` | 客户端 | 获取用户选中的文本 |
+| `get_element_by_selector` | 客户端 | 按 CSS 选择器获取元素 |
+| `fetch_url` | 服务端 | 抓取网页内容或搜索互联网 |
+| `http_request` | 服务端 | 发送 HTTP 请求 |
+| `get_current_time` | 服务端 | 获取当前时间 |
+
+### 工具执行流程
+
+- **服务端工具**：直接在服务端执行
+- **客户端工具**：通过 SSE 通知客户端执行，客户端回传结果
+
+### MCP 集成
+
+支持 MCP (Model Context Protocol) 协议，可动态加载外部工具：
+- Admin UI 管理 MCP Server 连接
+- 支持 STDIO、HTTP、SSE 三种传输方式
 | `pnpm fix` | 自动修复 lint 问题 |
 | `pnpm ws-server` | 启动 WebSocket 服务（端口 8787） |
 | `pnpm download-whisper` | 下载 Whisper 模型文件 |
