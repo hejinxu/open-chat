@@ -1,8 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { getInfo, setSession, getAdapterForRequest } from '@/app/api/utils/common'
+import { getInfo, setSession, getAdapterForRequest, getAgentForRequest } from '@/app/api/utils/common'
 import { ConversationNotFoundError } from '@/lib/adapters/dify'
 import { AgentNotFoundError, NoAgentsConfiguredError, UnauthorizedError } from '@/lib/errors'
+import { AgentExecutor } from '@/lib/executors/agent-executor'
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +17,88 @@ export async function POST(request: NextRequest) {
       messages,
     } = body
     const { sessionId, user } = getInfo(request)
+
+    const agent = await getAgentForRequest(request)
+    const executionMode = agent.execution_mode || 'chat'
+
+    if (agent.backend_type === 'direct_llm' && executionMode !== 'chat') {
+      console.log('[chat-messages] Agent config:', {
+        id: agent.id,
+        name: agent.name,
+        backend_type: agent.backend_type,
+        execution_mode: agent.execution_mode,
+        model: agent.model,
+        hasApiKey: !!agent.api_key,
+        hasApiUrl: !!agent.api_url,
+      })
+
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        async start(controller) {
+          const executor = new AgentExecutor({
+            agent,
+            userId: user,
+            sessionId,
+            controller,
+          })
+
+          try {
+            const result = await executor.execute({
+              query,
+              messages: messages || [],
+              conversationId,
+            })
+
+            console.log('[chat-messages] Result:', {
+              responseLength: result.response?.length,
+              responsePreview: result.response?.substring(0, 100),
+              conversationId: result.conversationId,
+            })
+
+            const messageId = `msg_${Date.now()}`
+            const messageEvent = {
+              event: 'message',
+              id: messageId,
+              message_id: messageId,
+              conversation_id: result.conversationId || conversationId,
+              answer: result.response,
+              created_at: Math.floor(Date.now() / 1000),
+            }
+            console.log('[chat-messages] Sending message event:', JSON.stringify(messageEvent).substring(0, 200))
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(messageEvent)}\n\n`))
+
+            const endEvent = {
+              event: 'message_end',
+              id: messageId,
+              metadata: {},
+            }
+            console.log('[chat-messages] Sending message_end event')
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(endEvent)}\n\n`))
+          } catch (error: any) {
+            const errorEvent = {
+              event: 'error',
+              status: 500,
+              message: error.message || 'Internal Server Error',
+              code: 'AGENT_EXECUTION_ERROR',
+            }
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorEvent)}\n\n`))
+          } finally {
+            controller.close()
+          }
+        },
+      })
+
+      const sessionCookie = setSession(sessionId)
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Set-Cookie': sessionCookie['Set-Cookie'],
+        },
+      })
+    }
+
     const adapter = await getAdapterForRequest(request)
 
     const sendParams = {
@@ -31,7 +114,6 @@ export async function POST(request: NextRequest) {
     try {
       const res = await adapter.sendMessage(sendParams)
       if (res instanceof Response) {
-        // Ensure session_id cookie is set for consistent user identity
         const headers = new Headers(res.headers)
         const sessionCookie = setSession(sessionId)
         headers.append('Set-Cookie', sessionCookie['Set-Cookie'])
@@ -47,7 +129,6 @@ export async function POST(request: NextRequest) {
       return response
     }
     catch (error: any) {
-      // Backend conversation_id expired — retry without conversation_id
       if (error instanceof ConversationNotFoundError) {
         const retryRes = await adapter.sendMessage({ ...sendParams, conversation_id: undefined })
         if (retryRes instanceof Response) {
@@ -69,7 +150,6 @@ export async function POST(request: NextRequest) {
     }
   }
   catch (error: any) {
-    // Use instanceof for reliable error type checking
     if (error instanceof NoAgentsConfiguredError) {
       return new Response(
         JSON.stringify({ message: error.message, code: error.code }),

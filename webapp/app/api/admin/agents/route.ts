@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { name, icon, description, backend_type, api_key, api_url, model_id, extra_config, is_default, is_enabled } = body
+    const { name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled } = body
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
@@ -85,6 +85,9 @@ export async function POST(request: NextRequest) {
       api_url: api_url || '',
       model_id: model_id || null,
       extra_config: extra_config ? JSON.stringify(extra_config) : '{}',
+      execution_mode: execution_mode || 'chat',
+      tools_config: tools_config ? JSON.stringify(tools_config) : '{}',
+      mcp_servers: mcp_servers ? JSON.stringify(mcp_servers) : '[]',
       is_default: !!is_default,
       is_enabled: is_enabled !== false,
       created_at: now,
@@ -112,7 +115,7 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { id, name, icon, description, backend_type, api_key, api_url, model_id, extra_config, is_default, is_enabled } = body
+    const { id, name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled } = body
 
     if (!id) {
       return NextResponse.json({ error: 'Agent ID is required' }, { status: 400 })
@@ -154,6 +157,9 @@ export async function PUT(request: NextRequest) {
       api_url: api_url ?? existing.api_url,
       model_id: model_id !== undefined ? (model_id || null) : existing.model_id,
       extra_config: extra_config !== undefined ? JSON.stringify(extra_config) : existing.extra_config,
+      execution_mode: execution_mode ?? existing.execution_mode,
+      tools_config: tools_config !== undefined ? JSON.stringify(tools_config) : existing.tools_config,
+      mcp_servers: mcp_servers !== undefined ? JSON.stringify(mcp_servers) : existing.mcp_servers,
       is_default: is_default !== undefined ? !!is_default : existing.is_default,
       is_enabled: is_enabled !== undefined ? !!is_enabled : existing.is_enabled,
       updated_at: now,

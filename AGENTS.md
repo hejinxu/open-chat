@@ -98,6 +98,10 @@ interface ConversationRecord {
 - **`isDirectLLM` 状态**：控制 `hasSetInputs`（直接返回 true，跳过欢迎页）、`ConfigSence`（强制 `isPublicVersion = false`，不显示提示词模板面板）
 - **会话上下文**：直连 LLM API 无状态，每次请求需携带完整对话历史。`handleSend` 从 `chatList` 构建 OpenAI 格式 `messages` 数组（过滤 `isOpeningStatement`，user/assistant 交替）→ `SendMessageParams.messages` → `route.ts` 转发 → `LLMAdapter.sendMessage()` 拼接历史 + 当前 query 后调用 API
 - **模型关联**：通过 `model_id` 外键严格关联模型库，`loadAgents()` 解析 `model_id` → 填充 `model`（模型名）、`api_key`、`api_url`（Agent 自身字段优先于 Provider 默认值）
+- **执行模式**：`execution_mode` 字段控制 Agent 行为（`chat` / `react` / `plan_and_execute`），Admin UI 配置
+- **工具系统**：`ToolRegistry` 管理内置工具、MCP 工具、自定义工具；`AgentExecutor` 根据执行模式调用对应工具
+- **LangGraph 集成**：`lib/langgraph/` 目录包含状态定义、ReAct 图、Plan-And-Execute 图；使用 `@langchain/langgraph` 和 `@langchain/openai`
+- **tiktoken 预加载**：首次请求时下载 tiktoken 编码数据到 `lib/langgraph/tiktoken/o200k_base.json`，后续从本地加载，避免网络超时
 
 **会话切换加载状态：**
 - **同步清空**：`handleConversationIdChange` 中先执行 `setChatList([])` + `setIsChatListLoading(true)`，再 `setCurrConversationId`，React 18 批处理合并为单帧
@@ -168,6 +172,78 @@ interface ConversationRecord {
   - `AUTH_MODE=remote`：调用外部验证 API（`VERIFY_ENDPOINT`）
   - `AUTH_ENABLED=false` 时跳过认证（向后兼容）
   - 详见 `docs/开发指南/认证系统.md`
+
+### Agent 执行模式
+
+**执行模式**（`execution_mode` 字段）控制 Agent 的行为：
+
+| 模式 | 说明 | 工具调用 | 适用场景 |
+|------|------|----------|----------|
+| `chat` | 纯对话模式 | ❌ 不支持 | 简单问答 |
+| `react` | ReAct 模式 | ✅ 支持 | 单步工具调用，动态决策 |
+| `plan_and_execute` | Plan-And-Execute 模式 | ✅ 支持 | 复杂多步任务 |
+
+**文件结构**：
+```
+webapp/lib/langgraph/
+├── state.ts                    # 状态 Schema 定义
+├── prompts.ts                  # 统一提示词管理
+├── tiktoken-preload.ts         # tiktoken 编码预加载
+├── tiktoken/
+│   └── o200k_base.json         # tiktoken 编码文件（提交到 git）
+├── graphs/
+│   ├── react-agent.ts          # ReAct 模式图
+│   └── plan-and-execute.ts     # Plan-And-Execute 模式图
+└── index.ts                    # 导出入口
+```
+
+### 工具系统
+
+**ToolRegistry**：工具注册中心，管理所有可用工具。
+
+**内置工具**：
+| 工具名称 | 执行位置 | 描述 |
+|----------|----------|------|
+| `get_page_content` | client | 获取宿主页面 DOM 内容 |
+| `get_selected_text` | client | 获取用户选中的文本 |
+| `get_element_by_selector` | client | 按 CSS 选择器获取元素 |
+| `fetch_url` | server | 抓取网页内容或搜索互联网 |
+| `http_request` | server | 发送 HTTP 请求 |
+| `get_current_time` | server | 获取当前时间 |
+
+**工具分类**：
+- **客户端工具**（`execution: 'client'`）：通过 SSE 通知客户端执行，客户端回传结果
+- **服务端工具**（`execution: 'server'`）：在服务端直接执行
+
+**文件结构**：
+```
+webapp/lib/tools/
+├── types.ts                    # 工具类型定义
+├── registry.ts                 # 工具注册中心
+└── builtin/
+    ├── index.ts                # 内置工具导出
+    ├── browser-tools.ts        # 浏览器工具（客户端执行）
+    ├── server-tools.ts         # 服务端工具
+    ├── fetch-url.ts            # 网页抓取/搜索工具
+    └── time-tools.ts           # 时间工具
+```
+
+### MCP 集成
+
+**MCP (Model Context Protocol)**：开放标准协议，支持动态工具加载。
+
+**文件结构**：
+```
+webapp/lib/mcp/
+├── client-manager.ts           # MCP Client 管理器
+├── tool-adapter.ts             # MCP 工具转 LangChain 工具
+├── types.ts                    # MCP 类型定义
+└── index.ts                    # 导出入口
+```
+
+**Admin UI**：
+- `/admin/tools` — 工具管理页面
+- `/admin/mcp-servers` — MCP Server 管理页面
 
 ### Theme System (CSS Custom Properties)
 - **方案**: CSS Custom Properties，每个主题一个 CSS 变量文件
@@ -436,6 +512,36 @@ embed.min.js (外层, ~450行 vanilla JS)
 - `docs/开发指南/嵌入式对话组件.md` — 技术方案全文
 - `docs/开发指南/第三方应用集成指南.md` — 面向集成方的使用教程
 - `docs/FAQ.md` §16 — 嵌入组件开发 FAQ
+
+## 已知问题和解决方案
+
+### ChatOpenAI API Key 参数
+**问题**：`openAIApiKey` 参数不起作用，导致 "Missing credentials" 错误。
+**解决方案**：使用 `apiKey` 参数（不是 `openAIApiKey`）。
+```typescript
+// 正确 ✓
+const model = new ChatOpenAI({ apiKey: 'sk-xxx', ... })
+
+// 错误 ✗
+const model = new ChatOpenAI({ openAIApiKey: 'sk-xxx', ... })
+```
+**注意**：不要使用 `process.env.OPENAI_API_KEY`，会有竞争条件问题（多用户并发时 API Key 互相覆盖）。
+
+### tiktoken 网络超时
+**问题**：LangChain 尝试从 `https://tiktoken.pages.dev/js/` 下载编码数据，网络不通时超时。
+**解决方案**：预先下载编码文件到 `lib/langgraph/tiktoken/o200k_base.json`，代码自动从本地加载。
+
+### 搜索结果解析
+**问题**：用正则表达式解析搜索引擎 HTML 不可靠，结构变化会导致解析失败。
+**解决方案**：直接返回页面文本内容，让 AI 自己提取和总结信息。
+
+### Plan-And-Execute 状态拼写
+**问题**：`'execuring'` 拼写错误（应为 `'executing'`），会导致无限循环。
+**解决方案**：确保状态值拼写正确。
+
+### 客户端工具执行
+**问题**：Plan-And-Execute 模式最初没有正确处理客户端工具（如 `get_page_content`）。
+**解决方案**：将 `context`（包含 SSE controller）传入 executor 节点，使用 `tools.executeClientTool()` 执行客户端工具。
 
 ## Docs
 - **README.md**: 根目录，用户面向的项目文档

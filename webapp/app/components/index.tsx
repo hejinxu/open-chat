@@ -149,6 +149,107 @@ const Main: FC<IMainProps> = (props) => {
     return null
   }, [getAgentParamsCallback])
 
+  // ---- Utility: call host's page reader tools ----
+  const callHostGetPageContent = useCallback(async (): Promise<any> => {
+    if (typeof window === 'undefined' || !window.parent || window.parent === window) {
+      return null
+    }
+
+    return new Promise((resolve) => {
+      const requestId = Math.random().toString(36).slice(2)
+      let resolved = false
+      const handler = (e: MessageEvent) => {
+        if (e.data?.type === 'com.openchat.page-reader'
+          && e.data?.requestId === requestId
+          && !resolved) {
+          resolved = true
+          window.removeEventListener('message', handler)
+          resolve(e.data.result || null)
+        }
+      }
+      window.addEventListener('message', handler)
+      window.parent.postMessage({
+        type: 'com.openchat.page-reader',
+        action: 'get_page_content',
+        requestId,
+      }, '*')
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true
+          window.removeEventListener('message', handler)
+          resolve(null)
+        }
+      }, 5000)
+    })
+  }, [])
+
+  const callHostGetSelectedText = useCallback(async (): Promise<any> => {
+    if (typeof window === 'undefined' || !window.parent || window.parent === window) {
+      return null
+    }
+
+    return new Promise((resolve) => {
+      const requestId = Math.random().toString(36).slice(2)
+      let resolved = false
+      const handler = (e: MessageEvent) => {
+        if (e.data?.type === 'com.openchat.page-reader'
+          && e.data?.requestId === requestId
+          && !resolved) {
+          resolved = true
+          window.removeEventListener('message', handler)
+          resolve(e.data.result || null)
+        }
+      }
+      window.addEventListener('message', handler)
+      window.parent.postMessage({
+        type: 'com.openchat.page-reader',
+        action: 'get_selected_text',
+        requestId,
+      }, '*')
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true
+          window.removeEventListener('message', handler)
+          resolve(null)
+        }
+      }, 5000)
+    })
+  }, [])
+
+  const callHostGetElement = useCallback(async (selector?: string, extractType?: string): Promise<any> => {
+    if (typeof window === 'undefined' || !window.parent || window.parent === window) {
+      return null
+    }
+
+    return new Promise((resolve) => {
+      const requestId = Math.random().toString(36).slice(2)
+      let resolved = false
+      const handler = (e: MessageEvent) => {
+        if (e.data?.type === 'com.openchat.page-reader'
+          && e.data?.requestId === requestId
+          && !resolved) {
+          resolved = true
+          window.removeEventListener('message', handler)
+          resolve(e.data.result || null)
+        }
+      }
+      window.addEventListener('message', handler)
+      window.parent.postMessage({
+        type: 'com.openchat.page-reader',
+        action: 'get_element_by_selector',
+        requestId,
+        params: { selector, extractType },
+      }, '*')
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true
+          window.removeEventListener('message', handler)
+          resolve(null)
+        }
+      }, 5000)
+    })
+  }, [])
+
   // ---- Utility: sync clean params against latest prompt_variables ----
   function syncAndCleanParams(convId: string, agentId: string, promptVars: { key: string }[]): Record<string, any> | null {
     const saved = agentInputsCacheRef.current[agentId] || null
@@ -934,6 +1035,7 @@ const Main: FC<IMainProps> = (props) => {
         setAbortController(abortController)
       },
       onData: (message: string, isFirstMessage: boolean, { conversationId: newDifyConvId, messageId, taskId }: any) => {
+        console.log('[Main] onData called:', { message: message?.substring(0, 50), isFirstMessage, messageId })
         // 只有 Dify 类型智能体才会在 chunk 中返回 conversation_id
         const convKey = `${localConvId}:${agentKey}`
         const isDifyAgent = agentTypeMapRef.current[agentKey] === 'dify'
@@ -1180,6 +1282,49 @@ const Main: FC<IMainProps> = (props) => {
             ...responseItem,
           }
         }))
+      },
+      async onToolCall(toolCall) {
+        console.log('[Main] onToolCall called:', toolCall)
+        if (toolCall.execution === 'client') {
+          try {
+            let result: any = null
+
+            if (toolCall.tool_name === 'get_page_content') {
+              console.log('[Main] Executing get_page_content')
+              result = await callHostGetPageContent()
+            }
+            else if (toolCall.tool_name === 'get_selected_text') {
+              console.log('[Main] Executing get_selected_text')
+              result = await callHostGetSelectedText()
+            }
+            else if (toolCall.tool_name === 'get_element_by_selector') {
+              console.log('[Main] Executing get_element_by_selector')
+              result = await callHostGetElement(toolCall.tool_input?.selector, toolCall.tool_input?.extractType)
+            }
+
+            console.log('[Main] Tool result:', result)
+            await fetch(`${BASE_PATH}/api/tools/tool-result`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tool_call_id: toolCall.tool_call_id,
+                result,
+              }),
+            })
+            console.log('[Main] Tool result sent to server')
+          }
+          catch (error: any) {
+            console.error('[Main] Error executing client tool:', error)
+            await fetch(`${BASE_PATH}/api/tools/tool-result`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tool_call_id: toolCall.tool_call_id,
+                error: error.message || 'Failed to execute client tool',
+              }),
+            })
+          }
+        }
       },
     })
   }

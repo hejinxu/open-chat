@@ -54,6 +54,8 @@ export default function AdminLayout({
     { name: t('common.auth.models'), href: '/admin/models' },
     { name: t('common.auth.integrations'), href: '/admin/integrations' },
     { name: t('common.auth.users'), href: '/admin/users' },
+    { name: t('common.auth.tools', '工具管理'), href: '/admin/tools' },
+    { name: t('common.auth.mcpServers', 'MCP Servers'), href: '/admin/mcp-servers' },
   ] as const
 
   return (

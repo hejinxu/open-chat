@@ -181,6 +181,73 @@ export class SqliteProvider implements DatabaseProvider {
     `)
     this.db.run('CREATE INDEX IF NOT EXISTS idx_models_provider_id ON models(provider_id)')
 
+    // Tools table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS tools (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        category TEXT NOT NULL DEFAULT 'builtin',
+        execution TEXT NOT NULL DEFAULT 'server',
+        input_schema TEXT DEFAULT '{}',
+        output_schema TEXT DEFAULT '{}',
+        handler_type TEXT DEFAULT 'function',
+        handler_config TEXT DEFAULT '{}',
+        is_builtin INTEGER NOT NULL DEFAULT 0,
+        is_enabled INTEGER NOT NULL DEFAULT 1,
+        permissions TEXT DEFAULT '["all"]',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `)
+
+    // MCP Servers table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS mcp_servers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        transport TEXT NOT NULL DEFAULT 'stdio',
+        config TEXT NOT NULL DEFAULT '{}',
+        is_enabled INTEGER NOT NULL DEFAULT 1,
+        last_connected_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `)
+
+    // Tool Permissions table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS tool_permissions (
+        id TEXT PRIMARY KEY,
+        tool_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        is_allowed INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (tool_id) REFERENCES tools(id) ON DELETE CASCADE,
+        UNIQUE(tool_id, role)
+      )
+    `)
+
+    // Agent Tools table (many-to-many relationship)
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS agent_tools (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        tool_id TEXT NOT NULL,
+        config TEXT DEFAULT '{}',
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+        FOREIGN KEY (tool_id) REFERENCES tools(id) ON DELETE CASCADE,
+        UNIQUE(agent_id, tool_id)
+      )
+    `)
+
+    // Migrate agents table: add execution_mode, tools_config, mcp_servers columns
+    this.migrateAgentToolsColumns()
+
     // Seed default model providers and models if tables are empty (must run before migrateAgentModelId)
     this.seedDefaultModels()
 
@@ -577,8 +644,8 @@ export class SqliteProvider implements DatabaseProvider {
   async saveAgent(agent: AgentRecord): Promise<void> {
     await this.ensureReady()
     this.db.run(
-      `INSERT OR REPLACE INTO agents (id, name, icon, description, backend_type, api_key, api_url, model_id, extra_config, is_default, is_enabled, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO agents (id, name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         agent.id,
         agent.name,
@@ -589,6 +656,9 @@ export class SqliteProvider implements DatabaseProvider {
         agent.api_url,
         agent.model_id || null,
         agent.extra_config,
+        agent.execution_mode || 'chat',
+        agent.tools_config || '{}',
+        agent.mcp_servers || '[]',
         agent.is_default ? 1 : 0,
         agent.is_enabled ? 1 : 0,
         agent.created_at,
@@ -622,10 +692,29 @@ export class SqliteProvider implements DatabaseProvider {
       api_url: (row.api_url as string) || '',
       model_id: row.model_id as string | null,
       extra_config: (row.extra_config as string) || '{}',
+      execution_mode: (row.execution_mode as string) || 'chat',
+      tools_config: (row.tools_config as string) || '{}',
+      mcp_servers: (row.mcp_servers as string) || '[]',
       is_default: (row.is_default as number) === 1,
       is_enabled: (row.is_enabled as number) === 1,
       created_at: row.created_at as number,
       updated_at: row.updated_at as number,
+    }
+  }
+
+  private migrateAgentToolsColumns(): void {
+    const columns = this.db.exec('PRAGMA table_info(agents)')
+    if (columns.length === 0) { return }
+    const colNames = columns[0].values.map((row: any[]) => row[1] as string)
+
+    if (!colNames.includes('execution_mode')) {
+      this.db.run('ALTER TABLE agents ADD COLUMN execution_mode TEXT DEFAULT "chat"')
+    }
+    if (!colNames.includes('tools_config')) {
+      this.db.run('ALTER TABLE agents ADD COLUMN tools_config TEXT DEFAULT "{}"')
+    }
+    if (!colNames.includes('mcp_servers')) {
+      this.db.run('ALTER TABLE agents ADD COLUMN mcp_servers TEXT DEFAULT "[]"')
     }
   }
 

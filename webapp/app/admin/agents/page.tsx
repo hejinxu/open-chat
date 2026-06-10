@@ -16,6 +16,9 @@ interface Agent {
   model: string | null
   model_id: string | null
   extra_config: string
+  execution_mode: string
+  tools_config: string
+  mcp_servers: string
   is_default: boolean
   is_enabled: boolean
   created_at: number
@@ -54,6 +57,7 @@ export default function AgentsPage() {
     api_url: '',
     model_id: '',
     extra_config: '{}',
+    execution_mode: 'chat',
     is_default: false,
     is_enabled: true,
   })
@@ -107,6 +111,7 @@ export default function AgentsPage() {
       api_url: '',
       model_id: '',
       extra_config: '{}',
+      execution_mode: 'chat',
       is_default: false,
       is_enabled: true,
     })
@@ -126,6 +131,7 @@ export default function AgentsPage() {
       api_url: agent.api_url,
       model_id: agent.model_id || '',
       extra_config: agent.extra_config || '{}',
+      execution_mode: agent.execution_mode || 'chat',
       is_default: agent.is_default,
       is_enabled: agent.is_enabled,
     })
@@ -355,6 +361,25 @@ export default function AgentsPage() {
               ))}
             </select>
           </div>
+          {form.backend_type === 'direct_llm' && (
+            <div>
+              <label className="block text-xs text-content-secondary mb-1">{t('common.auth.executionMode', '执行模式')}</label>
+              <select
+                value={form.execution_mode}
+                onChange={e => setForm({ ...form, execution_mode: e.target.value })}
+                className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
+              >
+                <option value="chat">{t('common.auth.executionChat', '纯对话模式')}</option>
+                <option value="react">{t('common.auth.executionReact', 'ReAct 模式')}</option>
+                <option value="plan_and_execute">{t('common.auth.executionPlanAndExecute', 'Plan-And-Execute 模式')}</option>
+              </select>
+              <p className="text-xs text-content-secondary mt-1">
+                {form.execution_mode === 'chat' && t('common.auth.executionChatDesc', '直接与LLM对话，不使用工具')}
+                {form.execution_mode === 'react' && t('common.auth.executionReactDesc', '支持工具调用，Agent会思考→调用工具→继续推理')}
+                {form.execution_mode === 'plan_and_execute' && t('common.auth.executionPlanDesc', '先规划任务步骤，再逐步执行，适合复杂任务')}
+              </p>
+            </div>
+          )}
           {form.backend_type === 'direct_llm' && (
             <div>
               <label className="block text-xs text-content-secondary mb-1">{t('common.auth.model')}</label>

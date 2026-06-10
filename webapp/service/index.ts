@@ -1,4 +1,4 @@
-import type { IOnCompleted, IOnData, IOnError, IOnFile, IOnMessageEnd, IOnMessageReplace, IOnNodeFinished, IOnNodeStarted, IOnThought, IOnWorkflowFinished, IOnWorkflowStarted } from './base'
+import type { IOnCompleted, IOnData, IOnError, IOnFile, IOnMessageEnd, IOnMessageReplace, IOnNodeFinished, IOnNodeStarted, IOnThought, IOnToolCall, IOnWorkflowFinished, IOnWorkflowStarted } from './base'
 import { get, post, ssePost } from './base'
 import type { Feedbacktype } from '@/types/app'
 import { getConversationService } from '@/lib/services/conversation'
@@ -20,6 +20,7 @@ export const sendChatMessage = async (
     onNodeStarted,
     onNodeFinished,
     onWorkflowFinished,
+    onToolCall,
   }: {
     onData: IOnData
     onCompleted: IOnCompleted
@@ -33,6 +34,7 @@ export const sendChatMessage = async (
     onNodeStarted: IOnNodeStarted
     onNodeFinished: IOnNodeFinished
     onWorkflowFinished: IOnWorkflowFinished
+    onToolCall?: IOnToolCall
   },
 ) => {
   const { agent_id, apiKey, messages: _messages, ...rest } = body
@@ -45,7 +47,7 @@ export const sendChatMessage = async (
       response_mode: 'streaming',
     },
     headers,
-  }, { onData, onCompleted, onThought, onFile, onError, getAbortController, onMessageEnd, onMessageReplace, onNodeStarted, onWorkflowStarted, onWorkflowFinished, onNodeFinished })
+  }, { onData, onCompleted, onThought, onFile, onError, getAbortController, onMessageEnd, onMessageReplace, onNodeStarted, onWorkflowStarted, onWorkflowFinished, onNodeFinished, onToolCall })
 }
 
 export const fetchConversations = async () => {
