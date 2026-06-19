@@ -2,9 +2,14 @@ import { DynamicStructuredTool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import type { ToolDefinition, ToolContext, ToolResult } from './types'
 
+const g = globalThis as any
+if (!g.__openchat_pendingToolCalls) {
+  g.__openchat_pendingToolCalls = new Map<string, (result: ToolResult) => void>()
+}
+const pendingToolCalls: Map<string, (result: ToolResult) => void> = g.__openchat_pendingToolCalls
+
 export class ToolRegistry {
   private tools = new Map<string, ToolDefinition>()
-  private pendingToolCalls = new Map<string, (result: ToolResult) => void>()
 
   register(tool: ToolDefinition): void {
     this.tools.set(tool.name, tool)
@@ -107,7 +112,7 @@ export class ToolRegistry {
     try {
       const fullContext: ToolContext = {
         ...context,
-        pendingToolCalls: this.pendingToolCalls,
+        pendingToolCalls,
       }
       const result = await tool.handler(input, fullContext)
       console.log(`[ToolRegistry] Tool "${name}" completed:`, result.success ? 'success' : 'error')
@@ -155,11 +160,11 @@ export class ToolRegistry {
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this.pendingToolCalls.delete(toolCallId)
+        pendingToolCalls.delete(toolCallId)
         reject(new Error(`Client tool "${name}" execution timeout`))
       }, 30000)
 
-      this.pendingToolCalls.set(toolCallId, (result) => {
+      pendingToolCalls.set(toolCallId, (result) => {
         clearTimeout(timeout)
         resolve(result)
       })
@@ -167,10 +172,10 @@ export class ToolRegistry {
   }
 
   resolveClientToolResult(toolCallId: string, result: ToolResult): boolean {
-    const resolver = this.pendingToolCalls.get(toolCallId)
+    const resolver = pendingToolCalls.get(toolCallId)
     if (resolver) {
       resolver(result)
-      this.pendingToolCalls.delete(toolCallId)
+      pendingToolCalls.delete(toolCallId)
       return true
     }
     return false

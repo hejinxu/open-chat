@@ -1305,7 +1305,10 @@ const Main: FC<IMainProps> = (props) => {
             console.log('[Main] Tool result:', result)
             await fetch(`${BASE_PATH}/api/tools/tool-result`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(apiKey ? { 'x-api-key': apiKey } : {}),
+              },
               body: JSON.stringify({
                 tool_call_id: toolCall.tool_call_id,
                 result,
@@ -1317,7 +1320,10 @@ const Main: FC<IMainProps> = (props) => {
             console.error('[Main] Error executing client tool:', error)
             await fetch(`${BASE_PATH}/api/tools/tool-result`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(apiKey ? { 'x-api-key': apiKey } : {}),
+              },
               body: JSON.stringify({
                 tool_call_id: toolCall.tool_call_id,
                 error: error.message || 'Failed to execute client tool',

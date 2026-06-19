@@ -84,7 +84,7 @@ const Sidebar: FC<ISidebarProps> = ({
 
   return (
     <div
-      className="shrink-0 flex flex-col overflow-y-auto bg-surface pc:w-[244px] tablet:w-[192px] mobile:w-[240px] border-r border-border-subtle h-screen"
+      className="shrink-0 flex flex-col overflow-hidden bg-surface pc:w-[244px] tablet:w-[192px] mobile:w-[240px] border-r border-border-subtle h-screen"
     >
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <div className="flex items-center space-x-2">
@@ -106,7 +106,7 @@ const Sidebar: FC<ISidebarProps> = ({
         </div>
       )}
 
-      <nav className="mt-4 flex-1 space-y-1 bg-surface p-4 !pt-0">
+      <nav className="mt-4 flex-1 min-h-0 overflow-y-auto space-y-1 bg-surface p-4 !pt-0">
         {list.map((item) => {
           const isCurrent = item.id === currentId
           const ItemIcon
