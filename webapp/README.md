@@ -195,6 +195,8 @@ docker run -p 3000:3000 webapp-conversation:latest
 - **服务端工具**：直接在服务端执行
 - **客户端工具**：通过 SSE 通知客户端执行，客户端回传结果
 
+**注意**：`pendingToolCalls`（客户端工具的待解析 Promise）使用 `globalThis` 存储，确保 HMR 模块重载时不丢失。详见 `lib/tools/registry.ts`。
+
 ### MCP 集成
 
 支持 MCP (Model Context Protocol) 协议，可动态加载外部工具：

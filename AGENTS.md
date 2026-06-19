@@ -199,7 +199,7 @@ webapp/lib/langgraph/
 
 ### 工具系统
 
-**ToolRegistry**：工具注册中心，管理所有可用工具。
+**ToolRegistry**：工具注册中心，管理所有可用工具。`pendingToolCalls` 使用 `globalThis` 存储，确保 HMR 安全。
 
 **内置工具**：
 | 工具名称 | 执行位置 | 描述 |
@@ -542,6 +542,24 @@ const model = new ChatOpenAI({ openAIApiKey: 'sk-xxx', ... })
 ### 客户端工具执行
 **问题**：Plan-And-Execute 模式最初没有正确处理客户端工具（如 `get_page_content`）。
 **解决方案**：将 `context`（包含 SSE controller）传入 executor 节点，使用 `tools.executeClientTool()` 执行客户端工具。
+
+### ToolRegistry pendingToolCalls HMR 丢失
+**问题**：`pendingToolCalls` 作为 `ToolRegistry` 实例变量存储，Next.js Turbopack HMR 模块重载时 `globalRegistry` 被重置为 `null`，新建的 `ToolRegistry` 实例与之前存 pending call 的实例不是同一个，导致 `resolveClientToolResult()` 找不到 `tool_call_id`，返回 404。
+**解决方案**：`pendingToolCalls` 使用 `globalThis` 挂载，确保跨模块重载和跨实例共享同一个 Map。
+```typescript
+// registry.ts — 模块级 globalThis 存储
+const g = globalThis as any
+if (!g.__openchat_pendingToolCalls) {
+  g.__openchat_pendingToolCalls = new Map<string, (result: ToolResult) => void>()
+}
+const pendingToolCalls: Map<string, (result: ToolResult) => void> = g.__openchat_pendingToolCalls
+
+export class ToolRegistry {
+  // 不要将 pendingToolCalls 作为实例变量
+  // executeClientTool() 和 resolveClientToolResult() 直接使用全局 pendingToolCalls
+}
+```
+**注意**：`tool_call_id` 格式为 `tc_${Date.now()}_${Math.random()}`，唯一性保证不同浏览器不会互相干扰，无需担心跨用户串扰。
 
 ## Docs
 - **README.md**: 根目录，用户面向的项目文档
