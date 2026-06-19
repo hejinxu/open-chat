@@ -37,7 +37,7 @@ export const sendChatMessage = async (
     onToolCall?: IOnToolCall
   },
 ) => {
-  const { agent_id, apiKey, messages: _messages, ...rest } = body
+  const { agent_id, apiKey, ...rest } = body
   const headers: Record<string, string> = {}
   if (agent_id) { headers['x-agent-id'] = agent_id }
   if (apiKey) { headers['x-api-key'] = apiKey }
