@@ -8,6 +8,23 @@ interface TextToSpeechProps {
   disabled?: boolean
 }
 
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s+/g, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+    .replace(/---+/g, '')
+    .replace(/^>\s+/gm, '')
+    .replace(/^[-*]\s+/gm, '')
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+    .replace(/[\u{2600}-\u{26FF}]/gu, '')
+    .replace(/[\u{2700}-\u{27BF}]/gu, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim()
+}
+
 let pendingAutoRead = false
 let autoReadCallback: ((text: string) => void) | null = null
 
@@ -32,12 +49,13 @@ export function TextToSpeech({ text, disabled = false }: TextToSpeechProps) {
   const [isSpeaking, setIsSpeaking] = useState(false)
 
   const speak = useCallback((content: string) => {
-    if (!content.trim()) { return }
+    const plainText = stripMarkdown(content)
+    if (!plainText.trim()) { return }
     if (!window.speechSynthesis) { return }
 
     window.speechSynthesis.cancel()
 
-    const utterance = new SpeechSynthesisUtterance(content)
+    const utterance = new SpeechSynthesisUtterance(plainText)
     utterance.lang = 'zh-CN'
     utterance.rate = 1
     utterance.pitch = 1
