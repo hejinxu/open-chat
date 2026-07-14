@@ -2,6 +2,7 @@ import { pipeline, env } from '@huggingface/transformers'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+import { existsSync, readdirSync } from 'fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -9,7 +10,7 @@ const MODEL_PATH = process.env.SPEECH_MODEL_PATH || resolve(__dirname, '..', 'mo
 
 env.allowLocalModels = true
 env.localModelPath = MODEL_PATH + '/'
-env.allowRemoteModels = !process.env.SPEECH_OFFLINE
+env.allowRemoteModels = process.env.AUTO_DOWNLOAD_MODELS === 'true'
 
 if (process.env.SPEECH_MIRROR) {
   env.remoteHost = process.env.SPEECH_MIRROR
@@ -54,6 +55,13 @@ export const MODELS = {
 const models = new Map()
 const modelLoading = new Map()
 
+function isLocalModelExists(modelName) {
+  const modelDir = resolve(MODEL_PATH, modelName)
+  if (!existsSync(modelDir)) return false
+  const files = readdirSync(modelDir)
+  return files.some(f => f.endsWith('.onnx'))
+}
+
 export async function loadModel(modelName) {
   if (models.has(modelName)) return models.get(modelName)
   if (modelLoading.get(modelName)) {
@@ -65,7 +73,13 @@ export async function loadModel(modelName) {
 
   const modelConfig = MODELS[modelName]
   if (!modelConfig) {
-    throw new Error(`Unknown model: ${modelName}. Available: ${Object.keys(MODELS).join(', ')}`)
+    throw new Error(`未知模型: ${modelName}。可用模型: ${Object.keys(MODELS).join(', ')}`)
+  }
+
+  // 检测本地模型是否存在，不存在则跳过加载
+  if (!isLocalModelExists(modelName) && env.allowRemoteModels !== true) {
+    console.log(`[ModelLoader] 模型 ${modelName} 本地不存在，已跳过加载。如需自动下载请设置 AUTO_DOWNLOAD_MODELS=true`)
+    return null
   }
 
   modelLoading.set(modelName, true)
@@ -93,8 +107,8 @@ export async function loadModel(modelName) {
     console.log(`[ModelLoader] Model ${modelName} loaded in ${elapsed}s`)
     return transcriber
   } catch (e) {
-    console.error(`[ModelLoader] Failed to load model ${modelName}:`, e)
-    throw e
+    console.log(`[ModelLoader] 模型 ${modelName} 加载失败: ${e.message}`)
+    return null
   } finally {
     modelLoading.set(modelName, false)
   }

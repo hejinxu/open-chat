@@ -32,6 +32,9 @@ async function transcribe(audioData, language, task, modelName) {
   }
 
   const model = await loadModel(modelName)
+  if (!model) {
+    throw new Error(`模型 ${modelName} 不可用，请先下载模型文件`)
+  }
   const result = await model(audioData, {
     language,
     task,
@@ -89,13 +92,17 @@ export default {
 
   async init() {
     const whisperModels = Object.keys(MODELS).filter(k => MODELS[k].type === 'whisper')
-    console.log(`[Speech] Preloading Whisper models: ${whisperModels.join(', ')}`)
+    console.log(`[Speech] 检测 Whisper 模型: ${whisperModels.join(', ')}`)
     const results = await Promise.allSettled(whisperModels.map(m => loadModel(m)))
-    const loaded = results.filter(r => r.status === 'fulfilled').length
+    const loaded = results.filter(r => r.status === 'fulfilled' && r.value !== null).length
+    const skipped = results.filter(r => r.status === 'fulfilled' && r.value === null).length
     const failed = results.filter(r => r.status === 'rejected')
-    console.log(`[Speech] Loaded ${loaded}/${whisperModels.length} models`)
+    console.log(`[Speech] 已加载 ${loaded}/${whisperModels.length} 个模型`)
+    if (skipped > 0) {
+      console.log(`[Speech] 跳过 ${skipped} 个本地不存在的模型`)
+    }
     for (const f of failed) {
-      console.error(`[Speech] Failed to preload model:`, f.reason?.message)
+      console.log(`[Speech] 模型预加载跳过: ${f.reason?.message}`)
     }
   },
 

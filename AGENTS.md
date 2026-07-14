@@ -471,7 +471,7 @@ AUTH_ENABLED=true       # false = 跳过认证（向后兼容）
 AUTH_MODE=remote        # self | remote（主应用使用 remote）
 VERIFY_ENDPOINT=http://127.0.0.1:3000/chat/api/auth/verify-token  # remote 模式必填，需包含 basePath
 VERIFY_TIMEOUT=5000     # 远程验证超时 ms
-SPEECH_OFFLINE=true     # 禁止启动时自动下载模型
+AUTO_DOWNLOAD_MODELS=false  # 是否允许自动下载模型（默认 false，不自动下载）
 ```
 配置文件：`ws-server/.env`（从 `.env.example` 复制创建，gitignored）
 

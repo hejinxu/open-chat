@@ -116,7 +116,7 @@ cp .env.example .env
 | `SPEECH_MODEL_PATH` | `./models` | 模型文件路径 |
 | `SPEECH_PROCESS_INTERVAL` | `1500` | 推理间隔（毫秒） |
 | `SPEECH_MIN_AUDIO_LENGTH` | `8000` | 最小音频长度 |
-| `SPEECH_OFFLINE` | - | 禁止远程下载模型 |
+| `AUTO_DOWNLOAD_MODELS` | `false` | 是否允许自动下载模型 |
 | `SPEECH_MIRROR` | - | 模型下载镜像地址 |
 | `FUNASR_PYTHON` | `python3` | FunASR Python 路径 |
 | `AUTH_ENABLED` | `true` | 是否启用认证（`false` = 跳过认证） |
