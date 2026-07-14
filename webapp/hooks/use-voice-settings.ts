@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { VoiceRecognitionEngine } from '@/config/voice-input'
 import { VOICE_INPUT_CONFIG } from '@/config/voice-input'
-import type { WhisperModel } from '@/app/components/chat/voice-recognition/whisper-recognition'
+import type { SpeechModel } from '@/app/components/chat/voice-recognition/ws-speech-recognition'
 
 function getSavedBoolean(key: string, fallback: boolean): boolean {
   if (typeof window === 'undefined') { return fallback }
@@ -18,9 +18,13 @@ function getSavedNumber(key: string, fallback: number): number {
 }
 
 function getDefaultNoInputMs(engine: VoiceRecognitionEngine): number {
-  return engine === 'whisper'
-    ? VOICE_INPUT_CONFIG.NO_INPUT_TIMEOUT_MS_WHISPER
-    : VOICE_INPUT_CONFIG.NO_INPUT_TIMEOUT_MS_BROWSER
+  if (engine === 'whisper') {
+    return VOICE_INPUT_CONFIG.NO_INPUT_TIMEOUT_MS_WHISPER
+  }
+  if (engine === 'funasr') {
+    return VOICE_INPUT_CONFIG.NO_INPUT_TIMEOUT_MS_FUNASR
+  }
+  return VOICE_INPUT_CONFIG.NO_INPUT_TIMEOUT_MS_BROWSER
 }
 
 export function useVoiceSettings() {
@@ -39,7 +43,7 @@ export function useVoiceSettings() {
   const [voiceEngine, setVoiceEngine] = useState<VoiceRecognitionEngine>(() => {
     if (typeof window === 'undefined') { return VOICE_INPUT_CONFIG.DEFAULT_ENGINE }
     const saved = localStorage.getItem('voice-engine')
-    if (saved === 'browser' || saved === 'whisper') { return saved }
+    if (saved === 'browser' || saved === 'whisper' || saved === 'funasr') { return saved }
     return VOICE_INPUT_CONFIG.DEFAULT_ENGINE
   })
 
@@ -49,11 +53,18 @@ export function useVoiceSettings() {
     return getSavedNumber(key, getDefaultNoInputMs(engine))
   })
 
-  const [whisperModel, setWhisperModel] = useState<WhisperModel>(() => {
+  const [whisperModel, setWhisperModel] = useState<SpeechModel>(() => {
     if (typeof window === 'undefined') { return 'whisper-tiny' }
     const saved = localStorage.getItem('whisper-model')
-    const validModels: WhisperModel[] = ['whisper-tiny', 'whisper-base', 'whisper-small', 'funasr-paraformer-zh', 'funasr-sensevoice']
-    return validModels.includes(saved as WhisperModel) ? (saved as WhisperModel) : 'whisper-tiny'
+    const whisperModels: SpeechModel[] = ['whisper-tiny', 'whisper-base', 'whisper-small']
+    const funasrModels: SpeechModel[] = ['funasr-paraformer-zh', 'funasr-sensevoice']
+    if (voiceEngine === 'whisper' && whisperModels.includes(saved as SpeechModel)) {
+      return saved as SpeechModel
+    }
+    if (voiceEngine === 'funasr' && funasrModels.includes(saved as SpeechModel)) {
+      return saved as SpeechModel
+    }
+    return voiceEngine === 'funasr' ? 'funasr-paraformer-zh' : 'whisper-tiny'
   })
 
   const handleAutoStopChange = (val: boolean) => {
@@ -82,9 +93,25 @@ export function useVoiceSettings() {
     const key = `voice-no-input-ms-${val}`
     const saved = localStorage.getItem(key)
     setNoInputMs(saved !== null ? Number(saved) : getDefaultNoInputMs(val))
+    const whisperModels: SpeechModel[] = ['whisper-tiny', 'whisper-base', 'whisper-small']
+    const funasrModels: SpeechModel[] = ['funasr-paraformer-zh', 'funasr-sensevoice']
+    if (val === 'whisper') {
+      const savedModel = localStorage.getItem('whisper-model')
+      const newModel = (savedModel && whisperModels.includes(savedModel as SpeechModel))
+        ? (savedModel as SpeechModel)
+        : 'whisper-tiny'
+      setWhisperModel(newModel)
+    }
+    else if (val === 'funasr') {
+      const savedModel = localStorage.getItem('whisper-model')
+      const newModel = (savedModel && funasrModels.includes(savedModel as SpeechModel))
+        ? (savedModel as SpeechModel)
+        : 'funasr-paraformer-zh'
+      setWhisperModel(newModel)
+    }
   }
 
-  const handleWhisperModelChange = (val: WhisperModel) => {
+  const handleWhisperModelChange = (val: SpeechModel) => {
     setWhisperModel(val)
     localStorage.setItem('whisper-model', val)
   }

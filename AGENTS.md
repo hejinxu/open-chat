@@ -262,14 +262,16 @@ webapp/lib/mcp/
 
 ## Voice Recognition
 
-Two engines in `webapp/app/components/chat/voice-recognition/`:
+Three engines in `webapp/app/components/chat/voice-recognition/`:
 - **browser** (`browser-recognition.ts`): Web Speech API. Hardcoded `lang: 'zh-CN'`. Auto-restarts on `onend`.
-- **whisper** (`whisper-recognition.ts`): Socket.IO client (namespace: `/speech`). Supports: whisper-tiny/base/small, funasr-paraformer-zh, funasr-sensevoice. 支持 `authToken` 参数用于 ws-server 认证。
+- **whisper** (`ws-speech-recognition.ts`): Socket.IO client (namespace: `/speech`). Supports: whisper-tiny/base/small. 支持 `authToken` 参数用于 ws-server 认证。
+- **funasr** (`ws-speech-recognition.ts`): Socket.IO client (namespace: `/speech`). Supports: funasr-paraformer-zh, funasr-sensevoice. 使用相同的 `WsSpeechRecognition` 类，ws-server 根据模型名自动路由。
 
 ### Core Components
-- **`voice-input.tsx`**: Core orchestrator — owns `isActive`, `isListening`, engine callbacks, timers, countdown, pending send logic. 接收 `authToken` prop 传递给 WhisperRecognition。
-- **`index.tsx`**: Parent — manages state, per-engine localStorage, prop passing. 将 `apiKey` 作为 `authToken` 传递给 VoiceInput。
-- **`voice-settings.tsx**: Settings UI — engine selector, timeout input, checkboxes.
+- **`voice-input.tsx`**: Core orchestrator — owns `isActive`, `isListening`, engine callbacks, timers, countdown, pending send logic. 接收 `authToken` prop 传递给 WsSpeechRecognition。支持 `onError` 回调用于错误提示。
+- **`index.tsx`**: Parent — manages state, per-engine localStorage, prop passing. 将 `apiKey` 作为 `authToken` 传递给 VoiceInput。管理 `inputMessage` 状态用于输入框上方提示。
+- **`voice-settings.tsx**: Settings UI — engine selector (browser/whisper/funasr), timeout input, checkboxes.
+- **`input-message.tsx`**: 通用输入框提示组件，支持 error/info/loading 三种类型，可关闭。使用语义化主题类（`bg-danger-bg`、`text-danger-text` 等）。
 
 ### Auto-Stop & Timer Design
 - **`autoStopOnNoInput`**: Stops recording after N seconds of silence.
@@ -277,6 +279,7 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 - **`noInputMs`**: Per-engine timeout stored in localStorage:
   - Browser: `voice-no-input-ms-browser` (default 5000ms)
   - Whisper: `voice-no-input-ms-whisper` (default 10000ms)
+  - FunASR: `voice-no-input-ms-funasr` (default 10000ms)
 - **`sendTimerRef`**: Debounce before auto-send. Each new result resets the 5s countdown.
 
 ### Whisper Server Details
@@ -293,18 +296,30 @@ Two engines in `webapp/app/components/chat/voice-recognition/`:
 5. **Per-engine timeout in localStorage**: Switching engines loads from the engine's own key.
 6. **opencc-js API**: Use `Converter({ from: 'tw', to: 'cn' })` — NOT `createConverter`.
 7. **`SEND_DELAY_MS = 5000`**: Debounce delay before auto-sending after timeout.
+8. **Error handling**: `WsSpeechRecognition` accepts `onError` callback. Parent component (`index.tsx`) manages `inputMessage` state for display above input area.
 
 ## Conventions
+
+### ⚠️ 硬性规则（编码时必须遵守）
+
+| 禁止 | 必须 |
+|------|------|
+| `bg-red-50`、`text-blue-600`、`fill="#444CE7"` | `bg-danger-bg`、`text-content-accent`、使用 CSS 变量 |
+| `dark:bg-xxx` 覆写 | 使用语义化类，主题自动适配 |
+| 只修改一个主题文件 | 同时修改 light.css、dark.css、tech-blue.css |
+
+**新增颜色步骤**：(1) 三个主题文件添加 CSS 变量 → (2) tailwind.config.js 注册语义类 → (3) 组件中使用生成的类
+
+### 基础规范
 - **ESLint**: No semicolons, single quotes, 2-space indent (`@antfu/eslint-config`). Run `pnpm fix` to auto-format.
 - **Imports**: Use `@/*` alias (maps to `webapp/`). Absolute imports preferred.
 - **Components**: `'use client'` required for client components. Server components are the default.
 - **Styling**: Tailwind-first. SCSS only for markdown/code. `classnames` or `tailwind-merge` for conditional classes.
-- **Theme colors**: Use semantic CSS custom property classes (`text-content-accent`, `border-border`, `hover:bg-surface-hover`) exclusively. Never hardcode theme-specific colors — this includes Tailwind literals (`text-indigo-600`, `bg-red-50`, `border-indigo-100`), SVG fills (`fill="#444CE7"`), and `dark:` variant overrides. When a component needs a color not covered by existing variables: (1) add the CSS variable to all three theme files (`light.css`, `dark.css`, `tech-blue.css`), (2) register it in `tailwind.config.js` under the appropriate semantic group, (3) use the generated class in components. Hover/danger/interactive states each need their own variable — avoid piggybacking on existing variables that happen to share a value.
 - **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom. Scrollbar at screen edge via full-width scrollable container. Auto-scroll: `ResizeObserver` on inner content wrapper (no overflow) triggers `scrollTop = scrollHeight` on outer scroll container — handles message loading, streaming, async markdown rendering.
 - **Build**: `next.config.js` disables ESLint and TypeScript errors during build.
 - **Turbopack**: 开发模式使用 Turbopack（`next dev --turbopack`），编译速度比 Webpack 快 5-20 倍。注意：CSS `@import` 规则必须在所有规则之前（Turbopack 使用 Lightning CSS，规范要求更严格）。
 - **Multi-Agent**: 后端 API 通过 `x-agent-id` header 选择智能体；前端 `AgentSelector` 组件在输入框内与语音按钮同排；
-- **After coding**: 每次编写完代码后，运行 `pnpm lint` 和 `pnpm typecheck` 检查，主动询问用户是否需要更新 AGENTS.md。
+- **After coding**: 每次编写完代码后，运行 `pnpm lint` 和 `pnpm typecheck` 检查，**检查是否使用了硬编码主题色**，主动询问用户是否需要更新 AGENTS.md。
 
 ### Dify 智能体 user 参数规范
 

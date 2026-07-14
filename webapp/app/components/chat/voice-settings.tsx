@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Cog6ToothIcon } from '@heroicons/react/24/outline'
 import type { VoiceRecognitionEngine } from '@/config/voice-input'
-import type { WhisperModel } from './voice-recognition/whisper-recognition'
+import type { SpeechModel } from './voice-recognition/ws-speech-recognition'
 
 interface VoiceSettingsProps {
   autoStopOnNoInput: boolean
@@ -16,15 +16,18 @@ interface VoiceSettingsProps {
   onTimeoutChange: (val: number) => void
   engine: VoiceRecognitionEngine
   onEngineChange: (val: VoiceRecognitionEngine) => void
-  whisperModel: WhisperModel
-  onWhisperModelChange: (val: WhisperModel) => void
+  whisperModel: SpeechModel
+  onWhisperModelChange: (val: SpeechModel) => void
 }
 
-const WHISPER_MODELS: { value: WhisperModel, label: string, desc: string }[] = [
+const WHISPER_MODELS: { value: SpeechModel, label: string, desc: string }[] = [
   { value: 'whisper-tiny', label: 'Whisper Tiny', desc: '最快，精度一般' },
   { value: 'whisper-base', label: 'Whisper Base', desc: '较快，精度良好' },
   { value: 'whisper-small', label: 'Whisper Small', desc: '较慢，精度最好' },
-  { value: 'funasr-paraformer-zh', label: 'FunASR Paraformer', desc: '中文识别，速度快精度高' },
+]
+
+const FUNASR_MODELS: { value: SpeechModel, label: string, desc: string }[] = [
+  { value: 'funasr-paraformer-zh', label: 'FunASR Paraformer', desc: '中文，速度快精度高' },
   { value: 'funasr-sensevoice', label: 'FunASR SenseVoice', desc: '多语言，中英日韩粤' },
 ]
 
@@ -113,19 +116,36 @@ export function VoiceSettings({
                 >
                   <option value="browser">浏览器识别</option>
                   <option value="whisper">Whisper 离线</option>
+                  <option value="funasr">FunASR 离线</option>
                 </select>
               </label>
 
               {engine === 'whisper' && (
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm text-content-tertiary">Whisper 模型</span>
+                  <span className="text-sm text-content-tertiary">语音模型</span>
                   <select
                     value={whisperModel}
-                    onChange={e => onWhisperModelChange(e.target.value as WhisperModel)}
+                    onChange={e => onWhisperModelChange(e.target.value as SpeechModel)}
                     className="text-sm px-2 py-1 rounded border bg-surface-tertiary text-content focus:outline-none focus:ring-2"
                     style={{ '--tw-ring-color': 'var(--ring)' } as React.CSSProperties}
                   >
                     {WHISPER_MODELS.map(m => (
+                      <option key={m.value} value={m.value}>{m.label} - {m.desc}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {engine === 'funasr' && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-sm text-content-tertiary">语音模型</span>
+                  <select
+                    value={whisperModel}
+                    onChange={e => onWhisperModelChange(e.target.value as SpeechModel)}
+                    className="text-sm px-2 py-1 rounded border bg-surface-tertiary text-content focus:outline-none focus:ring-2"
+                    style={{ '--tw-ring-color': 'var(--ring)' } as React.CSSProperties}
+                  >
+                    {FUNASR_MODELS.map(m => (
                       <option key={m.value} value={m.value}>{m.label} - {m.desc}</option>
                     ))}
                   </select>

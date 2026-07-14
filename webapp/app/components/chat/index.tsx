@@ -1,6 +1,6 @@
 'use client'
 import type { FC } from 'react'
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Textarea from 'rc-textarea'
 import s from './style.module.css'
@@ -20,6 +20,8 @@ import { VoiceInput } from './voice-input'
 import { setAutoReadPending, triggerAutoReadIfPending } from './text-to-speech'
 import { VoiceSettings } from './voice-settings'
 import { AgentSelector } from './agent-selector'
+import { InputMessage } from './input-message'
+import type { InputMessageType } from './input-message'
 import { useVoiceSettings } from '@/hooks/use-voice-settings'
 
 export interface IChatProps {
@@ -89,6 +91,7 @@ const Chat: FC<IChatProps> = ({
   const contentWrapperRef = useRef<HTMLDivElement>(null)
   const prevIsRespondingRef = useRef(false)
   const hasReadAloudRef = useRef(false)
+  const [inputMessage, setInputMessage] = useState<InputMessageType | null>(null)
 
   useEffect(() => {
     if (autoReadAloud) {
@@ -251,8 +254,17 @@ const Chat: FC<IChatProps> = ({
       {
         !isHideSendInput && (
           <div className='shrink-0 px-3.5 bg-surface pb-3 pt-2'>
-            <div className='pc:w-[794px] max-w-full mx-auto border-[1.5px] border-border rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.25)]'>
-              <div className='px-2 py-[7px] min-h-[44px]'>
+            <div className='pc:w-[794px] max-w-full mx-auto'>
+              {inputMessage && (
+                <InputMessage
+                  type={inputMessage.type}
+                  message={inputMessage.message}
+                  closable={inputMessage.closable}
+                  onClose={() => setInputMessage(null)}
+                />
+              )}
+              <div className='border-[1.5px] border-border rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.25)]'>
+                <div className='px-2 py-[7px] min-h-[44px]'>
                 {
                   visionConfig?.enabled && (
                     <>
@@ -304,6 +316,14 @@ const Chat: FC<IChatProps> = ({
                       queryRef.current = text
                     }}
                     onAutoSend={handleSend}
+                    onError={(error) => {
+                      if (error) {
+                        setInputMessage({ type: 'error', message: error, closable: true })
+                      }
+                      else {
+                        setInputMessage(null)
+                      }
+                    }}
                     disabled={isResponding}
                     autoStopOnNoInput={autoStopOnNoInput}
                     noInputMs={noInputMs}
@@ -354,8 +374,9 @@ const Chat: FC<IChatProps> = ({
                     >
                       <div className={`${s.sendBtn} w-8 h-8 cursor-pointer rounded-md`} onClick={handleSend}></div>
                     </Tooltip>
-                  )}
+                       )}
               </div>
+            </div>
             </div>
           </div>
         )

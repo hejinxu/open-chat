@@ -6,24 +6,25 @@ import { VOICE_INPUT_CONFIG } from '@/config/voice-input'
 import type { VoiceRecognitionEngine } from '@/config/voice-input'
 import { setAutoReadPending, stopReadAloud } from './text-to-speech'
 import { BrowserRecognition } from './voice-recognition/browser-recognition'
-import { WhisperRecognition } from './voice-recognition/whisper-recognition'
-import type { WhisperModel } from './voice-recognition/whisper-recognition'
+import { WsSpeechRecognition } from './voice-recognition/ws-speech-recognition'
+import type { SpeechModel } from './voice-recognition/ws-speech-recognition'
 import type { VoiceRecognitionResult } from './voice-recognition/types'
 
 interface VoiceInputProps {
   onResult: (text: string) => void
   onAutoSend?: () => void
+  onError?: (error: string | null) => void
   disabled?: boolean
   autoStopOnNoInput?: boolean
   noInputMs?: number
   autoSendOnStop?: boolean
   autoReadAloud?: boolean
   engine?: VoiceRecognitionEngine
-  whisperModel?: WhisperModel
+  whisperModel?: SpeechModel
   authToken?: string
 }
 
-export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, autoStopOnNoInput = true, noInputMs = VOICE_INPUT_CONFIG.NO_INPUT_TIMEOUT_MS_BROWSER, autoSendOnStop = VOICE_INPUT_CONFIG.AUTO_SEND_ON_STOP, autoReadAloud = VOICE_INPUT_CONFIG.AUTO_READ_ALOUD, engine = VOICE_INPUT_CONFIG.DEFAULT_ENGINE, whisperModel = 'whisper-tiny', authToken }: VoiceInputProps, ref: React.Ref<{ stop: () => void }>) => {
+export const VoiceInput = forwardRef(({ onResult, onAutoSend, onError, disabled = false, autoStopOnNoInput = true, noInputMs = VOICE_INPUT_CONFIG.NO_INPUT_TIMEOUT_MS_BROWSER, autoSendOnStop = VOICE_INPUT_CONFIG.AUTO_SEND_ON_STOP, autoReadAloud = VOICE_INPUT_CONFIG.AUTO_READ_ALOUD, engine = VOICE_INPUT_CONFIG.DEFAULT_ENGINE, whisperModel = 'whisper-tiny', authToken }: VoiceInputProps, ref: React.Ref<{ stop: () => void }>) => {
   const [isListening, setIsListening] = useState(false)
   const [isSupported, setIsSupported] = useState(false)
   const [isWaitingForResult, setIsWaitingForResult] = useState(false)
@@ -40,6 +41,7 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const onResultRef = useRef(onResult)
   const onAutoSendRef = useRef(onAutoSend)
+  const onErrorRef = useRef(onError)
   const autoStopOnNoInputRef = useRef(autoStopOnNoInput)
   const noInputMsRef = useRef(noInputMs)
   const autoSendOnStopRef = useRef(autoSendOnStop)
@@ -50,6 +52,7 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
 
   useEffect(() => { onResultRef.current = onResult }, [onResult])
   useEffect(() => { onAutoSendRef.current = onAutoSend }, [onAutoSend])
+  useEffect(() => { onErrorRef.current = onError }, [onError])
   useEffect(() => { autoStopOnNoInputRef.current = autoStopOnNoInput }, [autoStopOnNoInput])
   useEffect(() => { noInputMsRef.current = noInputMs }, [noInputMs])
   useEffect(() => { autoSendOnStopRef.current = autoSendOnStop }, [autoSendOnStop])
@@ -71,9 +74,14 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
   }, [engine])
 
   const createEngine = (callback: (result: VoiceRecognitionResult) => void) => {
-    if (engineTypeRef.current === 'whisper') {
-      return new WhisperRecognition(callback, whisperModelRef.current, {
+    if (engineTypeRef.current === 'whisper' || engineTypeRef.current === 'funasr') {
+      return new WsSpeechRecognition(callback, whisperModelRef.current, {
         authToken: authTokenRef.current,
+        onError: (error) => {
+          console.warn('[VoiceInput] Speech recognition error:', error.message)
+          onErrorRef.current?.(error.message)
+          setIsListening(false)
+        },
       })
     }
     return new BrowserRecognition(callback)
@@ -81,7 +89,7 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
 
   const checkSupport = () => {
     if (typeof window === 'undefined') { return false }
-    if (engineTypeRef.current === 'whisper') {
+    if (engineTypeRef.current === 'whisper' || engineTypeRef.current === 'funasr') {
       return !!navigator.mediaDevices?.getUserMedia
     }
     return !!(window.SpeechRecognition || (window as any).webkitSpeechRecognition)
@@ -155,6 +163,7 @@ export const VoiceInput = forwardRef(({ onResult, onAutoSend, disabled = false, 
     clearSendTimer()
     clearCountdown()
     setIsWaitingForResult(false)
+    onErrorRef.current?.(null)
     isActiveRef.current = true
 
     const scheduleAutoSend = () => {

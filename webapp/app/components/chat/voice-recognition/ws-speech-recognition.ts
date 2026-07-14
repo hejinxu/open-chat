@@ -2,15 +2,17 @@ import type { VoiceRecognitionResult } from './types'
 import { io as socketIo } from 'socket.io-client'
 import { BASE_PATH } from '@/config'
 
-type WhisperCallback = (result: VoiceRecognitionResult) => void
+type SpeechRecognitionCallback = (result: VoiceRecognitionResult) => void
+type SpeechRecognitionErrorCallback = (error: Error) => void
 
-export type WhisperModel = 'whisper-tiny' | 'whisper-base' | 'whisper-small' | 'funasr-paraformer-zh' | 'funasr-sensevoice'
+export type SpeechModel = 'whisper-tiny' | 'whisper-base' | 'whisper-small' | 'funasr-paraformer-zh' | 'funasr-sensevoice'
 
-interface WhisperRecognitionOptions {
+interface WsSpeechRecognitionOptions {
   authToken?: string
+  onError?: SpeechRecognitionErrorCallback
 }
 
-function getWhisperWsUrl(): string {
+function getSpeechWsUrl(): string {
   if (typeof window === 'undefined') { return '' }
   const port = (window as any).__WHISPER_PORT__ || '8787'
   return `http://${window.location.hostname}:${port}`
@@ -28,19 +30,21 @@ async function fetchWsAuthToken(): Promise<string | null> {
   return null
 }
 
-export class WhisperRecognition {
+export class WsSpeechRecognition {
   private isActive = false
-  private callback: WhisperCallback | null = null
+  private callback: SpeechRecognitionCallback | null = null
+  private errorCallback: SpeechRecognitionErrorCallback | null = null
   private audioContext: AudioContext | null = null
   private stream: MediaStream | null = null
   private socket: any = null
-  private modelName: WhisperModel
+  private modelName: SpeechModel
   private authToken: string | undefined
 
-  constructor(callback: WhisperCallback, modelName: WhisperModel = 'whisper-tiny', options?: WhisperRecognitionOptions) {
+  constructor(callback: SpeechRecognitionCallback, modelName: SpeechModel = 'whisper-tiny', options?: WsSpeechRecognitionOptions) {
     this.callback = callback
     this.modelName = modelName
     this.authToken = options?.authToken
+    this.errorCallback = options?.onError || null
   }
 
   isSupported(): boolean {
@@ -93,14 +97,14 @@ export class WhisperRecognition {
       source.connect(processor)
       processor.connect(this.audioContext.destination)
     } catch (e) {
-      console.warn('[WhisperRecognition] Failed to start:', e)
+      console.warn('[WsSpeechRecognition] Failed to start:', e)
       this.isActive = false
       this.cleanup()
     }
   }
 
   private async connectSocket(): Promise<void> {
-    const url = getWhisperWsUrl()
+    const url = getSpeechWsUrl()
 
     // Fetch auth token if not provided
     const token = this.authToken || await fetchWsAuthToken()
@@ -121,7 +125,7 @@ export class WhisperRecognition {
 
       this.socket.on('connect', () => {
         clearTimeout(timeout)
-        console.log('[WhisperRecognition] Socket connected')
+        console.log('[WsSpeechRecognition] Socket connected')
         this.socket.emit('config', { model: this.modelName })
         resolve()
       })
@@ -132,7 +136,7 @@ export class WhisperRecognition {
       })
 
       this.socket.on('disconnect', () => {
-        console.log('[WhisperRecognition] Socket disconnected')
+        console.log('[WsSpeechRecognition] Socket disconnected')
         this.cleanup()
       })
 
@@ -143,11 +147,14 @@ export class WhisperRecognition {
       })
 
       this.socket.on('config_ok', (msg: any) => {
-        console.log(`[WhisperRecognition] Server using model: ${msg.model}`)
+        console.log(`[WsSpeechRecognition] Server using model: ${msg.model}`)
       })
 
       this.socket.on('error', (msg: any) => {
-        console.warn('[WhisperRecognition] Server error:', msg.message)
+        console.warn('[WsSpeechRecognition] Server error:', msg.message)
+        if (this.errorCallback) {
+          this.errorCallback(new Error(msg.message || 'Speech recognition failed'))
+        }
       })
     })
   }

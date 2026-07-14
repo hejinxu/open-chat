@@ -9,6 +9,9 @@
   --surface-elevated: #FFFFFF;
 
   /* Danger */
+  --danger-bg: #FEF2F2;
+  --danger-text: #B91C1C;
+  --danger-icon: #F87171;
   --danger-hover: #FEE2E2;
 
   /* Text */

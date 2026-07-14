@@ -81,6 +81,12 @@ module.exports = {
           accent: 'var(--text-accent)',
           'on-accent': 'var(--text-on-accent)',
         },
+        danger: {
+          DEFAULT: 'var(--danger-text)',
+          bg: 'var(--danger-bg)',
+          text: 'var(--danger-text)',
+          icon: 'var(--danger-icon)',
+        },
         border: {
           DEFAULT: 'var(--border)',
           subtle: 'var(--border-subtle)',
