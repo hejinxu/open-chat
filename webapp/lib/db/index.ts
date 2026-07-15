@@ -1,5 +1,6 @@
 import type { DatabaseProvider } from './types'
 import { SqliteProvider } from './sqlite'
+import { PostgresProvider } from './postgres'
 
 let _instance: DatabaseProvider | null = null
 
@@ -12,8 +13,8 @@ export function getDatabaseProvider(): DatabaseProvider {
         _instance = new SqliteProvider()
         break
       case 'postgres':
-        // TODO: Implement PostgreSQL provider
-        throw new Error('PostgreSQL provider not implemented yet')
+        _instance = new PostgresProvider()
+        break
       default:
         throw new Error(`Unknown storage backend: ${backend}. Use 'sqlite' or 'postgres'.`)
     }

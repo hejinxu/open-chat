@@ -7,7 +7,7 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
   outputFileTracingRoot: path.join(__dirname, '../'),
-  serverExternalPackages: ['sql.js', 'svg-captcha'],
+  serverExternalPackages: ['sql.js', 'svg-captcha', 'pg'],
   eslint: {
     ignoreDuringBuilds: true,
   },
