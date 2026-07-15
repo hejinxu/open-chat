@@ -130,11 +130,15 @@ export default function LoginPage() {
                 autoComplete="off"
               />
               <div
-                className="h-10 cursor-pointer rounded"
+                className="w-[120px] h-10 shrink-0 overflow-hidden cursor-pointer rounded"
                 onClick={refreshCaptcha}
                 title={t('common.auth.refreshCaptcha')}
-                dangerouslySetInnerHTML={{ __html: captchaSvg }}
-              />
+              >
+                <div
+                  className="w-full h-full [&>svg]:w-full [&>svg]:h-full [&>svg]:block"
+                  dangerouslySetInnerHTML={{ __html: captchaSvg }}
+                />
+              </div>
             </div>
           </div>
 
