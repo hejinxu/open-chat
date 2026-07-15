@@ -253,8 +253,8 @@ export default function AgentsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-content-secondary">
-              <th className="px-4 py-2">{t('common.auth.agentId')}</th>
               <th className="px-4 py-2">{t('common.auth.name')}</th>
+              <th className="px-4 py-2">{t('common.auth.agentId')}</th>
               <th className="px-4 py-2">{t('common.auth.backendType')}</th>
               <th className="px-4 py-2">{t('common.auth.model')}</th>
               <th className="px-4 py-2">{t('common.auth.status')}</th>
@@ -265,11 +265,11 @@ export default function AgentsPage() {
           <tbody>
             {agents.map(agent => (
               <tr key={agent.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-2 text-content-secondary text-xs font-mono">{agent.id}</td>
                 <td className="px-4 py-2 text-content">
                   <span className="mr-2">{agent.icon}</span>
                   {agent.name}
                 </td>
+                <td className="px-4 py-2 text-content-secondary text-xs font-mono">{agent.id}</td>
                 <td className="px-4 py-2 text-content-secondary text-xs">{agent.backend_type}</td>
                 <td className="px-4 py-2 text-content-secondary text-xs font-mono">{agent.model || '-'}</td>
                 <td className="px-4 py-2">
