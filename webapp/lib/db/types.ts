@@ -2,6 +2,8 @@ import type { ConversationRecord, MessageRecord } from '../storage/types'
 import type { UserRecord, UserAccountRecord, AppIntegrationRecord, ApiKeyRecord } from '@/types/auth'
 import type { AgentRecord } from '@/types/agent'
 import type { ModelProvider, Model } from '@/types/model'
+import type { AgentTypeRecord } from '@/types/agent-type'
+import type { SystemPromptRecord } from '@/types/system-prompt'
 
 export interface DatabaseProvider {
   // Conversations
@@ -52,6 +54,18 @@ export interface DatabaseProvider {
   saveAgent: (agent: AgentRecord) => Promise<void>
   deleteAgent: (id: string) => Promise<void>
   setDefaultAgent: (id: string) => Promise<void>
+
+  // Agent Types
+  getAgentTypes: () => Promise<AgentTypeRecord[]>
+  getAgentTypeById: (id: string) => Promise<AgentTypeRecord | null>
+  saveAgentType: (agentType: AgentTypeRecord) => Promise<void>
+  deleteAgentType: (id: string) => Promise<void>
+
+  // System Prompts
+  getSystemPrompts: () => Promise<SystemPromptRecord[]>
+  getSystemPromptById: (id: string) => Promise<SystemPromptRecord | null>
+  saveSystemPrompt: (prompt: SystemPromptRecord) => Promise<void>
+  deleteSystemPrompt: (id: string) => Promise<void>
 
   // Model Providers
   getModelProviders: () => Promise<ModelProvider[]>

@@ -2,8 +2,9 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getInfo, setSession, getAdapterForRequest, getAgentForRequest } from '@/app/api/utils/common'
 import { ConversationNotFoundError } from '@/lib/adapters/dify'
-import { AgentNotFoundError, NoAgentsConfiguredError, UnauthorizedError } from '@/lib/errors'
+import { AgentNotFoundError, NoAgentsConfiguredError, UnauthorizedError, RiskAuthFailedError, PermissionDeniedError } from '@/lib/errors'
 import { AgentExecutor } from '@/lib/executors/agent-executor'
+import { verifyRiskToken, checkSmartQueryPermission } from '@/lib/services/risk-auth-verify'
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +21,31 @@ export async function POST(request: NextRequest) {
 
     const agent = await getAgentForRequest(request)
     const executionMode = agent.execution_mode || 'chat'
+
+    // Risk 平台智能问数：验证 token + 权限检查 + 区划注入
+    const isSmartQuery = agent.extra_config?.feature === 'smart_query'
+    if (isSmartQuery && inputs) {
+      const authToken = inputs.auth_token
+      const userInfoApi = inputs.user_info_api
+
+      if (!authToken || !userInfoApi) {
+        throw new RiskAuthFailedError('Missing auth_token or user_info_api in inputs')
+      }
+
+      // 服务端验证 token（含 RSA 验签）
+      const userInfo = await verifyRiskToken(authToken, userInfoApi)
+      console.log('[chat-messages] Risk user verified:', { userId: userInfo.userId, userType: userInfo.userType, dictCode: userInfo.dictCode })
+
+      // 权限检查：仅企业法人用户
+      checkSmartQueryPermission(userInfo)
+
+      // 服务端覆盖区划信息（防止客户端伪造）
+      inputs.region_code = userInfo.dictCode || ''
+      inputs.region_name = userInfo.distName || ''
+      inputs.user_type = userInfo.userType
+      inputs.corname = userInfo.corname || ''
+      inputs.cornumber = userInfo.cornumber || ''
+    }
 
     if (agent.backend_type === 'direct_llm' && executionMode !== 'chat') {
       console.log('[chat-messages] Agent config:', {
@@ -43,10 +69,47 @@ export async function POST(request: NextRequest) {
           })
 
           try {
+            // Build system prompt using the new prompt builder
+            const { buildSystemPrompt } = await import('@/lib/prompts')
+            const { getDatabaseProvider } = await import('@/lib/db')
+            const db = getDatabaseProvider()
+
+            // Get agent type and built-in prompt
+            let agentType = null
+            let builtInPrompt = null
+            if (agent.agent_type) {
+              const agentTypes = await db.getAgentTypes()
+              agentType = agentTypes.find(t => t.id === agent.agent_type || t.name === agent.agent_type)
+              if (agentType?.system_prompt_id) {
+                builtInPrompt = await db.getSystemPromptById(agentType.system_prompt_id)
+              }
+            }
+
+            let systemPrompt = await buildSystemPrompt(agent, agentType, builtInPrompt)
+
+            // Replace template variables in the final prompt
+            if (systemPrompt && inputs) {
+              for (const [key, value] of Object.entries(inputs)) {
+                if (typeof value === 'string' || typeof value === 'number') {
+                  systemPrompt = systemPrompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value))
+                } else if (typeof value === 'object' && value !== null) {
+                  for (const [subKey, subValue] of Object.entries(value)) {
+                    systemPrompt = systemPrompt.replace(
+                      new RegExp(`\\{\\{${key}\\.${subKey}\\}\\}`, 'g'),
+                      String(subValue),
+                    )
+                  }
+                }
+              }
+            }
+
+            console.log('[chat-messages] Final system prompt (first 200):', systemPrompt?.substring(0, 200))
+
             const result = await executor.execute({
               query,
               messages: messages || [],
               conversationId,
+              systemPrompt,
             })
 
             console.log('[chat-messages] Result:', {
@@ -166,6 +229,18 @@ export async function POST(request: NextRequest) {
       return new Response(
         JSON.stringify({ message: error.message, code: error.code }),
         { status: 401, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+    if (error instanceof RiskAuthFailedError) {
+      return new Response(
+        JSON.stringify({ message: error.message, code: error.code }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+    if (error instanceof PermissionDeniedError) {
+      return new Response(
+        JSON.stringify({ message: error.message, code: error.code }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
       )
     }
     return new Response(

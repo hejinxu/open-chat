@@ -50,6 +50,8 @@ export default function AdminLayout({
 
   const tabs = [
     { name: t('common.auth.agents'), href: '/admin/agents' },
+    { name: t('common.auth.agentTypes', '智能体类型'), href: '/admin/agent-types' },
+    { name: t('common.auth.systemPrompts', '内置提示词'), href: '/admin/system-prompts' },
     { name: t('common.auth.modelProviders'), href: '/admin/model-providers' },
     { name: t('common.auth.models'), href: '/admin/models' },
     { name: t('common.auth.integrations'), href: '/admin/integrations' },

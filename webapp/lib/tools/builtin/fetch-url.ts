@@ -112,7 +112,7 @@ async function searchWithScraping(query: string, engine: 'bing' | 'baidu', count
 
 async function fetchUrlHandler(
   input: Record<string, any>,
-  _context: ToolContext,
+  context: ToolContext,
 ): Promise<ToolResult> {
   const { url, search_engine = 'bing' } = input
 
@@ -124,13 +124,21 @@ async function fetchUrlHandler(
 
   // 检查是否是搜索查询（没有 http/https 前缀）
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    // 检查是否启用联网搜索
+    const agentConfig = context.agentConfig || {}
+    if (agentConfig.enable_network === false) {
+      return {
+        success: false,
+        error: '当前智能体未启用联网搜索功能。如需搜索，请在智能体配置中开启"允许联网搜索"。',
+      }
+    }
     // 当作搜索查询处理
     const engine = search_engine === 'baidu' ? 'baidu' : 'bing'
     console.log(`[fetch_url] Treating as search query: "${url}" (engine: ${engine})`)
     return searchWithScraping(url, engine, 5)
   }
 
-  // 直接抓取 URL
+  // 直接抓取 URL（无论 enable_network 如何都允许，可能是内网页面）
   console.log(`[fetch_url] Fetching URL: ${url}`)
   try {
     const response = await fetch(url, {

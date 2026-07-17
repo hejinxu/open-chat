@@ -189,6 +189,15 @@ async function webSearchHandler(
   }
 
   const agentConfig = context.agentConfig || {}
+
+  // 检查是否启用联网搜索
+  if (agentConfig.enable_network === false) {
+    return {
+      success: false,
+      error: '当前智能体未启用联网搜索功能。如需搜索，请在智能体配置中开启"允许联网搜索"。',
+    }
+  }
+
   const searchConfig: SearchConfig = agentConfig.web_search || {}
 
   // 如果没有配置搜索服务，使用免费的 DuckDuckGo

@@ -122,6 +122,8 @@ export class PostgresProvider implements DatabaseProvider {
           mcp_servers JSONB DEFAULT '[]'::jsonb,
           is_default BOOLEAN NOT NULL DEFAULT false,
           is_enabled BOOLEAN NOT NULL DEFAULT true,
+          agent_type VARCHAR(50) NOT NULL DEFAULT 'general',
+          agent_config JSONB DEFAULT '{}'::jsonb,
           created_at BIGINT NOT NULL,
           updated_at BIGINT NOT NULL
         )
@@ -223,8 +225,43 @@ export class PostgresProvider implements DatabaseProvider {
         )
       `)
 
+      // System Prompts table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS system_prompts (
+          id VARCHAR(255) PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT DEFAULT '',
+          content TEXT NOT NULL,
+          created_at BIGINT NOT NULL,
+          updated_at BIGINT NOT NULL
+        )
+      `)
+
+      // Agent Types table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS agent_types (
+          id VARCHAR(255) PRIMARY KEY,
+          name TEXT NOT NULL,
+          icon TEXT DEFAULT '🤖',
+          description TEXT DEFAULT '',
+          system_prompt_id VARCHAR(255),
+          backend_type_constraint JSONB,
+          execution_mode_constraint JSONB,
+          config_schema JSONB DEFAULT '{}'::jsonb,
+          is_enabled BOOLEAN NOT NULL DEFAULT true,
+          created_at BIGINT NOT NULL,
+          updated_at BIGINT NOT NULL
+        )
+      `)
+
+      // Migrate agents table: add agent_type, agent_config columns if not exist
+      await this.migrateAgentTypeColumns(client)
+
       // Seed default model providers and models if tables are empty
       await this.seedDefaultModels(client)
+
+      // Seed default agent types and system prompts
+      await this.seedDefaultAgentTypes(client)
     }
     finally {
       client.release()
@@ -671,8 +708,8 @@ export class PostgresProvider implements DatabaseProvider {
   async saveAgent(agent: AgentRecord): Promise<void> {
     await this.ensureReady()
     await this.pool.query(
-      `INSERT INTO agents (id, name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      `INSERT INTO agents (id, name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled, agent_type, agent_config, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name,
          icon = EXCLUDED.icon,
@@ -687,6 +724,8 @@ export class PostgresProvider implements DatabaseProvider {
          mcp_servers = EXCLUDED.mcp_servers,
          is_default = EXCLUDED.is_default,
          is_enabled = EXCLUDED.is_enabled,
+         agent_type = EXCLUDED.agent_type,
+         agent_config = EXCLUDED.agent_config,
          updated_at = EXCLUDED.updated_at`,
       [
         agent.id,
@@ -703,6 +742,8 @@ export class PostgresProvider implements DatabaseProvider {
         agent.mcp_servers || '[]',
         agent.is_default,
         agent.is_enabled,
+        agent.agent_type || 'general',
+        agent.agent_config || '{}',
         agent.created_at,
         agent.updated_at,
       ],
@@ -742,6 +783,8 @@ export class PostgresProvider implements DatabaseProvider {
       mcp_servers: typeof row.mcp_servers === 'string' ? row.mcp_servers : JSON.stringify(row.mcp_servers || []),
       is_default: row.is_default === true || row.is_default === 1,
       is_enabled: row.is_enabled === true || row.is_enabled === 1,
+      agent_type: (row.agent_type as string) || 'general',
+      agent_config: typeof row.agent_config === 'string' ? row.agent_config : JSON.stringify(row.agent_config || {}),
       created_at: Number(row.created_at),
       updated_at: Number(row.updated_at),
     }
@@ -908,6 +951,86 @@ export class PostgresProvider implements DatabaseProvider {
     }
   }
 
+  // ============ Migrations ============
+
+  private async migrateAgentTypeColumns(client: any): Promise<void> {
+    await client.query('ALTER TABLE agents ADD COLUMN IF NOT EXISTS agent_type VARCHAR(50) NOT NULL DEFAULT \'general\'')
+    await client.query('ALTER TABLE agents ADD COLUMN IF NOT EXISTS agent_config JSONB DEFAULT \'{}\'::jsonb')
+    console.log('[DB-PG] Migrated agent_type, agent_config columns')
+  }
+
+  // ============ Seed Default Agent Types ============
+
+  private async seedDefaultAgentTypes(client: any): Promise<void> {
+    // Only seed if agent_types table is empty
+    const countResult = await client.query('SELECT COUNT(*) as cnt FROM agent_types')
+    const count = parseInt(countResult.rows[0].cnt)
+    if (count > 0) { return }
+
+    const now = Math.floor(Date.now() / 1000)
+
+    // Create built-in system prompt for data query agent
+    const dataQueryPromptId = 'prompt-data-query-default'
+    const dataQueryPrompt = `# 角色定义
+你是一个专业的数据分析助手，能够通过查询数据库回答用户的数据问题。
+
+# 工作流程
+1. **理解问题**：分析用户的数据查询需求，明确要查询的指标和维度
+2. **分析数据结构**：查看可用的表和字段，理解数据模型
+3. **编写查询**：使用 SQL 查询工具获取数据
+4. **解读结果**：将查询结果转化为易懂的回答
+
+# 数据安全规范（最高优先级）
+- **只允许生成 SELECT 查询语句**
+- **严格禁止生成以下类型的 SQL**：UPDATE、DELETE、INSERT、ALTER、DROP、TRUNCATE、CREATE、GRANT、REVOKE 等任何可修改或删除数据的语句
+- **即使用户明确要求修改或删除数据，也必须拒绝执行**
+- **如果用户间接要求（如"帮我清理数据"、"更新一下记录"、"删除这条数据"），必须明确拒绝并说明原因**
+- **拒绝话术示例**："抱歉，我是一个只读的数据查询助手，无法执行任何修改或删除数据的操作。如果您需要修改数据，请联系数据库管理员。"
+
+# SQL 编写规范
+- 使用标准 SQL 语法
+- 优先使用已提供的业务术语定义
+- 注意处理 NULL 值
+- 对于聚合查询，使用合适的 GROUP BY
+- 限制结果集大小，避免返回过多数据
+- 使用中文别名，方便用户理解
+
+# 回答规范
+- 先确认用户想查的指标
+- 用表格或图表展示结果
+- 提供简要的数据解读
+- 如果查询失败，说明原因并提供替代方案
+
+# 业务知识使用
+- 参考已配置的业务术语理解指标含义
+- 使用已配置的查询示例作为参考
+- 遵循已配置的业务规则`
+
+    await client.query(
+      `INSERT INTO system_prompts (id, name, description, content, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (id) DO NOTHING`,
+      [dataQueryPromptId, '问数智能体默认提示词', '数据查询场景的基础提示词，包含SQL编写规范、回答规范等', dataQueryPrompt, now, now],
+    )
+
+    // Seed agent types
+    await client.query(
+      `INSERT INTO agent_types (id, name, icon, description, system_prompt_id, backend_type_constraint, execution_mode_constraint, is_enabled, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (id) DO NOTHING`,
+      ['type-general', '通用智能体', '🤖', '标准对话智能体，支持多种后端', null, null, null, true, now, now],
+    )
+
+    await client.query(
+      `INSERT INTO agent_types (id, name, icon, description, system_prompt_id, backend_type_constraint, execution_mode_constraint, is_enabled, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (id) DO NOTHING`,
+      ['type-data-query', '问数智能体', '📊', '专用于数据查询，可配置数据源和业务知识', dataQueryPromptId, '["direct_llm"]', '["react"]', true, now, now],
+    )
+
+    console.log('[DB-PG] Seeded default agent types and system prompts')
+  }
+
   // ============ Seed Default Models ============
 
   private async seedDefaultModels(client: any): Promise<void> {
@@ -1029,5 +1152,128 @@ export class PostgresProvider implements DatabaseProvider {
     }
 
     console.log(`[DB-PG] Seeded ${providers.length} model providers and ${models.length} models`)
+  }
+
+  // ============ Agent Types ============
+
+  async getAgentTypes(): Promise<import('@/types/agent-type').AgentTypeRecord[]> {
+    await this.ensureReady()
+    const result = await this.pool.query('SELECT * FROM agent_types ORDER BY created_at DESC')
+    return result.rows.map(this.mapAgentType)
+  }
+
+  async getAgentTypeById(id: string): Promise<import('@/types/agent-type').AgentTypeRecord | null> {
+    await this.ensureReady()
+    const result = await this.pool.query('SELECT * FROM agent_types WHERE id = $1', [id])
+    return result.rows.length > 0 ? this.mapAgentType(result.rows[0]) : null
+  }
+
+  async saveAgentType(agentType: import('@/types/agent-type').AgentTypeRecord): Promise<void> {
+    await this.ensureReady()
+    await this.pool.query(
+      `INSERT INTO agent_types (id, name, icon, description, system_prompt_id, backend_type_constraint, execution_mode_constraint, config_schema, is_enabled, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name,
+         icon = EXCLUDED.icon,
+         description = EXCLUDED.description,
+         system_prompt_id = EXCLUDED.system_prompt_id,
+         backend_type_constraint = EXCLUDED.backend_type_constraint,
+         execution_mode_constraint = EXCLUDED.execution_mode_constraint,
+         config_schema = EXCLUDED.config_schema,
+         is_enabled = EXCLUDED.is_enabled,
+         updated_at = EXCLUDED.updated_at`,
+      [
+        agentType.id,
+        agentType.name,
+        agentType.icon,
+        agentType.description,
+        agentType.system_prompt_id,
+        agentType.backend_type_constraint,
+        agentType.execution_mode_constraint,
+        agentType.config_schema,
+        agentType.is_enabled,
+        agentType.created_at,
+        agentType.updated_at,
+      ],
+    )
+  }
+
+  async deleteAgentType(id: string): Promise<void> {
+    await this.ensureReady()
+    await this.pool.query('DELETE FROM agent_types WHERE id = $1', [id])
+  }
+
+  private mapAgentType(row: any): import('@/types/agent-type').AgentTypeRecord {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      icon: (row.icon as string) || '🤖',
+      description: (row.description as string) || '',
+      system_prompt_id: row.system_prompt_id as string | null,
+      backend_type_constraint: typeof row.backend_type_constraint === 'string'
+        ? row.backend_type_constraint
+        : row.backend_type_constraint ? JSON.stringify(row.backend_type_constraint) : null,
+      execution_mode_constraint: typeof row.execution_mode_constraint === 'string'
+        ? row.execution_mode_constraint
+        : row.execution_mode_constraint ? JSON.stringify(row.execution_mode_constraint) : null,
+      config_schema: typeof row.config_schema === 'string'
+        ? row.config_schema
+        : JSON.stringify(row.config_schema || {}),
+      is_enabled: row.is_enabled === true || row.is_enabled === 1,
+      created_at: Number(row.created_at),
+      updated_at: Number(row.updated_at),
+    }
+  }
+
+  // ============ System Prompts ============
+
+  async getSystemPrompts(): Promise<import('@/types/system-prompt').SystemPromptRecord[]> {
+    await this.ensureReady()
+    const result = await this.pool.query('SELECT * FROM system_prompts ORDER BY created_at DESC')
+    return result.rows.map(this.mapSystemPrompt)
+  }
+
+  async getSystemPromptById(id: string): Promise<import('@/types/system-prompt').SystemPromptRecord | null> {
+    await this.ensureReady()
+    const result = await this.pool.query('SELECT * FROM system_prompts WHERE id = $1', [id])
+    return result.rows.length > 0 ? this.mapSystemPrompt(result.rows[0]) : null
+  }
+
+  async saveSystemPrompt(prompt: import('@/types/system-prompt').SystemPromptRecord): Promise<void> {
+    await this.ensureReady()
+    await this.pool.query(
+      `INSERT INTO system_prompts (id, name, description, content, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name,
+         description = EXCLUDED.description,
+         content = EXCLUDED.content,
+         updated_at = EXCLUDED.updated_at`,
+      [prompt.id, prompt.name, prompt.description, prompt.content, prompt.created_at, prompt.updated_at],
+    )
+  }
+
+  async deleteSystemPrompt(id: string): Promise<void> {
+    await this.ensureReady()
+    const client = await this.pool.connect()
+    try {
+      await client.query('UPDATE agent_types SET system_prompt_id = NULL WHERE system_prompt_id = $1', [id])
+      await client.query('DELETE FROM system_prompts WHERE id = $1', [id])
+    }
+    finally {
+      client.release()
+    }
+  }
+
+  private mapSystemPrompt(row: any): import('@/types/system-prompt').SystemPromptRecord {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      description: (row.description as string) || '',
+      content: row.content as string,
+      created_at: Number(row.created_at),
+      updated_at: Number(row.updated_at),
+    }
   }
 }

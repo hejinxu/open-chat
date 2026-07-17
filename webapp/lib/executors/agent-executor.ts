@@ -112,6 +112,7 @@ export class AgentExecutor {
       systemPrompt,
       context: {
         controller: this.controller,
+        agentConfig: this.agent.agent_config || {},
       },
     })
 
@@ -119,15 +120,24 @@ export class AgentExecutor {
 
     const formattedMessages = []
 
-    // 添加系统提示词（使用统一的提示词管理）
+    // 系统提示词：优先使用用户自定义的 systemPrompt，否则用默认提示词
     const currentDate = new Date().toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       weekday: 'long',
     })
-    const systemMessage = getSystemPrompt(currentDate)
-    formattedMessages.push(new SystemMessage(systemMessage))
+    if (systemPrompt) {
+      // 用户自定义系统提示词（来自 extra_config.system_prompt）
+      const finalPrompt = systemPrompt.replace(/\{\{current_date\}\}/g, currentDate)
+      formattedMessages.push(new SystemMessage(finalPrompt))
+      console.log('[AgentExecutor] Using custom system prompt, length:', finalPrompt.length)
+    } else {
+      // 默认系统提示词
+      const systemMessage = getSystemPrompt(currentDate)
+      formattedMessages.push(new SystemMessage(systemMessage))
+      console.log('[AgentExecutor] Using default system prompt')
+    }
 
     // 添加用户消息
     for (const msg of messages) {
@@ -195,6 +205,7 @@ export class AgentExecutor {
       apiUrl: this.agent.api_url,
       context: {
         controller: this.controller,
+        agentConfig: this.agent.agent_config || {},
       },
     })
 
@@ -202,15 +213,19 @@ export class AgentExecutor {
 
     const formattedMessages = []
 
-    // 添加系统提示词，包含当前日期
+    // 系统提示词：优先使用用户自定义的 systemPrompt，否则用默认提示词
     const currentDate = new Date().toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       weekday: 'long',
     })
-    const systemMessage = `当前日期：${currentDate}。你是一个有用的助手，可以使用工具来帮助用户。请根据当前日期回答时间相关的问题。`
-    formattedMessages.push(new SystemMessage(systemMessage))
+    if (systemPrompt) {
+      const finalPrompt = systemPrompt.replace(/\{\{current_date\}\}/g, currentDate)
+      formattedMessages.push(new SystemMessage(finalPrompt))
+    } else {
+      formattedMessages.push(new SystemMessage(`当前日期：${currentDate}。你是一个有用的助手，可以使用工具来帮助用户。`))
+    }
 
     // 添加用户消息
     for (const msg of messages) {

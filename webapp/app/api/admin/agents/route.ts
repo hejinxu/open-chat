@@ -39,10 +39,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled } = body
+    const { name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled, agent_type, agent_config } = body
 
     if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Name is required', code: 'NAME_REQUIRED' }, { status: 400 })
     }
 
     const db = getDatabaseProvider()
@@ -50,17 +50,17 @@ export async function POST(request: NextRequest) {
     // Check name uniqueness
     const allAgents = await db.getAgents()
     if (allAgents.some(a => a.name === name)) {
-      return NextResponse.json({ error: 'Agent name already exists' }, { status: 400 })
+      return NextResponse.json({ error: 'Agent name already exists', code: 'AGENT_NAME_EXISTS' }, { status: 400 })
     }
 
     // Validate model_id if provided
     if (model_id) {
       const model = await db.getModelById(model_id)
       if (!model) {
-        return NextResponse.json({ error: 'Model not found' }, { status: 400 })
+        return NextResponse.json({ error: 'Model not found', code: 'MODEL_NOT_FOUND' }, { status: 400 })
       }
       if (!model.is_enabled) {
-        return NextResponse.json({ error: 'Model is disabled' }, { status: 400 })
+        return NextResponse.json({ error: 'Model is disabled', code: 'MODEL_DISABLED' }, { status: 400 })
       }
     }
 
@@ -90,6 +90,8 @@ export async function POST(request: NextRequest) {
       mcp_servers: mcp_servers ? JSON.stringify(mcp_servers) : '[]',
       is_default: !!is_default,
       is_enabled: is_enabled !== false,
+      agent_type: agent_type || 'general',
+      agent_config: agent_config ? JSON.stringify(agent_config) : '{}',
       created_at: now,
       updated_at: now,
     }
@@ -115,23 +117,23 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { id, name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled } = body
+    const { id, name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled, agent_type, agent_config } = body
 
     if (!id) {
-      return NextResponse.json({ error: 'Agent ID is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Agent ID is required', code: 'AGENT_ID_REQUIRED' }, { status: 400 })
     }
 
     const db = getDatabaseProvider()
     const existing = await db.getAgentById(id)
     if (!existing) {
-      return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+      return NextResponse.json({ error: 'Agent not found', code: 'AGENT_NOT_FOUND' }, { status: 404 })
     }
 
     // Check name uniqueness (exclude current agent)
     if (name && name !== existing.name) {
       const allAgents = await db.getAgents()
       if (allAgents.some(a => a.name === name && a.id !== id)) {
-        return NextResponse.json({ error: 'Agent name already exists' }, { status: 400 })
+        return NextResponse.json({ error: 'Agent name already exists', code: 'AGENT_NAME_EXISTS' }, { status: 400 })
       }
     }
 
@@ -139,10 +141,10 @@ export async function PUT(request: NextRequest) {
     if (model_id !== undefined && model_id !== null && model_id !== '') {
       const model = await db.getModelById(model_id)
       if (!model) {
-        return NextResponse.json({ error: 'Model not found' }, { status: 400 })
+        return NextResponse.json({ error: 'Model not found', code: 'MODEL_NOT_FOUND' }, { status: 400 })
       }
       if (!model.is_enabled) {
-        return NextResponse.json({ error: 'Model is disabled' }, { status: 400 })
+        return NextResponse.json({ error: 'Model is disabled', code: 'MODEL_DISABLED' }, { status: 400 })
       }
     }
 
@@ -162,6 +164,8 @@ export async function PUT(request: NextRequest) {
       mcp_servers: mcp_servers !== undefined ? JSON.stringify(mcp_servers) : existing.mcp_servers,
       is_default: is_default !== undefined ? !!is_default : existing.is_default,
       is_enabled: is_enabled !== undefined ? !!is_enabled : existing.is_enabled,
+      agent_type: agent_type ?? existing.agent_type,
+      agent_config: agent_config !== undefined ? JSON.stringify(agent_config) : existing.agent_config,
       updated_at: now,
     }
 
@@ -189,17 +193,17 @@ export async function DELETE(request: NextRequest) {
     const { id } = body
 
     if (!id) {
-      return NextResponse.json({ error: 'Agent ID is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Agent ID is required', code: 'AGENT_ID_REQUIRED' }, { status: 400 })
     }
 
     const db = getDatabaseProvider()
     const existing = await db.getAgentById(id)
     if (!existing) {
-      return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+      return NextResponse.json({ error: 'Agent not found', code: 'AGENT_NOT_FOUND' }, { status: 404 })
     }
 
     if (existing.is_default) {
-      return NextResponse.json({ error: 'Cannot delete the default agent' }, { status: 400 })
+      return NextResponse.json({ error: 'Cannot delete the default agent', code: 'CANNOT_DELETE_DEFAULT' }, { status: 400 })
     }
 
     await db.deleteAgent(id)

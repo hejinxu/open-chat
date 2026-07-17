@@ -140,6 +140,8 @@ export class SqliteProvider implements DatabaseProvider {
         extra_config TEXT DEFAULT '{}',
         is_default INTEGER NOT NULL DEFAULT 0,
         is_enabled INTEGER NOT NULL DEFAULT 1,
+        agent_type TEXT NOT NULL DEFAULT 'general',
+        agent_config TEXT DEFAULT '{}',
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
@@ -245,6 +247,38 @@ export class SqliteProvider implements DatabaseProvider {
       )
     `)
 
+    // System Prompts table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS system_prompts (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `)
+
+    // Agent Types table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS agent_types (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        icon TEXT DEFAULT '🤖',
+        description TEXT DEFAULT '',
+        system_prompt_id TEXT,
+        backend_type_constraint TEXT,
+        execution_mode_constraint TEXT,
+        config_schema TEXT DEFAULT '{}',
+        is_enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `)
+
+    // Seed default agent types and system prompts
+    this.seedDefaultAgentTypes()
+
     // Migrate agents table: add execution_mode, tools_config, mcp_servers columns
     this.migrateAgentToolsColumns()
 
@@ -253,6 +287,9 @@ export class SqliteProvider implements DatabaseProvider {
 
     // Migrate agents table: add model_id column, migrate old model values, drop model column
     this.migrateAgentModelId()
+
+    // Migrate agents table: add agent_type, agent_config columns
+    this.migrateAgentTypeColumns()
 
     this.saveToFile()
   }
@@ -644,8 +681,8 @@ export class SqliteProvider implements DatabaseProvider {
   async saveAgent(agent: AgentRecord): Promise<void> {
     await this.ensureReady()
     this.db.run(
-      `INSERT OR REPLACE INTO agents (id, name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO agents (id, name, icon, description, backend_type, api_key, api_url, model_id, extra_config, execution_mode, tools_config, mcp_servers, is_default, is_enabled, agent_type, agent_config, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         agent.id,
         agent.name,
@@ -661,6 +698,8 @@ export class SqliteProvider implements DatabaseProvider {
         agent.mcp_servers || '[]',
         agent.is_default ? 1 : 0,
         agent.is_enabled ? 1 : 0,
+        agent.agent_type || 'general',
+        agent.agent_config || '{}',
         agent.created_at,
         agent.updated_at,
       ],
@@ -697,6 +736,8 @@ export class SqliteProvider implements DatabaseProvider {
       mcp_servers: (row.mcp_servers as string) || '[]',
       is_default: (row.is_default as number) === 1,
       is_enabled: (row.is_enabled as number) === 1,
+      agent_type: (row.agent_type as string) || 'general',
+      agent_config: (row.agent_config as string) || '{}',
       created_at: row.created_at as number,
       updated_at: row.updated_at as number,
     }
@@ -715,6 +756,21 @@ export class SqliteProvider implements DatabaseProvider {
     }
     if (!colNames.includes('mcp_servers')) {
       this.db.run('ALTER TABLE agents ADD COLUMN mcp_servers TEXT DEFAULT "[]"')
+    }
+  }
+
+  private migrateAgentTypeColumns(): void {
+    const columns = this.db.exec('PRAGMA table_info(agents)')
+    if (columns.length === 0) { return }
+    const colNames = columns[0].values.map((row: any[]) => row[1] as string)
+
+    if (!colNames.includes('agent_type')) {
+      this.db.run('ALTER TABLE agents ADD COLUMN agent_type TEXT NOT NULL DEFAULT "general"')
+      console.log('[DB] Added agent_type column to agents table')
+    }
+    if (!colNames.includes('agent_config')) {
+      this.db.run('ALTER TABLE agents ADD COLUMN agent_config TEXT DEFAULT "{}"')
+      console.log('[DB] Added agent_config column to agents table')
     }
   }
 
@@ -760,6 +816,70 @@ export class SqliteProvider implements DatabaseProvider {
         console.warn('[DB] Could not drop model column (older SQLite):', (e as Error).message)
       }
     }
+  }
+
+  private seedDefaultAgentTypes(): void {
+    // Only seed if agent_types table is empty
+    const result = this.db.exec('SELECT COUNT(*) as cnt FROM agent_types')
+    const count = result.length > 0 ? result[0].values[0][0] as number : 0
+    if (count > 0) { return }
+
+    const now = Math.floor(Date.now() / 1000)
+
+    // Create built-in system prompt for data query agent
+    const dataQueryPromptId = 'prompt-data-query-default'
+    const dataQueryPrompt = `# 角色定义
+你是一个专业的数据分析助手，能够通过查询数据库回答用户的数据问题。
+
+# 工作流程
+1. **理解问题**：分析用户的数据查询需求，明确要查询的指标和维度
+2. **分析数据结构**：查看可用的表和字段，理解数据模型
+3. **编写查询**：使用 SQL 查询工具获取数据
+4. **解读结果**：将查询结果转化为易懂的回答
+
+# 数据安全规范（最高优先级）
+- **只允许生成 SELECT 查询语句**
+- **严格禁止生成以下类型的 SQL**：UPDATE、DELETE、INSERT、ALTER、DROP、TRUNCATE、CREATE、GRANT、REVOKE 等任何可修改或删除数据的语句
+- **即使用户明确要求修改或删除数据，也必须拒绝执行**
+- **如果用户间接要求（如"帮我清理数据"、"更新一下记录"、"删除这条数据"），必须明确拒绝并说明原因**
+- **拒绝话术示例**："抱歉，我是一个只读的数据查询助手，无法执行任何修改或删除数据的操作。如果您需要修改数据，请联系数据库管理员。"
+
+# SQL 编写规范
+- 使用标准 SQL 语法
+- 优先使用已提供的业务术语定义
+- 注意处理 NULL 值
+- 对于聚合查询，使用合适的 GROUP BY
+- 限制结果集大小，避免返回过多数据
+- 使用中文别名，方便用户理解
+
+# 回答规范
+- 先确认用户想查的指标
+- 用表格或图表展示结果
+- 提供简要的数据解读
+- 如果查询失败，说明原因并提供替代方案
+
+# 业务知识使用
+- 参考已配置的业务术语理解指标含义
+- 使用已配置的查询示例作为参考
+- 遵循已配置的业务规则`
+
+    this.db.run(
+      'INSERT OR IGNORE INTO system_prompts (id, name, description, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [dataQueryPromptId, '问数智能体默认提示词', '数据查询场景的基础提示词，包含SQL编写规范、回答规范等', dataQueryPrompt, now, now],
+    )
+
+    // Seed agent types
+    this.db.run(
+      'INSERT OR IGNORE INTO agent_types (id, name, icon, description, system_prompt_id, backend_type_constraint, execution_mode_constraint, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ['type-general', '通用智能体', '🤖', '标准对话智能体，支持多种后端', null, null, null, 1, now, now],
+    )
+
+    this.db.run(
+      'INSERT OR IGNORE INTO agent_types (id, name, icon, description, system_prompt_id, backend_type_constraint, execution_mode_constraint, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ['type-data-query', '问数智能体', '📊', '专用于数据查询，可配置数据源和业务知识', dataQueryPromptId, '["direct_llm"]', '["react"]', 1, now, now],
+    )
+
+    console.log('[DB] Seeded default agent types and system prompts')
   }
 
   private seedDefaultModels(): void {
@@ -994,6 +1114,99 @@ export class SqliteProvider implements DatabaseProvider {
       pricing_output: row.pricing_output as number | null,
       default_params: typeof row.default_params === 'string' ? JSON.parse(row.default_params) : (row.default_params as Record<string, any>) || {},
       is_enabled: (row.is_enabled as number) === 1,
+      created_at: row.created_at as number,
+      updated_at: row.updated_at as number,
+    }
+  }
+
+  // ============ Agent Types ============
+
+  async getAgentTypes(): Promise<import('@/types/agent-type').AgentTypeRecord[]> {
+    return this.queryAll('SELECT * FROM agent_types ORDER BY created_at DESC', [], this.mapAgentType)
+  }
+
+  async getAgentTypeById(id: string): Promise<import('@/types/agent-type').AgentTypeRecord | null> {
+    return this.queryOne('SELECT * FROM agent_types WHERE id = ?', [id], this.mapAgentType)
+  }
+
+  async saveAgentType(agentType: import('@/types/agent-type').AgentTypeRecord): Promise<void> {
+    await this.ensureReady()
+    this.db.run(
+      `INSERT OR REPLACE INTO agent_types (id, name, icon, description, system_prompt_id, backend_type_constraint, execution_mode_constraint, config_schema, is_enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        agentType.id,
+        agentType.name,
+        agentType.icon,
+        agentType.description,
+        agentType.system_prompt_id,
+        agentType.backend_type_constraint,
+        agentType.execution_mode_constraint,
+        agentType.config_schema,
+        agentType.is_enabled ? 1 : 0,
+        agentType.created_at,
+        agentType.updated_at,
+      ],
+    )
+    this.scheduleSave()
+  }
+
+  async deleteAgentType(id: string): Promise<void> {
+    await this.ensureReady()
+    this.db.run('DELETE FROM agent_types WHERE id = ?', [id])
+    this.scheduleSave()
+  }
+
+  private mapAgentType(row: any): import('@/types/agent-type').AgentTypeRecord {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      icon: (row.icon as string) || '🤖',
+      description: (row.description as string) || '',
+      system_prompt_id: row.system_prompt_id as string | null,
+      backend_type_constraint: row.backend_type_constraint as string | null,
+      execution_mode_constraint: row.execution_mode_constraint as string | null,
+      config_schema: (row.config_schema as string) || '{}',
+      is_enabled: (row.is_enabled as number) === 1,
+      created_at: row.created_at as number,
+      updated_at: row.updated_at as number,
+    }
+  }
+
+  // ============ System Prompts ============
+
+  async getSystemPrompts(): Promise<import('@/types/system-prompt').SystemPromptRecord[]> {
+    return this.queryAll('SELECT * FROM system_prompts ORDER BY created_at DESC', [], this.mapSystemPrompt)
+  }
+
+  async getSystemPromptById(id: string): Promise<import('@/types/system-prompt').SystemPromptRecord | null> {
+    return this.queryOne('SELECT * FROM system_prompts WHERE id = ?', [id], this.mapSystemPrompt)
+  }
+
+  async saveSystemPrompt(prompt: import('@/types/system-prompt').SystemPromptRecord): Promise<void> {
+    await this.ensureReady()
+    this.db.run(
+      `INSERT OR REPLACE INTO system_prompts (id, name, description, content, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [prompt.id, prompt.name, prompt.description, prompt.content, prompt.created_at, prompt.updated_at],
+    )
+    this.scheduleSave()
+  }
+
+  async deleteSystemPrompt(id: string): Promise<void> {
+    await this.ensureReady()
+    // 清理引用该提示词的智能体类型
+    this.db.run('UPDATE agent_types SET system_prompt_id = NULL WHERE system_prompt_id = ?', [id])
+    this.db.run('DELETE FROM system_prompts WHERE id = ?', [id])
+    this.scheduleSave()
+  }
+
+  private mapSystemPrompt(row: any): import('@/types/system-prompt').SystemPromptRecord {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      description: (row.description as string) || '',
+      content: row.content as string,
       created_at: row.created_at as number,
       updated_at: row.updated_at as number,
     }

@@ -211,6 +211,12 @@ export function createReactAgent(
   const summarizeNode = async (state: { messages: BaseMessage[] }) => {
     console.log('[summarizeNode] Forcing summary after max tool rounds')
 
+    // 获取用户原始问题
+    const userMessages = state.messages.filter(m => m instanceof HumanMessage)
+    const originalQuestion = userMessages.length > 0
+      ? String(userMessages[userMessages.length - 1].content)
+      : ''
+
     // 收集所有工具调用结果
     const toolResults: string[] = []
     for (const msg of state.messages) {
@@ -220,12 +226,16 @@ export function createReactAgent(
     }
 
     // 构建总结提示
-    const summaryPrompt = `请根据以下工具调用结果，为用户生成一个完整的回答。不要再调用任何工具，直接总结回复。
+    const summaryPrompt = `用户问题：${originalQuestion}
 
-工具调用结果：
+以下是工具调用获取的数据：
 ${toolResults.join('\n\n---\n\n')}
 
-请直接用中文总结回复用户，不要调用任何工具。`
+请根据以上数据回答用户的问题：
+- 如果数据足以回答，请直接给出答案
+- 如果数据不足以回答或查询失败，请明确告知用户"查询未能完成，已达到工具调用次数限制，请重试或简化问题"
+- 不要编造数据或猜测答案
+- 不要总结工具调用过程，只关注回答用户的问题`
 
     const response = await chatModel.invoke([new HumanMessage(summaryPrompt)])
     return { messages: [response] }
