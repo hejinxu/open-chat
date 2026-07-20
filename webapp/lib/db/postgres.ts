@@ -957,6 +957,29 @@ export class PostgresProvider implements DatabaseProvider {
     await client.query('ALTER TABLE agents ADD COLUMN IF NOT EXISTS agent_type VARCHAR(50) NOT NULL DEFAULT \'general\'')
     await client.query('ALTER TABLE agents ADD COLUMN IF NOT EXISTS agent_config JSONB DEFAULT \'{}\'::jsonb')
     console.log('[DB-PG] Migrated agent_type, agent_config columns')
+
+    // Migrate agent_types and system_prompts IDs: remove prefixes
+    try {
+      // Check if old IDs exist
+      const oldAgentTypes = await client.query("SELECT id FROM agent_types WHERE id LIKE 'type-%'")
+      if (oldAgentTypes.rows.length > 0) {
+        console.log('[DB-PG] Migrating agent_types IDs to remove type- prefix')
+        
+        // Update system_prompts first (no foreign key dependency)
+        await client.query("UPDATE system_prompts SET id = 'data-query-default' WHERE id = 'prompt-data-query-default'")
+        
+        // Update agent_types.system_prompt_id foreign key
+        await client.query("UPDATE agent_types SET system_prompt_id = 'data-query-default' WHERE system_prompt_id = 'prompt-data-query-default'")
+        
+        // Update agent_types IDs
+        await client.query("UPDATE agent_types SET id = 'general' WHERE id = 'type-general'")
+        await client.query("UPDATE agent_types SET id = 'data_query' WHERE id = 'type-data-query'")
+        
+        console.log('[DB-PG] Migrated agent_types and system_prompts IDs')
+      }
+    } catch (e) {
+      console.error('[DB-PG] Error migrating agent_types IDs:', e)
+    }
   }
 
   // ============ Seed Default Agent Types ============
@@ -970,7 +993,7 @@ export class PostgresProvider implements DatabaseProvider {
     const now = Math.floor(Date.now() / 1000)
 
     // Create built-in system prompt for data query agent
-    const dataQueryPromptId = 'prompt-data-query-default'
+    const dataQueryPromptId = 'data-query-default'
     const dataQueryPrompt = `# 角色定义
 你是一个专业的数据分析助手，能够通过查询数据库回答用户的数据问题。
 
@@ -1018,14 +1041,14 @@ export class PostgresProvider implements DatabaseProvider {
       `INSERT INTO agent_types (id, name, icon, description, system_prompt_id, backend_type_constraint, execution_mode_constraint, is_enabled, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (id) DO NOTHING`,
-      ['type-general', '通用智能体', '🤖', '标准对话智能体，支持多种后端', null, null, null, true, now, now],
+      ['general', '通用智能体', '🤖', '标准对话智能体，支持多种后端', null, null, null, true, now, now],
     )
 
     await client.query(
       `INSERT INTO agent_types (id, name, icon, description, system_prompt_id, backend_type_constraint, execution_mode_constraint, is_enabled, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (id) DO NOTHING`,
-      ['type-data-query', '问数智能体', '📊', '专用于数据查询，可配置数据源和业务知识', dataQueryPromptId, '["direct_llm"]', '["react"]', true, now, now],
+      ['data_query', '问数智能体', '📊', '专用于数据查询，可配置数据源和业务知识', dataQueryPromptId, '["direct_llm"]', '["react"]', true, now, now],
     )
 
     console.log('[DB-PG] Seeded default agent types and system prompts')

@@ -772,6 +772,29 @@ export class SqliteProvider implements DatabaseProvider {
       this.db.run('ALTER TABLE agents ADD COLUMN agent_config TEXT DEFAULT "{}"')
       console.log('[DB] Added agent_config column to agents table')
     }
+
+    // Migrate agent_types and system_prompts IDs: remove prefixes
+    try {
+      // Check if old IDs exist
+      const oldAgentTypes = this.db.exec("SELECT id FROM agent_types WHERE id LIKE 'type-%'")
+      if (oldAgentTypes.length > 0 && oldAgentTypes[0].values.length > 0) {
+        console.log('[DB] Migrating agent_types IDs to remove type- prefix')
+        
+        // Update system_prompts first (no foreign key dependency)
+        this.db.run("UPDATE system_prompts SET id = 'data-query-default' WHERE id = 'prompt-data-query-default'")
+        
+        // Update agent_types.system_prompt_id foreign key
+        this.db.run("UPDATE agent_types SET system_prompt_id = 'data-query-default' WHERE system_prompt_id = 'prompt-data-query-default'")
+        
+        // Update agent_types IDs
+        this.db.run("UPDATE agent_types SET id = 'general' WHERE id = 'type-general'")
+        this.db.run("UPDATE agent_types SET id = 'data_query' WHERE id = 'type-data-query'")
+        
+        console.log('[DB] Migrated agent_types and system_prompts IDs')
+      }
+    } catch (e) {
+      console.error('[DB] Error migrating agent_types IDs:', e)
+    }
   }
 
   private migrateAgentModelId(): void {
@@ -827,7 +850,7 @@ export class SqliteProvider implements DatabaseProvider {
     const now = Math.floor(Date.now() / 1000)
 
     // Create built-in system prompt for data query agent
-    const dataQueryPromptId = 'prompt-data-query-default'
+    const dataQueryPromptId = 'data-query-default'
     const dataQueryPrompt = `# 角色定义
 你是一个专业的数据分析助手，能够通过查询数据库回答用户的数据问题。
 
@@ -871,12 +894,12 @@ export class SqliteProvider implements DatabaseProvider {
     // Seed agent types
     this.db.run(
       'INSERT OR IGNORE INTO agent_types (id, name, icon, description, system_prompt_id, backend_type_constraint, execution_mode_constraint, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ['type-general', '通用智能体', '🤖', '标准对话智能体，支持多种后端', null, null, null, 1, now, now],
+      ['general', '通用智能体', '🤖', '标准对话智能体，支持多种后端', null, null, null, 1, now, now],
     )
 
     this.db.run(
       'INSERT OR IGNORE INTO agent_types (id, name, icon, description, system_prompt_id, backend_type_constraint, execution_mode_constraint, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ['type-data-query', '问数智能体', '📊', '专用于数据查询，可配置数据源和业务知识', dataQueryPromptId, '["direct_llm"]', '["react"]', 1, now, now],
+      ['data_query', '问数智能体', '📊', '专用于数据查询，可配置数据源和业务知识', dataQueryPromptId, '["direct_llm"]', '["react"]', 1, now, now],
     )
 
     console.log('[DB] Seeded default agent types and system prompts')

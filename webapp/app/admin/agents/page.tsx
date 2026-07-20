@@ -47,14 +47,6 @@ const backendTypes = ['dify', 'direct_llm', 'fastgpt', 'n8n'] as const
 
 type TabKey = 'basic' | 'model' | 'datasource' | 'knowledge' | 'prompt' | 'other'
 
-// Helper to normalize agent type comparison (handles both old and new format)
-function isAgentTypeSelected(formAgentType: string, typeId: string): boolean {
-  if (formAgentType === typeId) { return true }
-  // Normalize: remove 'type-' prefix and replace hyphens with underscores
-  const normalized = typeId.replace('type-', '').replace(/-/g, '_')
-  return formAgentType === normalized
-}
-
 export default function AgentsPage() {
   const { t } = useTranslation()
   const [agents, setAgents] = useState<Agent[]>([])
@@ -369,6 +361,16 @@ export default function AgentsPage() {
     return tabs
   }
 
+  // 获取当前智能体类型的约束（API 返回的数据已经通过 dbToAgentType 解析，约束字段已是数组）
+  const getCurrentAgentTypeConstraints = () => {
+    const currentType = agentTypesList.find(t => t.id === form.agent_type)
+    if (!currentType) { return { backend: null, execution: null } }
+    return {
+      backend: currentType.backend_type_constraint || null,
+      execution: currentType.execution_mode_constraint || null,
+    }
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center h-full text-content-secondary">Loading...</div>
   }
@@ -402,7 +404,7 @@ export default function AgentsPage() {
               </div>
               <div className="flex items-center gap-2 text-xs text-content-secondary">
                 <span className="px-1.5 py-0.5 bg-surface-tertiary rounded">
-                  {(agentTypesList.find(t => isAgentTypeSelected(agent.agent_type, t.id))?.name) || t('common.auth.agentTypeGeneral')}
+                  {(agentTypesList.find(t => t.id === agent.agent_type)?.name) || t('common.auth.agentTypeGeneral')}
                 </span>
                 <span>{agent.backend_type}</span>
                 {!agent.is_enabled && (
@@ -491,7 +493,7 @@ export default function AgentsPage() {
                             setForm({ ...form, ...updates })
                           }}
                           className={`p-3 rounded-lg border transition-colors ${
-                            isAgentTypeSelected(form.agent_type, type.id)
+                            form.agent_type === type.id
                               ? 'border-accent bg-accent/5'
                               : 'border-border'
                           } ${isCreating ? 'cursor-pointer hover:border-content-secondary' : 'opacity-60 cursor-not-allowed'}`}
@@ -544,9 +546,9 @@ export default function AgentsPage() {
                       value={form.backend_type}
                       onChange={e => setForm({ ...form, backend_type: e.target.value, model_id: '' })}
                       className="w-full px-3 py-2 bg-surface border border-border rounded-md text-content text-sm"
-                      disabled={form.agent_type === 'data_query'}
+                      disabled={getCurrentAgentTypeConstraints().backend?.length === 1}
                     >
-                      {(form.agent_type === 'data_query' ? ['direct_llm'] : [...backendTypes]).map(bt => (
+                      {(getCurrentAgentTypeConstraints().backend || [...backendTypes]).map(bt => (
                         <option key={bt} value={bt}>
                           {t(`common.auth.backend${bt === 'dify' ? 'Dify' : bt === 'direct_llm' ? 'DirectLlm' : bt === 'fastgpt' ? 'Fastgpt' : 'N8n'}`)}
                         </option>
@@ -561,9 +563,9 @@ export default function AgentsPage() {
                         value={form.execution_mode}
                         onChange={e => setForm({ ...form, execution_mode: e.target.value })}
                         className="w-full px-3 py-2 bg-surface border border-border rounded-md text-content text-sm"
-                        disabled={form.agent_type === 'data_query'}
+                        disabled={getCurrentAgentTypeConstraints().execution?.length === 1}
                       >
-                        {(form.agent_type === 'data_query' ? ['react'] : ['chat', 'react', 'plan_and_execute']).map(mode => (
+                        {(getCurrentAgentTypeConstraints().execution || ['chat', 'react', 'plan_and_execute']).map(mode => (
                           <option key={mode} value={mode}>
                             {mode === 'chat' ? t('common.auth.executionChat', '纯对话模式') : mode === 'react' ? t('common.auth.executionReact', 'ReAct 模式') : t('common.auth.executionPlanAndExecute', 'Plan-And-Execute 模式')}
                           </option>
@@ -679,7 +681,7 @@ export default function AgentsPage() {
               {/* 系统提示词 */}
               {activeTab === 'prompt' && (
                 <SystemPromptTab
-                  agentType={agentTypesList.find(t => isAgentTypeSelected(form.agent_type, t.id))}
+                  agentType={agentTypesList.find(t => t.id === form.agent_type)}
                   systemPrompts={systemPromptsList}
                   agentConfig={getAgentConfigParsed()}
                   onUpdate={updateAgentConfig}
