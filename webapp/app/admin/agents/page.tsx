@@ -1364,6 +1364,14 @@ function SystemPromptTab({ agentType, systemPrompts, agentConfig, onUpdate, onRe
   onRegenerate: () => void
 }) {
   const { t } = useTranslation()
+  const [showToast, setShowToast] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
+
+  const showToastMessage = (message: string) => {
+    setToastMessage(message)
+    setShowToast(true)
+    setTimeout(() => setShowToast(false), 2000)
+  }
 
   // Get the built-in prompt content
   const builtInPromptId = agentType?.system_prompt_id
@@ -1384,8 +1392,21 @@ function SystemPromptTab({ agentType, systemPrompts, agentConfig, onUpdate, onRe
         </label>
         {builtInPrompt
           ? (
-            <div className="p-3 bg-surface-tertiary border border-border rounded-md text-content text-sm font-mono max-h-48 overflow-y-auto whitespace-pre-wrap">
+            <div className="relative group p-3 bg-surface-tertiary border border-border rounded-md text-content text-sm font-mono max-h-48 overflow-y-auto whitespace-pre-wrap">
               {builtInPrompt.content}
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(builtInPrompt.content)
+                  showToastMessage(t('common.auth.copied', '已复制'))
+                }}
+                className="absolute top-2 right-2 p-1 text-content-tertiary hover:text-content bg-surface-elevated rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                title={t('common.auth.copy', '复制')}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </button>
             </div>
           )
           : (
@@ -1404,12 +1425,27 @@ function SystemPromptTab({ agentType, systemPrompts, agentConfig, onUpdate, onRe
           {t('common.auth.supplementaryPrompt', '补充提示词')}
           <span className="ml-2 text-xs text-content-tertiary">({t('common.auth.optional', '可选')})</span>
         </label>
-        <textarea
-          value={agentConfig.system_prompt || ''}
-          onChange={e => onUpdate({ system_prompt: e.target.value })}
-          placeholder={t('common.auth.supplementaryPromptPlaceholder', '在内置提示词基础上，添加此智能体的特定指令...')}
-          className="w-full px-3 py-2 bg-surface border border-border rounded-md text-content text-sm h-40 resize-y font-mono"
-        />
+        <div className="relative group">
+          <textarea
+            value={agentConfig.system_prompt || ''}
+            onChange={e => onUpdate({ system_prompt: e.target.value })}
+            placeholder={t('common.auth.supplementaryPromptPlaceholder', '在内置提示词基础上，添加此智能体的特定指令...')}
+            className="w-full px-3 py-2 bg-surface border border-border rounded-md text-content text-sm h-40 resize-y font-mono"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(agentConfig.system_prompt || '')
+              showToastMessage(t('common.auth.copied', '已复制'))
+            }}
+            className="absolute top-2 right-2 p-1 text-content-tertiary hover:text-content bg-surface-elevated rounded opacity-0 group-hover:opacity-100 transition-opacity"
+            title={t('common.auth.copy', '复制')}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </button>
+        </div>
         <p className="text-xs text-content-secondary mt-2">
           {t('common.auth.supplementaryPromptDesc', '在内置提示词基础上，添加此智能体的特定指令')}
         </p>
@@ -1431,8 +1467,21 @@ function SystemPromptTab({ agentType, systemPrompts, agentConfig, onUpdate, onRe
         </div>
         {agentConfig.dynamic_prompt
           ? (
-            <div className="p-3 bg-surface-tertiary border border-border rounded-md text-content text-sm font-mono max-h-48 overflow-y-auto whitespace-pre-wrap">
+            <div className="relative group p-3 bg-surface-tertiary border border-border rounded-md text-content text-sm font-mono max-h-48 overflow-y-auto whitespace-pre-wrap">
               {agentConfig.dynamic_prompt}
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(agentConfig.dynamic_prompt || '')
+                  showToastMessage(t('common.auth.copied', '已复制'))
+                }}
+                className="absolute top-2 right-2 p-1 text-content-tertiary hover:text-content bg-surface-elevated rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                title={t('common.auth.copy', '复制')}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </button>
             </div>
           )
           : (
@@ -1451,6 +1500,13 @@ function SystemPromptTab({ agentType, systemPrompts, agentConfig, onUpdate, onRe
           )}
         </div>
       </div>
+
+      {/* Toast 提示 */}
+      {showToast && (
+        <div className="fixed bottom-4 right-4 bg-surface-elevated border border-border rounded-lg shadow-lg px-4 py-2 text-sm text-content animate-fade-in">
+          {toastMessage}
+        </div>
+      )}
     </div>
   )
 }

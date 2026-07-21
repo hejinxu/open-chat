@@ -255,6 +255,8 @@ const translation = {
     regenerate: '重新生成',
     lastUpdated: '最后更新',
     optional: '可选',
+    copy: '复制',
+    copied: '已复制',
     collapse: '收起',
     expand: '展开',
   },

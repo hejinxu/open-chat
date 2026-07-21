@@ -255,6 +255,8 @@ const translation = {
     regenerate: 'Regenerate',
     lastUpdated: 'Last updated',
     optional: 'Optional',
+    copy: 'Copy',
+    copied: 'Copied',
     collapse: 'Collapse',
     expand: 'Expand',
   },
