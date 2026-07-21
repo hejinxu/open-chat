@@ -1182,6 +1182,14 @@ function TableFieldSelection({ datasource, onBack, onUpdate }: {
     loadTables()
   }, [])
 
+  // 计算已选表数量
+  const selectedCount = datasource.selected_tables?.length || 0
+
+  // 计算已选字段数量
+  const selectedFieldCount = selectedTable
+    ? (datasource.selected_columns?.[selectedTable]?.length || 0)
+    : 0
+
   // 过滤表列表
   const filteredTables = tables.filter((table) => {
     if (showSelectedOnly && !isTableSelected(table.name)) {
@@ -1228,6 +1236,9 @@ function TableFieldSelection({ datasource, onBack, onUpdate }: {
                       className="rounded border-border w-3 h-3"
                     />
                     {t('common.auth.selectedOnly', '已选')}
+                    <span className="text-content-tertiary">
+                      ({selectedCount}/{tables.length})
+                    </span>
                   </label>
                 </div>
                 <input
@@ -1275,7 +1286,14 @@ function TableFieldSelection({ datasource, onBack, onUpdate }: {
             <div className="flex-1 border border-border rounded-lg overflow-hidden">
               <div className="p-3 bg-surface-tertiary border-b border-border">
                 <span className="text-sm font-medium text-content">
-                  {selectedTable ? `${selectedTable} - ${t('common.auth.selectFields')}` : t('common.auth.selectFields')}
+                  {selectedTable
+                    ? `${selectedTable} - ${t('common.auth.selectFields')}`
+                    : t('common.auth.selectFields')}
+                  {selectedTable && tableFields.length > 0 && (
+                    <span className="ml-2 text-xs text-content-tertiary">
+                      ({selectedFieldCount}/{tableFields.length})
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="overflow-y-auto h-[calc(100%-40px)]">
