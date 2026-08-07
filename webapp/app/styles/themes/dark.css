@@ -2,16 +2,13 @@
 .dark {
   /* Backgrounds */
   --surface: #1F2A37;
-  --surface-secondary: #1F2A37;
+  --surface-secondary: #19222F;
   --surface-tertiary: #374151;
   --surface-hover: #374151;
   --surface-active: rgba(28, 100, 242, 0.2);
   --surface-elevated: #374151;
 
   /* Danger */
-  --danger-bg: rgba(239, 68, 68, 0.15);
-  --danger-text: #FCA5A5;
-  --danger-icon: #F87171;
   --danger-hover: rgba(239, 68, 68, 0.15);
 
   /* Text */

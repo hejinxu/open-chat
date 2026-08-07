@@ -66,6 +66,7 @@ const Main: FC<IMainProps> = (props) => {
   const agentTypeMapRef = useRef<Record<string, string>>({})
   const backendConvIdCacheRef = useRef<Record<string, string>>({})
   const hasSavedBackendConvIdRef = useRef<Record<string, boolean>>({})
+  const pendingTitleSummarizationRef = useRef<{ convId: string, userMessage: string } | null>(null)
   const [currentUser, setCurrentUser] = useState<{ name: string, role: string } | null>(null)
 
   // ---- Utility: fetch & cache prompt_variables ----
@@ -987,10 +988,12 @@ const Main: FC<IMainProps> = (props) => {
       message_files: (files || []).filter((f: any) => f.type === 'image'),
     })
 
-    // 新会话首条消息：立即异步设置标题，不等 AI 回复
+    // 新会话首条消息：立即设置临时标题，AI 回复后异步总结
     if (getConversationIdChangeBecauseOfNew()) {
       const title = message.slice(0, 30) + (message.length > 30 ? '...' : '')
       updateLocalConversationName(localConvId, title)
+      // 标记需要异步总结标题（在 AI 回复完成后触发）
+      pendingTitleSummarizationRef.current = { convId: localConvId, userMessage: message }
     }
 
     // Look up Dify conversation_id for this agent (async)
@@ -1086,6 +1089,8 @@ const Main: FC<IMainProps> = (props) => {
             NO_AGENTS_CONFIGURED: t('common.error.noAgentsConfigured'),
             AGENT_NOT_FOUND: t('common.error.agentNotFound'),
             UNAUTHORIZED: t('common.error.unauthorized'),
+            RISK_AUTH_FAILED: t('common.error.riskAuthFailed'),
+            PERMISSION_DENIED: t('common.error.permissionDenied'),
           }
           const translatedError = errorCode ? (errorCodeMap[errorCode] || errorMessage) : errorMessage
           const errorContent = `⚠ ${translatedError || 'Request failed'}`
@@ -1129,6 +1134,22 @@ const Main: FC<IMainProps> = (props) => {
             message_files: responseItem.message_files || [],
             agent_thoughts: responseItem.agent_thoughts || [],
           })
+        }
+
+        // 异步总结对话标题（不阻塞 UI，失败静默保留临时标题）
+        if (pendingTitleSummarizationRef.current) {
+          const { convId, userMessage } = pendingTitleSummarizationRef.current
+          const assistantContent = responseItem.content || ''
+          pendingTitleSummarizationRef.current = null
+          fetch(`${BASE_PATH}/api/system/summarize-title`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_message: userMessage, assistant_message: assistantContent }),
+          }).then(res => res.json()).then((data) => {
+            if (data.title) {
+              updateLocalConversationName(convId, data.title)
+            }
+          }).catch(() => { /* 静默失败，保留临时标题 */ })
         }
 
         if (getConversationIdChangeBecauseOfNew()) {

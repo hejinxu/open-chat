@@ -4,6 +4,7 @@ import type { AgentRecord } from '@/types/agent'
 import type { ModelProvider, Model } from '@/types/model'
 import type { AgentTypeRecord } from '@/types/agent-type'
 import type { SystemPromptRecord } from '@/types/system-prompt'
+import type { SystemConfigRecord } from '@/types/system-config'
 
 export interface DatabaseProvider {
   // Conversations
@@ -79,4 +80,9 @@ export interface DatabaseProvider {
   getModelById: (id: string) => Promise<Model | null>
   saveModel: (model: Model) => Promise<void>
   deleteModel: (id: string) => Promise<void>
+
+  // System Config
+  getSystemConfig: () => Promise<SystemConfigRecord[]>
+  getSystemConfigByKey: (key: string) => Promise<SystemConfigRecord | null>
+  saveSystemConfig: (config: SystemConfigRecord) => Promise<void>
 }

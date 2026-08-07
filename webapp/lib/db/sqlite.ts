@@ -5,6 +5,7 @@ import type { DatabaseProvider } from './types'
 import type { UserRecord, UserAccountRecord, AppIntegrationRecord, ApiKeyRecord } from '@/types/auth'
 import type { AgentRecord } from '@/types/agent'
 import type { ModelProvider, Model } from '@/types/model'
+import type { SystemConfigRecord } from '@/types/system-config'
 
 export class SqliteProvider implements DatabaseProvider {
   private db: any = null
@@ -290,6 +291,19 @@ export class SqliteProvider implements DatabaseProvider {
 
     // Migrate agents table: add agent_type, agent_config columns
     this.migrateAgentTypeColumns()
+
+    // System Config table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS system_config (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT '',
+        description TEXT DEFAULT '',
+        updated_at INTEGER NOT NULL
+      )
+    `)
+
+    // Seed default system config
+    this.seedDefaultSystemConfig()
 
     this.saveToFile()
   }
@@ -1233,5 +1247,56 @@ export class SqliteProvider implements DatabaseProvider {
       created_at: row.created_at as number,
       updated_at: row.updated_at as number,
     }
+  }
+
+  // ============ System Config ============
+
+  async getSystemConfig(): Promise<SystemConfigRecord[]> {
+    const stmt = this.db.prepare('SELECT * FROM system_config ORDER BY key ASC')
+    const rows = stmt.all()
+    return rows.map((row: any) => this.mapSystemConfig(row))
+  }
+
+  async getSystemConfigByKey(key: string): Promise<SystemConfigRecord | null> {
+    const stmt = this.db.prepare('SELECT * FROM system_config WHERE key = ?')
+    const row = stmt.get(key)
+    return row ? this.mapSystemConfig(row) : null
+  }
+
+  async saveSystemConfig(config: SystemConfigRecord): Promise<void> {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO system_config (key, value, description, updated_at)
+      VALUES (?, ?, ?, ?)
+    `)
+    stmt.run(config.key, config.value, config.description, config.updated_at)
+    this.saveToFile()
+  }
+
+  private mapSystemConfig(row: any): SystemConfigRecord {
+    return {
+      key: row.key as string,
+      value: (row.value as string) || '',
+      description: (row.description as string) || '',
+      updated_at: row.updated_at as number,
+    }
+  }
+
+  // ============ Seed Default System Config ============
+
+  private seedDefaultSystemConfig(): void {
+    const now = Math.floor(Date.now() / 1000)
+    const configs: { key: string, value: string, description: string }[] = [
+      { key: 'title_summarization_model_id', value: '', description: '对话标题总结使用的模型 ID（来自 models 表），为空则使用前 30 字截取' },
+      { key: 'title_summarization_enabled', value: 'false', description: '是否启用 AI 对话标题总结' },
+    ]
+
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO system_config (key, value, description, updated_at)
+      VALUES (?, ?, ?, ?)
+    `)
+    for (const c of configs) {
+      stmt.run(c.key, c.value, c.description, now)
+    }
+    console.log('[DB] Seeded default system config')
   }
 }
