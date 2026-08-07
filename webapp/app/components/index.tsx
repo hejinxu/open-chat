@@ -480,7 +480,8 @@ const Main: FC<IMainProps> = (props) => {
             content: item.query,
             isAnswer: false,
             message_files: item.message_files?.filter((file: any) => file.belongs_to === 'user') || [],
-
+            agent_id: item.agent_id,
+            agent_name: item.agent_name,
           })
           newChatList.push({
             id: item.id,
@@ -489,6 +490,8 @@ const Main: FC<IMainProps> = (props) => {
             feedback: item.feedback,
             isAnswer: true,
             message_files: item.message_files?.filter((file: any) => file.belongs_to === 'assistant') || [],
+            agent_id: item.agent_id,
+            agent_name: item.agent_name,
           })
         })
         setChatList(newChatList)

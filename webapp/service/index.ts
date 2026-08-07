@@ -76,6 +76,8 @@ function messageRecordsToResponse(messages: MessageRecord[]) {
         message_files: [...(pendingUser.message_files || []), ...(msg.message_files || [])],
         agent_thoughts: msg.agent_thoughts || [],
         feedback: msg.feedback,
+        agent_id: msg.agent_id,
+        agent_name: msg.agent_name,
       })
       pendingUser = null
     }
