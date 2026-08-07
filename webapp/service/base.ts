@@ -5,6 +5,27 @@ import type { VisionFile } from '@/types/app'
 
 const TIME_OUT = 100000
 
+// 防止并发 401 触发多次跳转登录页
+let isRedirectingToLogin = false
+
+/** 401 认证失效时跳转登录页。排除 login/setup/embed 页面：
+ *  - login/setup：此处 401 是业务错误（如凭证错误），跳转会清空用户输入
+ *  - embed：iframe 内跳转登录页无意义（embed 用 API Key 认证），仅提示
+ */
+function redirectToLoginOnAuthFailure() {
+  if (typeof window === 'undefined' || isRedirectingToLogin) {
+    return
+  }
+  const pathname = window.location.pathname
+  const isAuthPage = pathname.startsWith(`${BASE_PATH}/login`)
+    || pathname.startsWith(`${BASE_PATH}/setup`)
+    || pathname.startsWith(`${BASE_PATH}/embed`)
+  if (!isAuthPage) {
+    isRedirectingToLogin = true
+    window.location.href = `${BASE_PATH}/login`
+  }
+}
+
 const ContentType = {
   json: 'application/json',
   stream: 'text/event-stream',
@@ -309,7 +330,16 @@ const baseFetch = (url: string, fetchOptions: any, { needAllResponseContent }: I
               const bodyJson = res.json()
               switch (res.status) {
                 case 401: {
-                  Toast.notify({ type: 'error', message: 'Invalid token' })
+                  bodyJson.then((data: any) => {
+                    const message = data?.code === 'TOKEN_EXPIRED'
+                      ? '登录超时'
+                      : (data?.error || '请先登录')
+                    Toast.notify({ type: 'error', message })
+                    redirectToLoginOnAuthFailure()
+                  }).catch(() => {
+                    Toast.notify({ type: 'error', message: '请先登录' })
+                    redirectToLoginOnAuthFailure()
+                  })
                   return
                 }
                 default:
@@ -426,11 +456,17 @@ export const ssePost = (
         let code = ''
         try {
           const data = await res.json()
-          msg = data.message || msg
           code = data.code || ''
+          msg = code === 'TOKEN_EXPIRED'
+            ? '登录超时'
+            : (data.error || data.message || msg)
         }
         catch {}
         Toast.notify({ type: 'error', message: msg })
+        // 认证失效：跳转登录页（SSE 流式请求同样处理）
+        if (res.status === 401) {
+          redirectToLoginOnAuthFailure()
+        }
         onCompleted?.(true, msg, code)
         return
       }

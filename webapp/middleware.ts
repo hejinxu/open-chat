@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { verifyJwt } from '@/lib/auth/jwt'
+import { signJwt, verifyJwt, isJwtExpired, getAuthCookieOptions, AUTH_TOKEN_REFRESH_THRESHOLD_SECONDS } from '@/lib/auth/jwt'
 import { verifyApiKey } from '@/lib/auth/token'
 import { getDatabaseProvider } from '@/lib/db'
 import { ensureHasUsers } from '@/lib/auth/setup-cache'
@@ -57,9 +57,34 @@ export async function middleware(request: NextRequest) {
       if (payload.role) {
         headers.set('x-auth-user-role', payload.role)
       }
-      return NextResponse.next({ request: { headers } })
+      const response = NextResponse.next({ request: { headers } })
+
+      // 滑动续期：剩余有效期 < 阈值则重签 JWT 并写回 cookie，活跃用户不掉线
+      const now = Math.floor(Date.now() / 1000)
+      const remaining = (payload.exp ?? 0) - now
+      if (remaining < AUTH_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+        const newToken = await signJwt({
+          sub: payload.sub,
+          type: payload.type,
+          role: payload.role,
+        })
+        response.cookies.set('auth_token', newToken, getAuthCookieOptions())
+      }
+
+      return response
     }
-    // Invalid JWT — clear cookie
+    // Invalid or expired JWT — clear cookie
+    const expired = isJwtExpired(tokenCookie)
+    const code = expired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID'
+    // API 请求返回 401 JSON（带 code，前端按 code 区分提示），页面请求 redirect login
+    if (pathname.startsWith('/api/')) {
+      const response = NextResponse.json(
+        { error: expired ? 'Token expired' : 'Invalid token', code },
+        { status: 401 },
+      )
+      response.cookies.delete('auth_token')
+      return response
+    }
     const response = NextResponse.redirect(getLoginUrl(request))
     response.cookies.delete('auth_token')
     return response
@@ -129,7 +154,7 @@ export async function middleware(request: NextRequest) {
 
   // 3. No credentials — redirect to login/setup for page requests, 401 for API
   if (pathname.startsWith('/api/')) {
-    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    return NextResponse.json({ error: 'Authentication required', code: 'AUTH_REQUIRED' }, { status: 401 })
   }
 
   const db = getDatabaseProvider()

@@ -6,7 +6,13 @@ interface CaptchaEntry {
   expiresAt: number
 }
 
-const store = new Map<string, CaptchaEntry>()
+// 挂载到 globalThis，避免 Next.js Turbopack HMR 模块重载时 store 被重置成空 Map，
+// 导致验证码生成与校验落在不同模块实例而"验证码错误"（同 ToolRegistry pendingToolCalls 方案）
+const g = globalThis as any
+if (!g.__openchat_captchaStore) {
+  g.__openchat_captchaStore = new Map<string, CaptchaEntry>()
+}
+const store: Map<string, CaptchaEntry> = g.__openchat_captchaStore
 
 const CAPTCHA_TTL_MS = 5 * 60 * 1000 // 5 minutes
 

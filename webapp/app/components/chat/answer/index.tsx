@@ -1,9 +1,8 @@
 'use client'
 import type { FC } from 'react'
-import type { FeedbackFunc } from '../type'
-import type { ChatItem, MessageRating, VisionFile } from '@/types/app'
+import type { ChatItem, VisionFile } from '@/types/app'
 import type { Emoji } from '@/types/tools'
-import { ArrowPathIcon, HandThumbDownIcon, HandThumbUpIcon } from '@heroicons/react/24/outline'
+import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import Button from '@/app/components/base/button'
@@ -36,10 +35,6 @@ const OpeningStatementIcon: FC<{ className?: string }> = ({ className }) => (
   </svg>
 )
 
-const RatingIcon: FC<{ isLike: boolean }> = ({ isLike }) => {
-  return isLike ? <HandThumbUpIcon className="w-4 h-4" /> : <HandThumbDownIcon className="w-4 h-4" />
-}
-
 const RegenerateIcon: FC = () => {
   return <ArrowPathIcon className="w-4 h-4" />
 }
@@ -71,8 +66,6 @@ const IconWrapper: FC<{ children: React.ReactNode | string }> = ({ children }) =
 
 interface IAnswerProps {
   item: ChatItem
-  feedbackDisabled: boolean
-  onFeedback?: FeedbackFunc
   onRegenerate?: (id: string) => void
   onDeleteMessage?: (id: string) => void
   isLastMessage?: boolean
@@ -84,8 +77,6 @@ interface IAnswerProps {
 // The component needs to maintain its own state to control whether to display input component
 const Answer: FC<IAnswerProps> = ({
   item,
-  feedbackDisabled = false,
-  onFeedback,
   onRegenerate,
   onDeleteMessage,
   isLastMessage = false,
@@ -93,67 +84,18 @@ const Answer: FC<IAnswerProps> = ({
   allToolIcons,
   suggestionClick = () => { },
 }) => {
-  const { id, content, feedback, agent_thoughts, workflowProcess, suggestedQuestions = [], agent_name } = item
+  const { id, content, agent_thoughts, workflowProcess, suggestedQuestions = [], agent_name } = item
   const isAgentMode = !!agent_thoughts && agent_thoughts.length > 0
 
   const { t } = useTranslation()
-
-  /**
-   * Render feedback results (distinguish between users and administrators)
-   * User reviews cannot be cancelled in Console
-   * @param rating feedback result
-   * @param isUserFeedback Whether it is user's feedback
-   * @returns comp
-   */
-  const renderFeedbackRating = (rating: MessageRating | undefined) => {
-    if (!rating) { return null }
-
-    const isLike = rating === 'like'
-    const ratingIconClassname = isLike ? 'text-primary-600 bg-primary-100 hover:bg-primary-200' : 'text-red-600 bg-red-100 hover:bg-red-200'
-    // The tooltip is always displayed, but the content is different for different scenarios.
-    return (
-      <Tooltip
-        selector={`user-feedback-${randomString(16)}`}
-        content={isLike ? '取消赞同' : '取消反对'}
-      >
-        <div
-          className="relative box-border flex items-center justify-center h-7 w-7 p-0.5 rounded-lg bg-surface cursor-pointer text-content-tertiary hover:text-content"
-          style={{ boxShadow: '0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -2px rgba(0, 0, 0, 0.05)' }}
-          onClick={async () => {
-            await onFeedback?.(id, { rating: null })
-          }}
-        >
-          <div className={`${ratingIconClassname} rounded-lg h-6 w-6 flex items-center justify-center`}>
-            <RatingIcon isLike={isLike} />
-          </div>
-        </div>
-      </Tooltip>
-    )
-  }
 
   /**
    * Different scenarios have different operation items.
    * @returns comp
    */
   const renderItemOperation = () => {
-    const userOperation = () => {
-      return feedback?.rating
-        ? null
-        : (
-          <div className="flex gap-1">
-            <Tooltip selector={`user-feedback-${randomString(16)}`} content={t('common.operation.like') as string}>
-              {OperationBtn({ innerContent: <IconWrapper><RatingIcon isLike={true} /></IconWrapper>, onClick: () => onFeedback?.(id, { rating: 'like' }) })}
-            </Tooltip>
-            <Tooltip selector={`user-feedback-${randomString(16)}`} content={t('common.operation.dislike') as string}>
-              {OperationBtn({ innerContent: <IconWrapper><RatingIcon isLike={false} /></IconWrapper>, onClick: () => onFeedback?.(id, { rating: 'dislike' }) })}
-            </Tooltip>
-          </div>
-        )
-    }
-
     return (
       <div className={`${s.itemOperation} flex gap-2`}>
-        {userOperation()}
         {onRegenerate && (
           <Tooltip selector={`regenerate-${randomString(16)}`} content={t('common.operation.regenerate') as string}>
             {OperationBtn({ innerContent: <IconWrapper><RegenerateIcon /></IconWrapper>, onClick: () => onRegenerate(id) })}
@@ -261,9 +203,7 @@ const Answer: FC<IAnswerProps> = ({
             </div>
           </div>
           <div className="flex justify-start mt-1 gap-1">
-            {!feedbackDisabled && !item.feedbackDisabled && renderItemOperation()}
-            {/* User feedback must be displayed */}
-            {!feedbackDisabled && renderFeedbackRating(feedback?.rating)}
+            {!item.feedbackDisabled && renderItemOperation()}
           </div>
         </div>
       </div>

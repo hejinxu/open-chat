@@ -6,7 +6,6 @@ import Textarea from 'rc-textarea'
 import s from './style.module.css'
 import Answer from './answer'
 import Question from './question'
-import type { FeedbackFunc } from './type'
 import type { ChatItem, VisionFile, VisionSettings } from '@/types/app'
 import { TransferMethod } from '@/types/app'
 import Tooltip from '@/app/components/base/tooltip'
@@ -26,9 +25,7 @@ import { useVoiceSettings } from '@/hooks/use-voice-settings'
 
 export interface IChatProps {
   chatList: ChatItem[]
-  feedbackDisabled?: boolean
   isHideSendInput?: boolean
-  onFeedback?: FeedbackFunc
   onRegenerate?: (id: string) => void
   onDeleteMessage?: (id: string) => void
   checkCanSend?: () => boolean
@@ -47,9 +44,7 @@ export interface IChatProps {
 
 const Chat: FC<IChatProps> = ({
   chatList,
-  feedbackDisabled = false,
   isHideSendInput = false,
-  onFeedback,
   onRegenerate,
   onDeleteMessage,
   checkCanSend,
@@ -91,6 +86,8 @@ const Chat: FC<IChatProps> = ({
   const contentWrapperRef = useRef<HTMLDivElement>(null)
   const prevIsRespondingRef = useRef(false)
   const hasReadAloudRef = useRef(false)
+  const autoScrollEnabledRef = useRef(true)
+  const prevChatListLengthRef = useRef(0)
   const [inputMessage, setInputMessage] = useState<InputMessageType | null>(null)
 
   useEffect(() => {
@@ -115,12 +112,33 @@ const Chat: FC<IChatProps> = ({
     if (!wrapper || !container) {
       return
     }
+    // 用户向上滚动时暂停自动滚动，滚回底部附近时恢复
+    const handleScroll = () => {
+      const threshold = 50
+      autoScrollEnabledRef.current
+        = container.scrollTop + container.clientHeight >= container.scrollHeight - threshold
+    }
+    container.addEventListener('scroll', handleScroll, { passive: true })
     const ro = new ResizeObserver(() => {
-      container.scrollTop = container.scrollHeight
+      if (autoScrollEnabledRef.current) {
+        container.scrollTop = container.scrollHeight
+      }
     })
     ro.observe(wrapper)
-    return () => ro.disconnect()
+    return () => {
+      container.removeEventListener('scroll', handleScroll)
+      ro.disconnect()
+    }
   }, [])
+
+  // 会话切换（chatList 清空）或新消息加入时，恢复自动滚动
+  useEffect(() => {
+    const len = chatList.length
+    if (len === 0 || len > prevChatListLengthRef.current) {
+      autoScrollEnabledRef.current = true
+    }
+    prevChatListLengthRef.current = len
+  }, [chatList.length])
 
   const handleContentChange = (e: any) => {
     const value = e.target.value
@@ -229,8 +247,6 @@ const Chat: FC<IChatProps> = ({
               return <Answer
                 key={item.id}
                 item={item}
-                feedbackDisabled={feedbackDisabled}
-                onFeedback={onFeedback}
                 onRegenerate={onRegenerate}
                 onDeleteMessage={onDeleteMessage}
                 isLastMessage={isLast}

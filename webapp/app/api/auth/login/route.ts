@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDatabaseProvider } from '@/lib/db'
 import { comparePassword } from '@/lib/auth/password'
-import { signJwt } from '@/lib/auth/jwt'
+import { signJwt, getAuthCookieOptions } from '@/lib/auth/jwt'
 import { verifyCaptcha } from '@/lib/auth/captcha-store'
 
 export async function POST(request: NextRequest) {
@@ -59,12 +59,7 @@ export async function POST(request: NextRequest) {
       user: { id: user.id, name: user.name, role: user.role },
     })
 
-    response.cookies.set('auth_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-    })
+    response.cookies.set('auth_token', token, getAuthCookieOptions())
 
     return response
   }

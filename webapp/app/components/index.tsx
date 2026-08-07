@@ -10,7 +10,7 @@ import Sidebar from '@/app/components/sidebar'
 import ConfigSence from '@/app/components/config-scence'
 import Header from '@/app/components/header'
 import { fetchAppParams, fetchChatList, fetchConversations, sendChatMessage, stopChatMessage, saveUserMessage, saveAssistantMessage, createLocalConversation, updateLocalConversationName } from '@/service'
-import type { ChatItem, ConversationItem, Feedbacktype, PromptConfig, VisionFile, VisionSettings } from '@/types/app'
+import type { ChatItem, ConversationItem, PromptConfig, VisionFile, VisionSettings } from '@/types/app'
 import type { FileUpload } from '@/app/components/base/file-uploader-in-attachment/types'
 import { Resolution, TransferMethod, WorkflowRunningStatus } from '@/types/app'
 import Chat from '@/app/components/chat'
@@ -678,6 +678,11 @@ const Main: FC<IMainProps> = (props) => {
           }
           setCurrConversationId(_conversationId, false)
         }
+        else {
+          // 页面首次加载即为新会话（无有效存储 ID 或存储的会话已删除）：
+          // 标记为新会话，确保首条消息发送时能正确更新标题，避免标题停留在"新的对话"
+          setConversationIdChangeBecauseOfNew(true)
+        }
 
         setInited(true)
       }
@@ -1335,25 +1340,6 @@ const Main: FC<IMainProps> = (props) => {
     })
   }
 
-  const handleFeedback = async (messageId: string, feedback: Feedbacktype) => {
-    try {
-      const storage = getStorageProvider()
-      await storage.updateMessageFeedback(messageId, JSON.stringify({ rating: feedback.rating }))
-    }
-    catch { /* ignore */ }
-    const newChatList = chatList.map((item) => {
-      if (item.id === messageId) {
-        return {
-          ...item,
-          feedback,
-        }
-      }
-      return item
-    })
-    setChatList(newChatList)
-    notify({ type: 'success', message: t('common.api.success') })
-  }
-
   const handleRegenerate = async (id: string) => {
     if (isResponding) {
       notify({ type: 'info', message: t('app.errorMessage.waitForResponse') })
@@ -1494,7 +1480,6 @@ const Main: FC<IMainProps> = (props) => {
               <Chat
                 chatList={chatList}
                 onSend={handleSend}
-                onFeedback={handleFeedback}
                 onRegenerate={handleRegenerate}
                 onDeleteMessage={handleDeleteMessage}
                 isResponding={isResponding}
