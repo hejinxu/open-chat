@@ -117,6 +117,14 @@ interface ConversationRecord {
 - `lib/services/conversation.ts` — `ConversationService`（对话 CRUD）
 - `lib/services/message.ts` — `MessageService`（消息保存/删除，区分用户消息和 AI 回复；`deleteMessagesByIds` 按 ID 精确删除）
 
+#### 问数链路（`data_query` 智能体）
+- `lib/services/data-query-pipeline.ts` — 链路编排：查询规范化 → 表选择 → 实时 DDL 注入 → 构建 systemPrompt + 工具上下文（route 只做 HTTP/认证/流式）
+- `lib/services/query-normalize.ts` — 查询规范化（多轮指代消解 + 相对时间换算，产物 `canonicalQuery` 替换 agent 最新用户消息）
+- `lib/services/schema-select.ts` — 实时 Schema 拉取（information_schema，TTL 缓存 60s）+ 渐进式表选择 + DDL 构建（注释优先级：用户自定义 > 实时 > 快照）
+- `lib/tools/builtin/execute-sql.ts` — SQL 执行前做**代码级结构校验**（零 LLM）：解析 SQL 引用的表/列，与实时 schema 比对，拦截不存在的表或列（如 YEAR），返回友好错误让模型修正；同请求内相同 SQL 命中缓存直接返回结果，成功结果附带引导避免模型重复查询
+
+**问数配置开关**（`agent_config`，默认开）：`enable_table_selection` / `enable_query_normalization` / `enable_semantic_check`。任一步失败自动降级，不阻断请求。`lib/services/sql-semantic-check.ts` 保留为可选的人工/深度 LLM 审计工具，运行时不再调用。
+
 #### 存储层（远程存储优先）
 - **StorageProvider 接口**: `lib/storage/types.ts` 定义统一的存储接口
 - **RemoteStorageProvider**: `lib/storage/remote-storage.ts` 实现 HTTP API 存储（客户端使用）

@@ -122,7 +122,7 @@ function createToolNode(tools: ToolRegistry, context?: any) {
 // 搜索工具最大调用轮数
 const MAX_SEARCH_ROUNDS = 5
 // 总工具调用轮数上限（防止无限循环）
-const MAX_TOTAL_ROUNDS = 10
+const MAX_TOTAL_ROUNDS = 12
 
 function shouldContinue(state: { messages: BaseMessage[] }): typeof END | 'tools' | 'summarize' {
   const lastMessage = state.messages[state.messages.length - 1]
@@ -200,7 +200,7 @@ export function createReactAgent(
     apiKey,
     configuration: apiUrl ? { baseURL: apiUrl } : undefined,
     streaming: true,
-    temperature: 0.7,
+    temperature: 0.1,
     maxTokens: 4096,
   })
 

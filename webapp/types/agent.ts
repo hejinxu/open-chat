@@ -50,6 +50,9 @@ export interface AgentExtraConfig {
   query_examples?: QueryExample[]
   system_prompt?: string
   enable_network?: boolean
+  enable_table_selection?: boolean
+  enable_query_normalization?: boolean
+  enable_semantic_check?: boolean
   dynamic_prompt?: string
   dynamic_prompt_updated_at?: number
 }

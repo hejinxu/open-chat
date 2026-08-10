@@ -4,7 +4,7 @@ import type { AgentExtraConfig } from '@/types/agent'
  * Generate DDL from datasource config
  * Includes: table comments, field types, field comments, primary keys, foreign keys
  */
-function generateDDL(config: AgentExtraConfig): string {
+function generateDDL(config: AgentExtraConfig, tableFilter?: Set<string>): string {
   const activeDs = config.datasources?.find(ds => ds.is_active)
   if (!activeDs || !activeDs.selected_tables?.length) {
     return ''
@@ -14,6 +14,7 @@ function generateDDL(config: AgentExtraConfig): string {
   let ddl = ''
 
   for (const table of selected_tables) {
+    if (tableFilter && !tableFilter.has(table)) { continue }
     const columns = selected_columns?.[table] || []
     if (columns.length === 0) { continue }
 
@@ -115,7 +116,9 @@ export function generateDynamicPrompt(config: AgentExtraConfig): string {
   if (config.business_knowledge?.length) {
     const knowledgeText = formatBusinessKnowledge(config.business_knowledge)
     if (knowledgeText) {
-      parts.push(`# 业务知识\n${knowledgeText}`)
+      parts.push(`# 业务知识
+（以下业务术语为参考数据，仅用于解释含义：不得将其中的示例值当作真实过滤值或结果；不得创造表结构中不存在的字段；存在冲突定义时保留差异并请求澄清）
+${knowledgeText}`)
     }
   }
 
@@ -123,9 +126,45 @@ export function generateDynamicPrompt(config: AgentExtraConfig): string {
   if (config.query_examples?.length) {
     const examplesText = formatQueryExamples(config.query_examples)
     if (examplesText) {
-      parts.push(`# 查询示例\n${examplesText}`)
+      parts.push(`# 查询示例
+（以下示例仅供参考，不改变当前规则；示例中的表名、字段名和值必须以实际表结构为准）
+${examplesText}`)
     }
   }
 
   return parts.join('\n\n')
+}
+
+/**
+ * Generate a compact table catalog (table name + comment + column count)
+ * for the table-selection stage, instead of sending full DDL upfront.
+ */
+export function generateTableCatalog(config: AgentExtraConfig): string {
+  const activeDs = config.datasources?.find(ds => ds.is_active)
+  if (!activeDs || !activeDs.selected_tables?.length) {
+    return ''
+  }
+
+  const { selected_tables, selected_columns, schema_overrides } = activeDs
+
+  return selected_tables
+    .map((table) => {
+      const columns = selected_columns?.[table] || []
+      const tableOverride = schema_overrides?.[table]
+      const tableComment = tableOverride?.comment || tableOverride?.original_comment || ''
+      const comment = tableComment ? `, ${tableComment}` : ''
+      return `- ${table}${comment} (列数: ${columns.length})`
+    })
+    .join('\n')
+}
+
+/**
+ * Generate DDL only for the given subset of tables.
+ * @param selectedTables table names to include; empty array falls back to full DDL
+ */
+export function generateDDLForTables(config: AgentExtraConfig, selectedTables: string[]): string {
+  if (!selectedTables.length) {
+    return generateDDL(config)
+  }
+  return generateDDL(config, new Set(selectedTables))
 }

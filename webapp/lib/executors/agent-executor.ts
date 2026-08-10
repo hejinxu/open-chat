@@ -50,12 +50,13 @@ export class AgentExecutor {
     messages?: Array<{ role: string, content: string }>
     conversationId?: string
     systemPrompt?: string
+    toolContext?: Record<string, any>
   }): Promise<{
     response: string
     conversationId?: string
     toolCalls?: Array<{ name: string, args: Record<string, any>, result: any }>
   }> {
-    const { query, messages = [], conversationId, systemPrompt } = params
+    const { query, messages = [], conversationId, systemPrompt, toolContext } = params
     const executionMode = this.agent.execution_mode || 'chat'
 
     const allMessages = [
@@ -67,9 +68,9 @@ export class AgentExecutor {
       case 'chat':
         return this.executeChat(allMessages, systemPrompt)
       case 'react':
-        return this.executeReAct(allMessages, conversationId, systemPrompt)
+        return this.executeReAct(allMessages, conversationId, systemPrompt, toolContext)
       case 'plan_and_execute':
-        return this.executePlanAndExecute(allMessages, conversationId, systemPrompt)
+        return this.executePlanAndExecute(allMessages, conversationId, systemPrompt, toolContext)
       default:
         return this.executeChat(allMessages, systemPrompt)
     }
@@ -93,6 +94,7 @@ export class AgentExecutor {
     messages: Array<{ role: string, content: string }>,
     conversationId?: string,
     systemPrompt?: string,
+    toolContext?: Record<string, any>,
   ): Promise<{
     response: string
     conversationId?: string
@@ -113,6 +115,7 @@ export class AgentExecutor {
       context: {
         controller: this.controller,
         agentConfig: this.agent.agent_config || {},
+        queryContext: toolContext || {},
       },
     })
 
@@ -163,6 +166,7 @@ export class AgentExecutor {
         },
         {
           configurable: { thread_id: threadId },
+          recursionLimit: 64,
         },
       )
 
@@ -190,6 +194,7 @@ export class AgentExecutor {
     messages: Array<{ role: string, content: string }>,
     conversationId?: string,
     systemPrompt?: string,
+    toolContext?: Record<string, any>,
   ): Promise<{
     response: string
     conversationId?: string
@@ -206,6 +211,7 @@ export class AgentExecutor {
       context: {
         controller: this.controller,
         agentConfig: this.agent.agent_config || {},
+        queryContext: toolContext || {},
       },
     })
 
@@ -247,6 +253,7 @@ export class AgentExecutor {
       },
       {
         configurable: { thread_id: threadId },
+        recursionLimit: 64,
       },
     )
 

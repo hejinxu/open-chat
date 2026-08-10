@@ -29,6 +29,7 @@
 - **工具系统**：内置工具 + MCP 工具 + 自定义工具
 - **客户端工具**：通过 SSE 协议支持客户端执行（如读取宿主页面 DOM）
 - **LangGraph 集成**：基于 LangGraph.js 的 Agent 编排框架
+- **智能问数**：问数智能体（`data_query`）支持渐进式表选择、查询规范化（多轮指代消解 + 相对时间换算）、实时 Schema 注入、SQL 执行前代码级结构校验（拦截不存在的表/列，零 LLM）
 
 ## 前置要求
 
@@ -147,6 +148,11 @@ docker run -p 3000:3000 webapp-conversation:latest
 │   │   ├── types.ts              # 工具类型
 │   │   ├── registry.ts           # 工具注册中心
 │   │   └── builtin/              # 内置工具
+│   ├── services/                 # 业务服务（问数链路）
+│   │   ├── data-query-pipeline.ts # 问数链路编排（规范化→表选择→DDL注入）
+│   │   ├── query-normalize.ts     # 查询规范化（多轮指代消解 + 相对时间换算）
+│   │   ├── schema-select.ts       # 实时 Schema 拉取（TTL 缓存）+ 表选择 + DDL 构建
+│   │   └── sql-semantic-check.ts  # 可选的人工/深度 LLM 审计（运行时不再调用）
 │   ├── mcp/                      # MCP 集成
 │   ├── adapters/                 # 后端适配器
 │   └── db/                       # 数据库适配器

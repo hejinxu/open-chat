@@ -69,8 +69,6 @@ export async function POST(request: NextRequest) {
           })
 
           try {
-            // Build system prompt using the new prompt builder
-            const { buildSystemPrompt } = await import('@/lib/prompts')
             const { getDatabaseProvider } = await import('@/lib/db')
             const db = getDatabaseProvider()
 
@@ -85,7 +83,20 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            let systemPrompt = await buildSystemPrompt(agent, agentType, builtInPrompt)
+            // Run the data-query pipeline: query normalization + table selection + DDL injection
+            const { runDataQueryPipeline } = await import('@/lib/services/data-query-pipeline')
+            const pipeline = await runDataQueryPipeline({
+              agent,
+              agentType,
+              builtInPrompt,
+              query,
+              messages: messages || [],
+              inputs,
+            })
+
+            let systemPrompt = pipeline.systemPrompt
+            const canonicalQuery = pipeline.canonicalQuery
+            const toolContext = pipeline.toolContext
 
             // Replace template variables in the final prompt
             if (systemPrompt && inputs) {
@@ -106,10 +117,11 @@ export async function POST(request: NextRequest) {
             console.log('[chat-messages] Final system prompt (first 200):', systemPrompt?.substring(0, 200))
 
             const result = await executor.execute({
-              query,
+              query: canonicalQuery,
               messages: messages || [],
               conversationId,
               systemPrompt,
+              toolContext,
             })
 
             console.log('[chat-messages] Result:', {

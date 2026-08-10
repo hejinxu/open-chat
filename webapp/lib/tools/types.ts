@@ -50,6 +50,12 @@ export interface ToolContext {
   controller?: ReadableStreamDefaultController
   pendingToolCalls?: Map<string, (result: ToolResult) => void>
   agentConfig?: Record<string, any>
+  /**
+   * Runtime context for the data-query pipeline, e.g.
+   * { canonicalQuery, userQuery, dialect, enableSemanticCheck, llm }
+   * Kept loosely typed to avoid coupling the tools layer to services.
+   */
+  queryContext?: Record<string, any>
 }
 
 export interface ToolResult {

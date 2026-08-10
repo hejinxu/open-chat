@@ -15,6 +15,14 @@ function getNetworkStatusPrompt(enableNetwork?: boolean): string {
   return ''
 }
 
+export interface BuildSystemPromptOptions {
+  /**
+   * Progressive disclosure: when provided, replaces the `# 数据表结构` section
+   * inside the stored dynamic_prompt with this DDL-only section (selected tables).
+   */
+  ddlSection?: string
+}
+
 /**
  * Build the complete system prompt for an agent
  * Uses stored dynamic_prompt instead of regenerating on every request
@@ -23,6 +31,7 @@ export async function buildSystemPrompt(
   agent: AgentConfig,
   agentType?: AgentTypeRecord | null,
   builtInPrompt?: SystemPromptRecord | null,
+  options: BuildSystemPromptOptions = {},
 ): Promise<string> {
   const parts: string[] = []
 
@@ -39,7 +48,15 @@ export async function buildSystemPrompt(
 
   // 3. Dynamic prompt (pre-generated, stored in agent_config)
   if (agentConfig.dynamic_prompt) {
-    parts.push(agentConfig.dynamic_prompt)
+    parts.push(
+      options.ddlSection
+        ? replaceSchemaSection(agentConfig.dynamic_prompt, options.ddlSection)
+        : agentConfig.dynamic_prompt,
+    )
+  }
+  else if (options.ddlSection) {
+    // Fallback: no stored dynamic_prompt but a schema section is provided
+    parts.push(options.ddlSection)
   }
 
   // 4. Network status (dynamic, simple flag)
@@ -49,4 +66,17 @@ export async function buildSystemPrompt(
   }
 
   return parts.join('\n\n')
+}
+
+/**
+ * Replace the `# 数据表结构` section inside a single dynamic_prompt string,
+ * so the replacement never leaks into sibling prompt parts.
+ */
+function replaceSchemaSection(dynamicPrompt: string, ddlSection: string): string {
+  const header = '# 数据表结构'
+  const pattern = new RegExp(`${header}\\n[\\s\\S]*?(?=\\n\\n# |$)`)
+  if (pattern.test(dynamicPrompt)) {
+    return dynamicPrompt.replace(pattern, ddlSection)
+  }
+  return `${dynamicPrompt}\n\n${ddlSection}`
 }
