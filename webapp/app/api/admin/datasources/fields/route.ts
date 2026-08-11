@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/app/api/utils/auth-guard'
+import { parseSchemas } from '@/lib/services/datasource'
 
 export async function POST(request: NextRequest) {
   const authError = requireAdmin(request)
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { type, host, port, database, username, password, table } = body
+    const { type, host, port, database, username, password, table, schemas } = body
 
     if (!host || !port || !database || !username || !table) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 })
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
       return await getMysqlFields(host, port, database, username, password, table)
     }
     else if (type === 'postgresql') {
-      return await getPostgresFields(host, port, database, username, password, table)
+      return await getPostgresFields(host, port, database, username, password, table, schemas)
     }
     else {
       return NextResponse.json({ success: false, message: 'Unsupported database type' }, { status: 400 })
@@ -89,7 +90,7 @@ async function getMysqlFields(host: string, port: number, database: string, user
   }
 }
 
-async function getPostgresFields(host: string, port: number, database: string, username: string, password: string, table: string) {
+async function getPostgresFields(host: string, port: number, database: string, username: string, password: string, table: string, schemas?: string) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Client } = require('pg')
@@ -103,6 +104,8 @@ async function getPostgresFields(host: string, port: number, database: string, u
     })
     await client.connect()
 
+    const schemaList = parseSchemas(schemas)
+
     // Get columns with type and comment
     const columnsResult = await client.query(`
       SELECT
@@ -115,11 +118,11 @@ async function getPostgresFields(host: string, port: number, database: string, u
         SELECT ku.column_name
         FROM information_schema.table_constraints tc
         JOIN information_schema.key_column_usage ku ON tc.constraint_name = ku.constraint_name
-        WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'
+        WHERE tc.table_schema = ANY($1) AND tc.table_name = $2 AND tc.constraint_type = 'PRIMARY KEY'
       ) pk ON c.column_name = pk.column_name
-      WHERE c.table_schema = 'public' AND c.table_name = $1
+      WHERE c.table_schema = ANY($1) AND c.table_name = $2
       ORDER BY c.ordinal_position
-    `, [table])
+    `, [schemaList, table])
 
     // Get foreign keys
     const fkResult = await client.query(`
@@ -130,8 +133,8 @@ async function getPostgresFields(host: string, port: number, database: string, u
       FROM information_schema.table_constraints tc
       JOIN information_schema.key_column_usage ku ON tc.constraint_name = ku.constraint_name
       JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
-      WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'
-    `, [table])
+      WHERE tc.table_schema = ANY($1) AND tc.table_name = $2 AND tc.constraint_type = 'FOREIGN KEY'
+    `, [schemaList, table])
 
     await client.end()
 

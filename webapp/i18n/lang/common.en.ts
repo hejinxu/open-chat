@@ -183,6 +183,8 @@ const translation = {
     datasourceHost: 'Host',
     datasourcePort: 'Port',
     datasourceDatabase: 'Database',
+    datasourceSchemas: 'Schema',
+    datasourceSchemasHint: 'Comma-separated, e.g. public,audit',
     datasourceUsername: 'Username',
     datasourcePassword: 'Password',
     setAsActive: 'Set as Active',

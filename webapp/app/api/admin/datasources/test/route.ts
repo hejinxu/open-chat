@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/app/api/utils/auth-guard'
+import { parseSchemas, postgresSearchPathOption } from '@/lib/services/datasource'
 
 export async function POST(request: NextRequest) {
   const authError = requireAdmin(request)
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { type, host, port, database, username, password } = body
+    const { type, host, port, database, username, password, schemas } = body
 
     if (!host || !port || !database || !username) {
       return NextResponse.json({ error: 'Missing required fields', code: 'MISSING_FIELDS' }, { status: 400 })
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
       return await testMysqlConnection(host, port, database, username, password)
     }
     else if (type === 'postgresql') {
-      return await testPostgresConnection(host, port, database, username, password)
+      return await testPostgresConnection(host, port, database, username, password, schemas)
     }
     else {
       return NextResponse.json({ error: 'Unsupported database type', code: 'UNSUPPORTED_DB_TYPE' }, { status: 400 })
@@ -51,7 +52,7 @@ async function testMysqlConnection(host: string, port: number, database: string,
   }
 }
 
-async function testPostgresConnection(host: string, port: number, database: string, username: string, password: string) {
+async function testPostgresConnection(host: string, port: number, database: string, username: string, password: string, schemas?: string) {
   try {
     // Use pg for testing connection
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -63,6 +64,7 @@ async function testPostgresConnection(host: string, port: number, database: stri
       user: username,
       password,
       connectionTimeoutMillis: 5000,
+      options: postgresSearchPathOption(parseSchemas(schemas)),
     })
     await client.connect()
     await client.query('SELECT 1')

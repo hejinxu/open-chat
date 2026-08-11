@@ -46,6 +46,9 @@ export function generateDynamicPrompt(config: AgentExtraConfig): string {
   if (activeDs) {
     const dbType = activeDs.type === 'mysql' ? 'MySQL' : activeDs.type === 'postgresql' ? 'PostgreSQL' : activeDs.type
     parts.push(`# 数据源类型\n当前使用的数据库类型为 ${dbType}，请生成符合该数据库 SQL 语法规范的查询语句。`)
+    if (activeDs.type === 'postgresql' && activeDs.schemas) {
+      parts.push(`# 数据源模式（schema）\n当前数据源配置的模式为：${activeDs.schemas}。查询时可直接使用不带模式前缀的表名。`)
+    }
   }
 
   // 1. Business knowledge

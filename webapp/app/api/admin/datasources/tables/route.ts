@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/app/api/utils/auth-guard'
+import { parseSchemas } from '@/lib/services/datasource'
 
 export async function POST(request: NextRequest) {
   const authError = requireAdmin(request)
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { type, host, port, database, username, password } = body
+    const { type, host, port, database, username, password, schemas } = body
 
     if (!host || !port || !database || !username) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 })
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
       return await getMysqlTables(host, port, database, username, password)
     }
     else if (type === 'postgresql') {
-      return await getPostgresTables(host, port, database, username, password)
+      return await getPostgresTables(host, port, database, username, password, schemas)
     }
     else {
       return NextResponse.json({ success: false, message: 'Unsupported database type' }, { status: 400 })
@@ -66,7 +67,7 @@ async function getMysqlTables(host: string, port: number, database: string, user
   }
 }
 
-async function getPostgresTables(host: string, port: number, database: string, username: string, password: string) {
+async function getPostgresTables(host: string, port: number, database: string, username: string, password: string, schemas?: string) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Client } = require('pg')
@@ -85,9 +86,9 @@ async function getPostgresTables(host: string, port: number, database: string, u
         t.table_name as name,
         COALESCE(obj_description((t.table_schema || '.' || t.table_name)::regclass), '') as comment
       FROM information_schema.tables t
-      WHERE t.table_schema = 'public'
+      WHERE t.table_schema = ANY($1)
       ORDER BY t.table_name
-    `)
+    `, [parseSchemas(schemas)])
 
     await client.end()
 

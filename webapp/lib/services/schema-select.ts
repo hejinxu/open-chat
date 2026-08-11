@@ -1,4 +1,5 @@
 import type { AgentExtraConfig, DatasourceConfig } from '@/types/agent'
+import { parseSchemas } from '@/lib/services/datasource'
 
 export interface TableSelectionOptions {
   model: string
@@ -64,7 +65,7 @@ function cacheSet(key: string, value: unknown, ttlMs: number = SCHEMA_CACHE_TTL_
 }
 
 function cacheKeyFor(activeDs: DatasourceConfig, tables: string[]): string {
-  const ds = `${activeDs.type}:${activeDs.host}:${activeDs.port}:${activeDs.database}`
+  const ds = `${activeDs.type}:${activeDs.host}:${activeDs.port}:${activeDs.database}:${activeDs.schemas || 'public'}`
   return tables.length > 0 ? `${ds}:${[...tables].sort().join(',')}` : ds
 }
 
@@ -322,6 +323,7 @@ async function queryMysqlCatalog(ds: DatasourceConfig, tables: string[]): Promis
 async function queryPostgresCatalog(ds: DatasourceConfig, tables: string[]): Promise<CatalogRow[]> {
   // eslint-disable-next-line ts/no-require-imports
   const { Client } = require('pg')
+  const schemas = parseSchemas(ds.schemas)
   const client = new Client({
     host: ds.host,
     port: ds.port,
@@ -336,12 +338,12 @@ async function queryPostgresCatalog(ds: DatasourceConfig, tables: string[]): Pro
       SELECT c.relname AS name,
              COALESCE(obj_description(c.oid), '') AS comment,
              (SELECT COUNT(*) FROM information_schema.columns col
-              WHERE col.table_schema = 'public' AND col.table_name = c.relname) AS col_count
+              WHERE col.table_schema = ANY($1) AND col.table_name = c.relname) AS col_count
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname = ANY($1)
+      WHERE n.nspname = ANY($1) AND c.relkind = 'r' AND c.relname = ANY($2)
       ORDER BY c.relname
-    `, [tables])
+    `, [schemas, tables])
     return res.rows
   }
   finally {
@@ -396,6 +398,7 @@ async function fetchMysqlTableSchemas(ds: DatasourceConfig, tables: string[]): P
 async function fetchPostgresTableSchemas(ds: DatasourceConfig, tables: string[]): Promise<TableSchema[]> {
   // eslint-disable-next-line ts/no-require-imports
   const { Client } = require('pg')
+  const schemas = parseSchemas(ds.schemas)
   const client = new Client({
     host: ds.host,
     port: ds.port,
@@ -417,11 +420,11 @@ async function fetchPostgresTableSchemas(ds: DatasourceConfig, tables: string[])
         SELECT ku.column_name
         FROM information_schema.table_constraints tc
         JOIN information_schema.key_column_usage ku ON tc.constraint_name = ku.constraint_name
-        WHERE tc.table_schema = 'public' AND tc.table_name = ANY($1) AND tc.constraint_type = 'PRIMARY KEY'
+        WHERE tc.table_schema = ANY($1) AND tc.table_name = ANY($2) AND tc.constraint_type = 'PRIMARY KEY'
       ) pk ON c.column_name = pk.column_name
-      WHERE c.table_schema = 'public' AND c.table_name = ANY($1)
+      WHERE c.table_schema = ANY($1) AND c.table_name = ANY($2)
       ORDER BY c.table_name, c.ordinal_position
-    `, [tables])
+    `, [schemas, tables])
 
     const fkResult = await client.query(`
       SELECT ku.table_name,
@@ -431,16 +434,16 @@ async function fetchPostgresTableSchemas(ds: DatasourceConfig, tables: string[])
       FROM information_schema.table_constraints tc
       JOIN information_schema.key_column_usage ku ON tc.constraint_name = ku.constraint_name
       JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
-      WHERE tc.table_schema = 'public' AND tc.table_name = ANY($1) AND tc.constraint_type = 'FOREIGN KEY'
-    `, [tables])
+      WHERE tc.table_schema = ANY($1) AND tc.table_name = ANY($2) AND tc.constraint_type = 'FOREIGN KEY'
+    `, [schemas, tables])
 
     const tableInfoResult = await client.query(`
       SELECT c.relname AS table_name,
              COALESCE(obj_description(c.oid), '') AS comment
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname = ANY($1)
-    `, [tables])
+      WHERE n.nspname = ANY($1) AND c.relkind = 'r' AND c.relname = ANY($2)
+    `, [schemas, tables])
 
     return buildTableSchemas(columnsResult.rows, fkResult.rows, tableInfoResult.rows)
   }

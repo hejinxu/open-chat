@@ -38,14 +38,14 @@ Pre-commit hook 运行 `pnpm lint-staged`（ESLint on staged `.ts`/`.tsx` files�
 - **State**: Zustand + immer for state management; ahooks for utility hooks
 - **Config**: `config/index.ts` holds `APP_ID`, `API_KEY`, `API_URL` from env vars
 - **basePath**: `NEXT_PUBLIC_BASE_PATH` 环境变量驱动 `next.config.js` 的 `basePath`（页面路由 + 静态资源）和 `config/index.ts` 的 `BASE_PATH` 常量（客户端 API 调用），默认为空（根路径）。所有客户端 `fetch('/api/...')` 统一使用 `${BASE_PATH}/api/...` 格式
-- **认证系统**: JWT + bcrypt，Next.js Middleware 全局验证。支持两种认证级别：Level 1 (API Key: `sk-xxx`) 用于简单嵌入集成，Level 2 (OAuth: `app_id` + `app_secret`) 用于服务端到服务端用户身份映射。认证始终启用，对话页面必须登录，嵌入式弹窗必须携带 apiKey。认证 cookie 为 session cookie（无 maxAge），关闭浏览器后自动过期。详见 `docs/开发指南/认证系统.md`
+- **认证系统**: JWT + bcrypt，Next.js Middleware 全局验证。支持两种认证级别：Level 1 (API Key: `sk-xxx`) 用于简单嵌入集成，Level 2 (OAuth: `app_id` + `app_secret`) 用于服务端到服务端用户身份映射。认证始终启用，对话页面必须登录，嵌入式弹窗必须携带 apiKey。登录 JWT 有效期 2 小时（`AUTH_TOKEN_TTL_SECONDS`，同时作为 cookie `maxAge`），middleware 滑动续期：剩余有效期 < 1 小时（`AUTH_TOKEN_REFRESH_THRESHOLD_SECONDS`）时重签 JWT 并写回 cookie，活跃用户不掉线、闲置 2 小时后失效。常量与 `getAuthCookieOptions()` 定义在 `lib/auth/jwt.ts`。详见 `docs/开发指南/认证系统.md`
 - **多租户**: 组织级数据隔离（规划中，`users` 表已预留 `org_id` 字段）
 
 ### Setup & Login
 - **Setup 页面**: Server Component，查询 DB 检查用户是否存在，有用户则 `redirect('/login')`，无用户则渲染客户端表单。创建用户成功后显示 3 秒倒计时跳转到登录页。
 - **Setup API**: 当 `users` 表为空时，自动清理 `user_accounts` 中的孤立记录（防止手动删用户后 identifier 冲突）。
 - **Login 页面**: 登录成功后使用 `window.location.href` 跳转，路径包含 `BASE_PATH` 前缀。
-- **Session Cookie**: 登录 cookie 不设置 `maxAge`，为 session cookie，关闭浏览器后自动过期。
+- **Auth Cookie**: 登录 cookie `maxAge = 2h`（与 JWT `exp` 一致，由 `getAuthCookieOptions()` 统一配置）。middleware 滑动续期：剩余有效期 < 1 小时时重签 JWT 并写回 cookie。活跃用户不掉线，闲置 2 小时后失效需重新登录。
 
 ### Multi-Agent System
 - **适配器模式**: `lib/adapters/` 定义 `ChatAdapter` 接口，不同后端类型有独立适配器实现
@@ -123,7 +123,10 @@ interface ConversationRecord {
 - `lib/services/data-query-pipeline.ts` — 链路编排：查询规范化 → 表选择 → 实时 DDL 注入 → 构建 systemPrompt + 工具上下文（route 只做 HTTP/认证/流式）
 - `lib/services/query-normalize.ts` — 查询规范化（多轮指代消解 + 相对时间换算，产物 `canonicalQuery` 替换 agent 最新用户消息）
 - `lib/services/schema-select.ts` — 实时 Schema 拉取（information_schema，TTL 缓存 60s）+ 渐进式表选择 + DDL 构建（注释优先级：用户自定义 > 实时 > 快照）
+- `lib/services/datasource.ts` — 数据源工具：`parseSchemas`（逗号分隔 schema 解析，默认 `public`）+ `postgresSearchPathOption`（生成 `-c search_path=...` 连接参数，等价 JDBC `currentSchema`）
 - `lib/tools/builtin/execute-sql.ts` — SQL 执行前做**代码级结构校验**（零 LLM）：解析 SQL 引用的表/列，与实时 schema 比对，拦截不存在的表或列（如 YEAR），返回友好错误让模型修正；同请求内相同 SQL 命中缓存直接返回结果，成功结果附带引导避免模型重复查询
+
+**PostgreSQL 多 Schema**：数据源配置 `schemas` 字段（逗号分隔，仅 PG 生效，默认 `public`）贯穿全链路——Admin 表/字段选择与运行时 schema 拉取用 `table_schema = ANY($1)` 参数化，SQL 执行用连接级 `options: '-c search_path=a,b'`，模型 SQL 无需 schema 前缀。老配置无该字段自动按 `public` 处理。假定不同 schema 间无同名表。
 
 **问数配置开关**（`agent_config`，默认开）：`enable_query_normalization` / `enable_semantic_check`。表选择为强制流程（实时选表 + 实时 schema，失败时配置范围全量实时拉取，无开关）。任一步失败自动降级，不阻断请求。`lib/services/sql-semantic-check.ts` 保留为可选的人工/深度 LLM 审计工具，运行时不再调用。
 
@@ -278,16 +281,14 @@ webapp/lib/mcp/
 
 ## Voice Recognition
 
-Three engines in `webapp/app/components/chat/voice-recognition/`:
+Two engines in `webapp/app/components/chat/voice-recognition/`:
 - **browser** (`browser-recognition.ts`): Web Speech API. Hardcoded `lang: 'zh-CN'`. Auto-restarts on `onend`.
-- **whisper** (`ws-speech-recognition.ts`): Socket.IO client (namespace: `/speech`). Supports: whisper-tiny/base/small. 支持 `authToken` 参数用于 ws-server 认证。
-- **funasr** (`ws-speech-recognition.ts`): Socket.IO client (namespace: `/speech`). Supports: funasr-paraformer-zh, funasr-sensevoice. 使用相同的 `WsSpeechRecognition` 类，ws-server 根据模型名自动路由。
+- **whisper** (`whisper-recognition.ts`): Socket.IO client (namespace: `/speech`). Supports: whisper-tiny/base/small, funasr-paraformer-zh, funasr-sensevoice. 支持 `authToken` 参数用于 ws-server 认证。
 
 ### Core Components
-- **`voice-input.tsx`**: Core orchestrator — owns `isActive`, `isListening`, engine callbacks, timers, countdown, pending send logic. 接收 `authToken` prop 传递给 WsSpeechRecognition。支持 `onError` 回调用于错误提示。
-- **`index.tsx`**: Parent — manages state, per-engine localStorage, prop passing. 将 `apiKey` 作为 `authToken` 传递给 VoiceInput。管理 `inputMessage` 状态用于输入框上方提示。
-- **`voice-settings.tsx**: Settings UI — engine selector (browser/whisper/funasr), timeout input, checkboxes.
-- **`input-message.tsx`**: 通用输入框提示组件，支持 error/info/loading 三种类型，可关闭。使用语义化主题类（`bg-danger-bg`、`text-danger-text` 等）。
+- **`voice-input.tsx`**: Core orchestrator — owns `isActive`, `isListening`, engine callbacks, timers, countdown, pending send logic. 接收 `authToken` prop 传递给 WhisperRecognition。
+- **`index.tsx`**: Parent — manages state, per-engine localStorage, prop passing. 将 `apiKey` 作为 `authToken` 传递给 VoiceInput。
+- **`voice-settings.tsx**: Settings UI — engine selector, timeout input, checkboxes.
 
 ### Auto-Stop & Timer Design
 - **`autoStopOnNoInput`**: Stops recording after N seconds of silence.
@@ -295,7 +296,6 @@ Three engines in `webapp/app/components/chat/voice-recognition/`:
 - **`noInputMs`**: Per-engine timeout stored in localStorage:
   - Browser: `voice-no-input-ms-browser` (default 5000ms)
   - Whisper: `voice-no-input-ms-whisper` (default 10000ms)
-  - FunASR: `voice-no-input-ms-funasr` (default 10000ms)
 - **`sendTimerRef`**: Debounce before auto-send. Each new result resets the 5s countdown.
 
 ### Whisper Server Details
@@ -312,30 +312,18 @@ Three engines in `webapp/app/components/chat/voice-recognition/`:
 5. **Per-engine timeout in localStorage**: Switching engines loads from the engine's own key.
 6. **opencc-js API**: Use `Converter({ from: 'tw', to: 'cn' })` — NOT `createConverter`.
 7. **`SEND_DELAY_MS = 5000`**: Debounce delay before auto-sending after timeout.
-8. **Error handling**: `WsSpeechRecognition` accepts `onError` callback. Parent component (`index.tsx`) manages `inputMessage` state for display above input area.
 
 ## Conventions
-
-### ⚠️ 硬性规则（编码时必须遵守）
-
-| 禁止 | 必须 |
-|------|------|
-| `bg-red-50`、`text-blue-600`、`fill="#444CE7"` | `bg-danger-bg`、`text-content-accent`、使用 CSS 变量 |
-| `dark:bg-xxx` 覆写 | 使用语义化类，主题自动适配 |
-| 只修改一个主题文件 | 同时修改 light.css、dark.css、tech-blue.css |
-
-**新增颜色步骤**：(1) 三个主题文件添加 CSS 变量 → (2) tailwind.config.js 注册语义类 → (3) 组件中使用生成的类
-
-### 基础规范
 - **ESLint**: No semicolons, single quotes, 2-space indent (`@antfu/eslint-config`). Run `pnpm fix` to auto-format.
 - **Imports**: Use `@/*` alias (maps to `webapp/`). Absolute imports preferred.
 - **Components**: `'use client'` required for client components. Server components are the default.
 - **Styling**: Tailwind-first. SCSS only for markdown/code. `classnames` or `tailwind-merge` for conditional classes.
+- **Theme colors**: Use semantic CSS custom property classes (`text-content-accent`, `border-border`, `hover:bg-surface-hover`) exclusively. Never hardcode theme-specific colors — this includes Tailwind literals (`text-indigo-600`, `bg-red-50`, `border-indigo-100`), SVG fills (`fill="#444CE7"`), and `dark:` variant overrides. When a component needs a color not covered by existing variables: (1) add the CSS variable to all three theme files (`light.css`, `dark.css`, `tech-blue.css`), (2) register it in `tailwind.config.js` under the appropriate semantic group, (3) use the generated class in components. Hover/danger/interactive states each need their own variable — avoid piggybacking on existing variables that happen to share a value.
 - **Chat layout**: Chat input uses flex layout (`shrink-0`) to stay at bottom. Scrollbar at screen edge via full-width scrollable container. Auto-scroll: `ResizeObserver` on inner content wrapper (no overflow) triggers `scrollTop = scrollHeight` on outer scroll container — handles message loading, streaming, async markdown rendering.
 - **Build**: `next.config.js` disables ESLint and TypeScript errors during build.
 - **Turbopack**: 开发模式使用 Turbopack（`next dev --turbopack`），编译速度比 Webpack 快 5-20 倍。注意：CSS `@import` 规则必须在所有规则之前（Turbopack 使用 Lightning CSS，规范要求更严格）。
 - **Multi-Agent**: 后端 API 通过 `x-agent-id` header 选择智能体；前端 `AgentSelector` 组件在输入框内与语音按钮同排；
-- **After coding**: 每次编写完代码后，运行 `pnpm lint` 和 `pnpm typecheck` 检查，**检查是否使用了硬编码主题色**，主动询问用户是否需要更新 AGENTS.md。
+- **After coding**: 每次编写完代码后，运行 `pnpm lint` 和 `pnpm typecheck` 检查，主动询问用户是否需要更新 AGENTS.md。
 
 ### Dify 智能体 user 参数规范
 

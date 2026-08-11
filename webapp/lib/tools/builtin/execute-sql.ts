@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolContext, ToolResult } from '../types'
+import { pgClientConfig } from '@/lib/services/datasource'
 
 /**
  * Validate that SQL is a SELECT query only (no modifications allowed)
@@ -289,18 +290,12 @@ async function executePostgresQuery(
   username: string,
   password: string,
   sql: string,
+  schemas?: string,
 ): Promise<ToolResult> {
   try {
     // eslint-disable-next-line ts/no-require-imports
     const { Client } = require('pg')
-    const client = new Client({
-      host,
-      port,
-      database,
-      user: username,
-      password,
-      connectionTimeoutMillis: 5000,
-    })
+    const client = new Client(pgClientConfig({ host, port, database, username, password, schemas }))
 
     await client.connect()
 
@@ -420,6 +415,7 @@ async function executeSqlHandler(
       activeDs.username,
       activeDs.password,
       finalSql,
+      activeDs.schemas,
     )
   }
   else {

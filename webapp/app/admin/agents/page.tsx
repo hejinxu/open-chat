@@ -751,6 +751,7 @@ function DatasourceTab({ config, onUpdate }: { config: AgentExtraConfig, onUpdat
       database: '',
       username: '',
       password: '',
+      schemas: 'public',
       is_active: datasources.length === 0,
     }
     onUpdate({ datasources: [...datasources, newDs] })
@@ -790,6 +791,7 @@ function DatasourceTab({ config, onUpdate }: { config: AgentExtraConfig, onUpdat
           database: ds.database,
           username: ds.username,
           password: ds.password,
+          schemas: ds.schemas,
         }),
       })
       const data = await res.json()
@@ -938,6 +940,19 @@ function DatasourceTab({ config, onUpdate }: { config: AgentExtraConfig, onUpdat
                             className="w-full px-2 py-1.5 text-sm bg-surface border border-border rounded text-content font-mono"
                           />
                         </div>
+                        {ds.type === 'postgresql' && (
+                          <div>
+                            <label className="block text-xs text-content-secondary mb-1">{t('common.auth.datasourceSchemas')}</label>
+                            <input
+                              type="text"
+                              value={ds.schemas || 'public'}
+                              placeholder="public"
+                              title={t('common.auth.datasourceSchemasHint')}
+                              onChange={e => updateDatasource(ds.id, { schemas: e.target.value })}
+                              className="w-full px-2 py-1.5 text-sm bg-surface border border-border rounded text-content font-mono"
+                            />
+                          </div>
+                        )}
                         <div>
                           <label className="block text-xs text-content-secondary mb-1">{t('common.auth.datasourceUsername')}</label>
                           <input
@@ -997,6 +1012,7 @@ function TableFieldSelection({ datasource, onBack, onUpdate }: {
           database: datasource.database,
           username: datasource.username,
           password: datasource.password,
+          schemas: datasource.schemas,
         }),
       })
       const data = await res.json()
@@ -1029,6 +1045,7 @@ function TableFieldSelection({ datasource, onBack, onUpdate }: {
           username: datasource.username,
           password: datasource.password,
           table: tableName,
+          schemas: datasource.schemas,
         }),
       })
       const data = await res.json()
@@ -1132,6 +1149,7 @@ function TableFieldSelection({ datasource, onBack, onUpdate }: {
           username: datasource.username,
           password: datasource.password,
           table: tableName,
+          schemas: datasource.schemas,
         }),
       })
       const data = await res.json()

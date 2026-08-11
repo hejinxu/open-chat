@@ -183,6 +183,8 @@ const translation = {
     datasourceHost: '主机',
     datasourcePort: '端口',
     datasourceDatabase: '数据库',
+    datasourceSchemas: 'Schema（模式）',
+    datasourceSchemasHint: '多个模式用逗号分隔，例如 public,audit',
     datasourceUsername: '用户名',
     datasourcePassword: '密码',
     setAsActive: '设为活跃',

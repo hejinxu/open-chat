@@ -13,6 +13,7 @@ export interface DatasourceConfig {
   database: string
   username: string
   password: string
+  schemas?: string
   is_active: boolean
   selected_tables?: string[]
   selected_columns?: Record<string, string[]>
