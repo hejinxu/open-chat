@@ -31,6 +31,9 @@ import { stopReadAloud } from '@/app/components/chat/text-to-speech'
 import ConfirmDialog from '@/app/components/base/confirm-dialog'
 import { extractCommands, stripCommands } from '@/lib/command-parser'
 
+// localStorage key for remembering the last agent selected by the user
+const SELECTED_AGENT_ID_KEY = 'selected-agent-id'
+
 export interface IMainProps {
   params: any
 }
@@ -53,12 +56,22 @@ const Main: FC<IMainProps> = (props) => {
   const [promptConfig, setPromptConfig] = useState<PromptConfig | null>(null)
   const [inited, setInited] = useState<boolean>(false)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+  // 切换智能体时持久化到 localStorage，刷新后保持"最后一次选择的智能体"
+  const handleAgentChange = (agentId: string | null) => {
+    setSelectedAgentId(agentId)
+    try {
+      globalThis.localStorage?.setItem(SELECTED_AGENT_ID_KEY, agentId || '')
+    }
+    catch { /* ignore */ }
+  }
   const [defaultAgentId, setDefaultAgentId] = useState<string>('')
   const [isDirectLLM, setIsDirectLLM] = useState<boolean>(false)
   const [isChatListLoading, setIsChatListLoading] = useState<boolean>(false)
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<string | null>(null)
   const [deleteConversationConfirmTarget, setDeleteConversationConfirmTarget] = useState<string | null>(null)
   const agentInputsCacheRef = useRef<Record<string, Record<string, any>>>({})
+  // 标记"用户主动切换到已有会话"，用于按会话最后消息恢复智能体选择
+  const shouldRestoreAgentFromConversationRef = useRef(false)
   const skipChatListFetchRef = useRef(false)
   const chatListFetchIdRef = useRef(0)
   const promptVariablesCacheRef = useRef<Record<string, { key: string, name?: string, required?: boolean }[]>>({})
@@ -432,6 +445,10 @@ const Main: FC<IMainProps> = (props) => {
   const handleConversationSwitch = () => {
     if (!inited) { return }
 
+    // 仅用户主动切换到已有会话时，按会话最后消息恢复智能体选择（init 恢复 / 新建不恢复）
+    const restoreAgentFromConversation = shouldRestoreAgentFromConversationRef.current
+    shouldRestoreAgentFromConversationRef.current = false
+
     // update inputs of current conversation
     let notSyncToStateIntroduction = ''
     let notSyncToStateInputs: Record<string, any> | undefined | null = {}
@@ -496,6 +513,19 @@ const Main: FC<IMainProps> = (props) => {
           })
         })
         setChatList(newChatList)
+
+        // Restore the agent used in the last message of this conversation
+        if (restoreAgentFromConversation && !embedAgentId && data.length > 0) {
+          const lastAgentId = data[data.length - 1]?.agent_id
+          if (lastAgentId) {
+            setSelectedAgentId(lastAgentId)
+            try {
+              globalThis.localStorage?.setItem(SELECTED_AGENT_ID_KEY, lastAgentId)
+            }
+            catch { /* ignore */ }
+          }
+        }
+
         setIsChatListLoading(false)
       }).catch(() => {
         if (chatListFetchIdRef.current !== fetchId) { return }
@@ -540,6 +570,8 @@ const Main: FC<IMainProps> = (props) => {
       setConversationIdChangeBecauseOfNew(true)
     }
     else {
+      // 用户主动切换到已有会话：标记按会话最后消息恢复智能体选择
+      shouldRestoreAgentFromConversationRef.current = true
       setConversationIdChangeBecauseOfNew(false)
       setChatList([])
       setIsChatListLoading(true)
@@ -669,7 +701,19 @@ const Main: FC<IMainProps> = (props) => {
           setIsDirectLLM(activeAgent.backend_type === 'direct_llm')
         }
         else {
-          setIsDirectLLM(defaultAgent?.backend_type === 'direct_llm')
+          // Restore the last selected agent from localStorage (global memory);
+          // embedAgentId takes priority and is handled above.
+          let restoredDirectLLM = false
+          try {
+            const savedId = globalThis.localStorage?.getItem(SELECTED_AGENT_ID_KEY) || ''
+            const savedAgent = savedId ? agentsRes.agents?.find((a: any) => a.id === savedId) : null
+            if (savedAgent) {
+              setSelectedAgentId(savedAgent.id)
+              restoredDirectLLM = savedAgent.backend_type === 'direct_llm'
+            }
+          }
+          catch { /* ignore */ }
+          setIsDirectLLM(restoredDirectLLM || defaultAgent?.backend_type === 'direct_llm')
         }
 
         // Cache backend_type for each agent (used to skip param fetch for direct_llm etc.)
@@ -1513,7 +1557,7 @@ const Main: FC<IMainProps> = (props) => {
                 visionConfig={visionConfig}
                 fileConfig={fileConfig}
                 selectedAgentId={selectedAgentId}
-                onAgentChange={setSelectedAgentId}
+                onAgentChange={handleAgentChange}
                 apiKey={apiKey}
               />)
           }

@@ -82,6 +82,8 @@ interface ConversationRecord {
 
 **切换智能体：** 始终从服务端 fetch 最新参数定义，清空旧表单，同步清洗已存参数，恢复表单。
 
+**智能体选择恢复：** `app/components/index.tsx` 用 localStorage key `selected-agent-id` 记住"最后一次选择的智能体"（`handleAgentChange` 切换时写入）。刷新页面（init effect）时恢复全局记忆；用户主动切换到已有会话（`handleConversationIdChange` 非 `-1` 分支）时，按该会话**最后一条消息的 `agent_id`** 恢复选中。优先级：`embedAgentId`（嵌入固定）> 会话最后消息 `agent_id` > localStorage 全局记忆 > 默认智能体。
+
 **handleSend 守卫：** 区分 `promptConfig === null`（未加载 → 阻塞）与 `prompt_variables === []`（无参数 → 放行）。
 
 **Dify conversation_id 隔离：** 每个智能体独立管理自己的 `backend_conversation_id`，首次发送 `conversation_id: null`，不跨 Agent 共享。
