@@ -2,13 +2,31 @@ import type { ToolDefinition, ToolContext, ToolResult } from '../types'
 
 async function httpRequestHandler(
   input: Record<string, any>,
-  _context: ToolContext,
+  context: ToolContext,
 ): Promise<ToolResult> {
   const { url, method = 'GET', headers = {}, body, timeout = 10000 } = input
 
   if (!url) {
     return { success: false, error: 'URL is required' }
   }
+
+  // 与 fetch_url 一致：无 http/https 前缀视为"搜索关键词"场景，受联网开关控制
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    const agentConfig = context.agentConfig || {}
+    if (agentConfig.enable_network !== true) {
+      return {
+        success: false,
+        error: '当前智能体未启用联网搜索功能。如需搜索，请在智能体配置中开启"允许联网搜索"。',
+      }
+    }
+    return { success: false, error: 'URL 必须是 http:// 或 https:// 开头的完整地址。' }
+  }
+
+  console.log('[http_request] ===== 开始调用 =====')
+  console.log('[http_request] URL:', url)
+  console.log('[http_request] Method:', method)
+  console.log('[http_request] Headers:', JSON.stringify(headers))
+  console.log('[http_request] Body:', body ? JSON.stringify(body).substring(0, 500) : 'none')
 
   try {
     const controller = new AbortController()
@@ -27,8 +45,11 @@ async function httpRequestHandler(
       fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body)
     }
 
+    console.log('[http_request] Fetching:', url)
     const response = await fetch(url, fetchOptions)
     clearTimeout(timeoutId)
+
+    console.log('[http_request] Response status:', response.status, response.statusText)
 
     const contentType = response.headers.get('content-type') || ''
     let data: any
@@ -38,6 +59,9 @@ async function httpRequestHandler(
     } else {
       data = await response.text()
     }
+
+    console.log('[http_request] Response body:', typeof data === 'string' ? data.substring(0, 500) : JSON.stringify(data).substring(0, 500))
+    console.log('[http_request] ===== 调用结束 =====')
 
     return {
       success: true,

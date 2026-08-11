@@ -45,6 +45,15 @@ export class AgentExecutor {
     }
   }
 
+  /**
+   * Tools that must not be bound to the model for this agent.
+   * When network is not explicitly enabled, web_search is excluded from the tool list.
+   */
+  private getExcludedTools(): string[] | undefined {
+    const agentConfig = this.agent.agent_config || {}
+    return agentConfig.enable_network !== true ? ['web_search'] : undefined
+  }
+
   async execute(params: {
     query: string
     messages?: Array<{ role: string, content: string }>
@@ -112,6 +121,7 @@ export class AgentExecutor {
       apiKey: this.agent.api_key,
       apiUrl: this.agent.api_url,
       systemPrompt,
+      excludeTools: this.getExcludedTools(),
       context: {
         controller: this.controller,
         agentConfig: this.agent.agent_config || {},
@@ -208,6 +218,7 @@ export class AgentExecutor {
       model: this.agent.model || 'gpt-4',
       apiKey: this.agent.api_key,
       apiUrl: this.agent.api_url,
+      excludeTools: this.getExcludedTools(),
       context: {
         controller: this.controller,
         agentConfig: this.agent.agent_config || {},

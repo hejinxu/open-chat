@@ -9,10 +9,7 @@ function getNetworkStatusPrompt(enableNetwork?: boolean): string {
   if (enableNetwork === true) {
     return '你可以使用联网搜索和网页抓取工具获取互联网上的最新信息。'
   }
-  if (enableNetwork === false) {
-    return '注意：当前环境不支持联网搜索，你无法访问互联网获取实时信息。请基于已有知识和数据库数据回答问题，不要尝试使用搜索或网页抓取工具。HTTP 请求工具可用于调用业务系统接口。'
-  }
-  return ''
+  return '注意：当前环境不支持联网搜索，你无法搜索互联网获取信息。请基于已有知识和数据库数据回答问题，不要使用搜索工具或搜索关键词；如需网页内容，只能访问用户明确提供的具体 URL。HTTP 请求工具可用于调用业务系统接口。'
 }
 
 export interface BuildSystemPromptOptions {

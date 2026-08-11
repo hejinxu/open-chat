@@ -238,6 +238,12 @@ webapp/lib/tools/
     └── time-tools.ts           # 时间工具
 ```
 
+**联网开关（`enable_network`）约定：**
+- `enable_network === true` 才允许联网搜索；`!== true`（`false` 或未配置）一律视为关闭。
+- 判断规则（`fetch_url` / `http_request` 一致）：URL 带 `http://` 或 `https://` 前缀 = 抓取/请求（不受限，可能是内网/用户指定 URL）；**无协议前缀 = 搜索关键词**，受开关控制，关闭时拒绝并提示。
+- `web_search` 当前**未注册**（`allBuiltinTools` 不含 `webSearchTools`）：需搜索引擎 API key（Bing/SerpAPI）且 DuckDuckGo 不可达；若配置 API key 可注册，并由 `agent-executor.ts` 的 `getExcludedTools()` 在关闭时从模型工具列表剔除。
+- System prompt：`lib/prompts/index.ts` 的 `getNetworkStatusPrompt` 在 `enable_network !== true` 时提示"不支持联网搜索，只能访问用户明确提供的具体 URL"。
+
 ### MCP 集成
 
 **MCP (Model Context Protocol)**：开放标准协议，支持动态工具加载。

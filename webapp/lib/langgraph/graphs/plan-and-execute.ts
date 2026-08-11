@@ -50,6 +50,10 @@ interface CreatePlanAndExecuteAgentOptions {
   maxRetries?: number
   checkpointer?: MemorySaver
   context?: any
+  /**
+   * Tool names to exclude from binding to the model (e.g. web_search when network is disabled).
+   */
+  excludeTools?: string[]
 }
 
 function createPlannerNode(model: ChatOpenAI) {
@@ -103,7 +107,7 @@ function createPlannerNode(model: ChatOpenAI) {
   }
 }
 
-function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: any) {
+function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: any, excludeTools?: string[]) {
   return async (state: PlannerStateType) => {
     const currentPlan = state.plan
     const currentStepIdx = state.currentStep
@@ -116,7 +120,7 @@ function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: an
 
     console.log('[PlanExecute] Executing step:', currentStepItem.step, '-', currentStepItem.description)
 
-    const langchainTools = tools.toLangChainTools()
+    const langchainTools = tools.toLangChainTools(undefined, excludeTools)
     const userQuery = typeof state.messages[0]?.content === 'string' ? state.messages[0].content : ''
 
     // 使用统一的提示词管理
@@ -326,6 +330,7 @@ export function createPlanAndExecuteAgent(
     maxRetries = 2,
     checkpointer = new MemorySaver(),
     context,
+    excludeTools,
   } = options
 
   const chatModel = new ChatOpenAI({
@@ -337,7 +342,7 @@ export function createPlanAndExecuteAgent(
   })
 
   const plannerNode = createPlannerNode(chatModel)
-  const executorNode = createExecutorNode(chatModel, tools, context)
+  const executorNode = createExecutorNode(chatModel, tools, context, excludeTools)
   const replannerNode = createReplannerNode(chatModel)
   const summarizerNode = createSummarizerNode(chatModel)
 

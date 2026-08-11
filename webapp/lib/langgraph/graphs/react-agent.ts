@@ -5,8 +5,8 @@ import type { BaseMessage } from '@langchain/core/messages'
 import { AgentState } from '../state'
 import type { ToolRegistry } from '@/lib/tools/registry'
 
-function createAgentNode(model: ChatOpenAI, tools: ToolRegistry) {
-  const langchainTools = tools.toLangChainTools()
+function createAgentNode(model: ChatOpenAI, tools: ToolRegistry, excludeTools?: string[]) {
+  const langchainTools = tools.toLangChainTools(undefined, excludeTools)
   const modelWithTools = langchainTools.length > 0 ? model.bindTools(langchainTools) : model
 
   console.log('[createAgentNode] Tools count:', langchainTools.length)
@@ -180,6 +180,10 @@ export interface CreateReactAgentOptions {
   maxIterations?: number
   checkpointer?: MemorySaver
   context?: any
+  /**
+   * Tool names to exclude from binding to the model (e.g. web_search when network is disabled).
+   */
+  excludeTools?: string[]
 }
 
 export function createReactAgent(
@@ -193,6 +197,7 @@ export function createReactAgent(
     systemPrompt,
     checkpointer = new MemorySaver(),
     context,
+    excludeTools,
   } = options
 
   const chatModel = new ChatOpenAI({
@@ -204,7 +209,7 @@ export function createReactAgent(
     maxTokens: 4096,
   })
 
-  const agentNode = createAgentNode(chatModel, tools)
+  const agentNode = createAgentNode(chatModel, tools, excludeTools)
   const toolNode = createToolNode(tools, context)
 
   // 创建总结节点 - 当工具调用达到上限时强制总结

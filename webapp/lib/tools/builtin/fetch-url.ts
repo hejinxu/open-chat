@@ -124,9 +124,9 @@ async function fetchUrlHandler(
 
   // 检查是否是搜索查询（没有 http/https 前缀）
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    // 检查是否启用联网搜索
+    // 检查是否启用联网搜索（未显式开启则拒绝关键词搜索）
     const agentConfig = context.agentConfig || {}
-    if (agentConfig.enable_network === false) {
+    if (agentConfig.enable_network !== true) {
       return {
         success: false,
         error: '当前智能体未启用联网搜索功能。如需搜索，请在智能体配置中开启"允许联网搜索"。',

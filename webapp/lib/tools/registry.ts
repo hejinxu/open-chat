@@ -55,8 +55,10 @@ export class ToolRegistry {
     return this.tools.size
   }
 
-  toLangChainTools(context?: Partial<ToolContext>): DynamicStructuredTool[] {
-    return this.getEnabled().map(tool => this.toLangChainTool(tool, context))
+  toLangChainTools(context?: Partial<ToolContext>, excludeNames?: string[]): DynamicStructuredTool[] {
+    return this.getEnabled()
+      .filter(tool => !excludeNames?.includes(tool.name))
+      .map(tool => this.toLangChainTool(tool, context))
   }
 
   toLangChainTool(tool: ToolDefinition, context?: Partial<ToolContext>): DynamicStructuredTool {
