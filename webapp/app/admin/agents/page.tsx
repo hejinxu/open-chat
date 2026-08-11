@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { BASE_PATH } from '@/config'
 import type { AgentType, AgentExtraConfig, DatasourceConfig, BusinessKnowledgeItem, QueryExample } from '@/types/agent'
 import { generateDynamicPrompt } from '@/lib/prompts/dynamic-prompt'
+import { isPostgresFamily } from '@/lib/services/dialects'
 
 interface Agent {
   id: string
@@ -906,11 +907,26 @@ function DatasourceTab({ config, onUpdate }: { config: AgentExtraConfig, onUpdat
                           <label className="block text-xs text-content-secondary mb-1">{t('common.auth.datasourceType')}</label>
                           <select
                             value={ds.type}
-                            onChange={e => updateDatasource(ds.id, { type: e.target.value as 'mysql' | 'postgresql' })}
+                            onChange={(e) => {
+                              const type = e.target.value as 'mysql' | 'postgresql' | 'vastbase' | 'kingbase'
+                              // 仅当端口还是任一默认端口时才自动联动（避免覆盖用户自定义端口）
+                              const defaultPorts: Record<string, number> = {
+                                mysql: 3306,
+                                postgresql: 5432,
+                                vastbase: 5432,
+                                kingbase: 54321,
+                              }
+                              const nextPort = [3306, 5432, 54321].includes(ds.port)
+                                ? defaultPorts[type]
+                                : ds.port
+                              updateDatasource(ds.id, { type, port: nextPort })
+                            }}
                             className="w-full px-2 py-1.5 text-sm bg-surface border border-border rounded text-content"
                           >
                             <option value="mysql">MySQL</option>
                             <option value="postgresql">PostgreSQL</option>
+                            <option value="vastbase">Vastbase</option>
+                            <option value="kingbase">KingbaseES</option>
                           </select>
                         </div>
                         <div>
@@ -940,7 +956,7 @@ function DatasourceTab({ config, onUpdate }: { config: AgentExtraConfig, onUpdat
                             className="w-full px-2 py-1.5 text-sm bg-surface border border-border rounded text-content font-mono"
                           />
                         </div>
-                        {ds.type === 'postgresql' && (
+                        {isPostgresFamily(ds.type) && (
                           <div>
                             <label className="block text-xs text-content-secondary mb-1">{t('common.auth.datasourceSchemas')}</label>
                             <input

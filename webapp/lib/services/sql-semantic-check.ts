@@ -53,11 +53,10 @@ const SEMANTIC_CHECK_SYSTEM_PROMPT = `# 角色
 只返回符合以下格式的合法 JSON，不要输出 Markdown 或额外说明：
 {"passed": true, "reason": ""}`
 
+import { getDialect } from '@/lib/services/dialects'
+
 function dialectDisplayName(dialect: string): string {
-  if (dialect === 'postgresql') {
-    return 'PostgreSQL'
-  }
-  return 'MySQL'
+  return getDialect(dialect)?.displayName || 'MySQL'
 }
 
 function buildCompactSchema(schemas: TableSchema[]): string {

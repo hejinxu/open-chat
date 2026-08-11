@@ -1,4 +1,5 @@
 import type { AgentExtraConfig } from '@/types/agent'
+import { getDialect } from '@/lib/services/dialects'
 
 /**
  * Format business knowledge for prompt
@@ -44,9 +45,10 @@ export function generateDynamicPrompt(config: AgentExtraConfig): string {
   // 0. Database type info
   const activeDs = config.datasources?.find(ds => ds.is_active)
   if (activeDs) {
-    const dbType = activeDs.type === 'mysql' ? 'MySQL' : activeDs.type === 'postgresql' ? 'PostgreSQL' : activeDs.type
-    parts.push(`# 数据源类型\n当前使用的数据库类型为 ${dbType}，请生成符合该数据库 SQL 语法规范的查询语句。`)
-    if (activeDs.type === 'postgresql' && activeDs.schemas) {
+    const dialect = getDialect(activeDs.type)
+    const dbType = dialect?.displayName || activeDs.type
+    parts.push(`# 数据源类型\n${dialect ? dialect.dialectPrompt() : `当前使用的数据库类型为 ${dbType}，请生成符合该数据库 SQL 语法规范的查询语句。`}`)
+    if (dialect?.family === 'postgresql' && activeDs.schemas) {
       parts.push(`# 数据源模式（schema）\n当前数据源配置的模式为：${activeDs.schemas}。查询时可直接使用不带模式前缀的表名。`)
     }
   }

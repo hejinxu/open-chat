@@ -7,7 +7,7 @@ export type AgentType = 'general' | 'data_query'
 export interface DatasourceConfig {
   id: string
   name: string
-  type: 'mysql' | 'postgresql'
+  type: 'mysql' | 'postgresql' | 'vastbase' | 'kingbase'
   host: string
   port: number
   database: string

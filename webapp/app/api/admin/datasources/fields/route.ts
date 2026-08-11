@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/app/api/utils/auth-guard'
 import { parseSchemas } from '@/lib/services/datasource'
+import { isPostgresFamily } from '@/lib/services/dialects'
 
 export async function POST(request: NextRequest) {
   const authError = requireAdmin(request)
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
     if (type === 'mysql') {
       return await getMysqlFields(host, port, database, username, password, table)
     }
-    else if (type === 'postgresql') {
+    else if (isPostgresFamily(type)) {
       return await getPostgresFields(host, port, database, username, password, table, schemas)
     }
     else {

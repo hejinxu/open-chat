@@ -124,7 +124,10 @@ interface ConversationRecord {
 - `lib/services/query-normalize.ts` — 查询规范化（多轮指代消解 + 相对时间换算，产物 `canonicalQuery` 替换 agent 最新用户消息）
 - `lib/services/schema-select.ts` — 实时 Schema 拉取（information_schema，TTL 缓存 60s）+ 渐进式表选择 + DDL 构建（注释优先级：用户自定义 > 实时 > 快照）
 - `lib/services/datasource.ts` — 数据源工具：`parseSchemas`（逗号分隔 schema 解析，默认 `public`）+ `postgresSearchPathOption`（生成 `-c search_path=...` 连接参数，等价 JDBC `currentSchema`）
-- `lib/tools/builtin/execute-sql.ts` — SQL 执行前做**代码级结构校验**（零 LLM）：解析 SQL 引用的表/列，与实时 schema 比对，拦截不存在的表或列（如 YEAR），返回友好错误让模型修正；同请求内相同 SQL 命中缓存直接返回结果，成功结果附带引导避免模型重复查询
+- `lib/services/dialects.ts` — 数据库方言层：`DatabaseDialect` 接口（`type`/`displayName`/`family`/`dialectPrompt`/`setupReadOnly`）+ 注册表 `getDialect()` + `isPostgresFamily()`。PG 族基类 `PostgresDialect` 承载默认实现，`VastbaseDialect` / `KingbaseDialect` 继承并覆写 `dialectPrompt()` 强制 PG 风格分页（禁用 Oracle ROWNUM 伪列），未来新增 PG 系库建独立方言类覆写特有差异即可，无需改散落分派点
+- `lib/tools/builtin/execute-sql.ts` — SQL 执行前做**代码级结构校验**（零 LLM）：解析 SQL 引用的表/列，与实时 schema 比对，拦截不存在的表或列（如 YEAR），返回友好错误让模型修正；同请求内相同 SQL 命中缓存直接返回结果，成功结果附带引导避免模型重复查询。执行按 `dialect.family` 分派，只读保护用 `dialect.setupReadOnly()`
+
+**数据库类型**：`DatasourceConfig.type = 'mysql' | 'postgresql' | 'vastbase' | 'kingbase'`。所有分派点（schema 拉取、SQL 执行、Admin 连接测试/表/字段、动态提示词、语义审计方言名）统一走方言层 `getDialect()` / `isPostgresFamily()`，PG 系（postgresql/vastbase/kingbase）复用 `pg` 驱动与 PG 查询逻辑。Admin UI 切换类型时端口自动联动（mysql→3306，postgresql/vastbase→5432，kingbase→54321，仅当端口为任一默认端口时替换）。
 
 **PostgreSQL 多 Schema**：数据源配置 `schemas` 字段（逗号分隔，仅 PG 生效，默认 `public`）贯穿全链路——Admin 表/字段选择与运行时 schema 拉取用 `table_schema = ANY($1)` 参数化，SQL 执行用连接级 `options: '-c search_path=a,b'`，模型 SQL 无需 schema 前缀。老配置无该字段自动按 `public` 处理。假定不同 schema 间无同名表。
 

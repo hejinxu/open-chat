@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolContext, ToolResult } from '../types'
 import { pgClientConfig } from '@/lib/services/datasource'
+import { getDialect, type DatabaseDialect } from '@/lib/services/dialects'
 
 /**
  * Validate that SQL is a SELECT query only (no modifications allowed)
@@ -236,6 +237,7 @@ async function executeMysqlQuery(
   username: string,
   password: string,
   sql: string,
+  dialect: DatabaseDialect,
 ): Promise<ToolResult> {
   try {
     // eslint-disable-next-line ts/no-require-imports
@@ -250,7 +252,7 @@ async function executeMysqlQuery(
     })
 
     // Set read-only transaction for additional safety
-    await connection.query('SET SESSION TRANSACTION READ ONLY')
+    await dialect.setupReadOnly(connection)
 
     // Execute query with query-level timeout (180 seconds)
     const [rows, fields] = await connection.query({
@@ -290,6 +292,7 @@ async function executePostgresQuery(
   username: string,
   password: string,
   sql: string,
+  dialect: DatabaseDialect,
   schemas?: string,
 ): Promise<ToolResult> {
   try {
@@ -300,7 +303,7 @@ async function executePostgresQuery(
     await client.connect()
 
     // Set read-only transaction for additional safety
-    await client.query('SET default_transaction_read_only = true')
+    await dialect.setupReadOnly(client)
 
     // Execute query with timeout (180 seconds)
     const result = await client.query({ text: sql, query_timeout: 180000 })
@@ -396,8 +399,16 @@ async function executeSqlHandler(
   console.log(`[execute_sql] Executing on ${activeDs.type} (${activeDs.host}:${activeDs.port}/${activeDs.database}): ${finalSql.substring(0, 200)}`)
 
   // Execute based on database type
+  const dialect = getDialect(activeDs.type)
+  if (!dialect) {
+    return {
+      success: false,
+      error: `不支持的数据库类型: ${activeDs.type}`,
+    }
+  }
+
   let result: ToolResult
-  if (activeDs.type === 'mysql') {
+  if (dialect.family === 'mysql') {
     result = await executeMysqlQuery(
       activeDs.host,
       activeDs.port,
@@ -405,9 +416,10 @@ async function executeSqlHandler(
       activeDs.username,
       activeDs.password,
       finalSql,
+      dialect,
     )
   }
-  else if (activeDs.type === 'postgresql') {
+  else {
     result = await executePostgresQuery(
       activeDs.host,
       activeDs.port,
@@ -415,14 +427,9 @@ async function executeSqlHandler(
       activeDs.username,
       activeDs.password,
       finalSql,
+      dialect,
       activeDs.schemas,
     )
-  }
-  else {
-    return {
-      success: false,
-      error: `不支持的数据库类型: ${activeDs.type}`,
-    }
   }
 
   // Cache successful results within this request, and guide the model to stop re-querying

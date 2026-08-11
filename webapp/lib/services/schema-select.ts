@@ -1,5 +1,6 @@
 import type { AgentExtraConfig, DatasourceConfig } from '@/types/agent'
 import { parseSchemas } from '@/lib/services/datasource'
+import { isPostgresFamily } from '@/lib/services/dialects'
 
 export interface TableSelectionOptions {
   model: string
@@ -182,7 +183,7 @@ export async function fetchTableCatalog(config: AgentExtraConfig): Promise<strin
   try {
     const rows = activeDs.type === 'mysql'
       ? await queryMysqlCatalog(activeDs, activeDs.selected_tables)
-      : activeDs.type === 'postgresql'
+      : isPostgresFamily(activeDs.type)
         ? await queryPostgresCatalog(activeDs, activeDs.selected_tables)
         : null
     if (!rows || rows.length === 0) {
@@ -220,7 +221,7 @@ export async function fetchSelectedTableSchemas(
   try {
     const schemas = activeDs.type === 'mysql'
       ? await fetchMysqlTableSchemas(activeDs, tables)
-      : activeDs.type === 'postgresql'
+      : isPostgresFamily(activeDs.type)
         ? await fetchPostgresTableSchemas(activeDs, tables)
         : null
     if (schemas) {
