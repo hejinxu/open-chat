@@ -249,7 +249,7 @@ const translation = {
     supplementaryPrompt: 'Supplementary Prompt',
     supplementaryPromptDesc: 'Add agent-specific instructions on top of the built-in prompt',
     dynamicPrompt: 'Dynamic Prompt (Auto-generated)',
-    dynamicPromptDesc: 'Includes: DDL, business knowledge, query examples, auto-updated on config change',
+    dynamicPromptDesc: 'Includes: database type, business knowledge, query examples, auto-updated on config change (table schema is injected live at request time)',
     noDynamicPrompt: 'Not generated yet, will auto-generate after configuring data source and business knowledge',
     noBuiltInPrompt: 'Current agent type has no built-in prompt configured',
     regenerate: 'Regenerate',

@@ -249,7 +249,7 @@ const translation = {
     supplementaryPrompt: '补充提示词',
     supplementaryPromptDesc: '在内置提示词基础上，添加此智能体的特定指令',
     dynamicPrompt: '动态提示词（自动生成）',
-    dynamicPromptDesc: '包含：选中表的DDL、业务知识、查询示例，配置变更时自动更新',
+    dynamicPromptDesc: '包含：数据源类型、业务知识、查询示例，配置变更时自动更新（数据表结构由请求时实时注入）',
     noDynamicPrompt: '尚未生成，配置数据源和业务知识后自动生成',
     noBuiltInPrompt: '当前智能体类型未配置内置提示词',
     regenerate: '重新生成',

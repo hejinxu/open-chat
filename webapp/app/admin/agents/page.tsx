@@ -1410,8 +1410,10 @@ function SystemPromptTab({ agentType, systemPrompts, agentConfig, onUpdate, onRe
         </label>
         {builtInPrompt
           ? (
-            <div className="relative group p-3 bg-surface-tertiary border border-border rounded-md text-content text-sm font-mono max-h-48 overflow-y-auto whitespace-pre-wrap">
-              {builtInPrompt.content}
+            <div className="relative group">
+              <div className="p-3 bg-surface-tertiary border border-border rounded-md text-content text-sm font-mono max-h-48 overflow-y-auto whitespace-pre-wrap">
+                {builtInPrompt.content}
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -1485,8 +1487,10 @@ function SystemPromptTab({ agentType, systemPrompts, agentConfig, onUpdate, onRe
         </div>
         {agentConfig.dynamic_prompt
           ? (
-            <div className="relative group p-3 bg-surface-tertiary border border-border rounded-md text-content text-sm font-mono max-h-48 overflow-y-auto whitespace-pre-wrap">
-              {agentConfig.dynamic_prompt}
+            <div className="relative group">
+              <div className="p-3 bg-surface-tertiary border border-border rounded-md text-content text-sm font-mono max-h-48 overflow-y-auto whitespace-pre-wrap">
+                {agentConfig.dynamic_prompt}
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -1509,7 +1513,7 @@ function SystemPromptTab({ agentType, systemPrompts, agentConfig, onUpdate, onRe
           )}
         <div className="flex items-center justify-between mt-2">
           <p className="text-xs text-content-tertiary">
-            {t('common.auth.dynamicPromptDesc', '包含：选中表的DDL、业务知识、查询示例，配置变更时自动更新')}
+            {t('common.auth.dynamicPromptDesc', '包含：数据源类型、业务知识、查询示例，配置变更时自动更新（数据表结构由请求时实时注入）')}
           </p>
           {dynamicPromptUpdatedAt && (
             <p className="text-xs text-content-tertiary">

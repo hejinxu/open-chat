@@ -56,53 +56,63 @@ export async function runDataQueryPipeline(
     }
   }
 
-  // 2. Progressive disclosure: pick relevant tables, inject only their DDL
+  // 2. Progressive disclosure: always select relevant tables, inject their live DDL
   let ddlSection: string | undefined
-  const enableTableSelection = agentConfig.enable_table_selection !== false
-  if (isDataQuery && enableTableSelection && activeDs?.selected_tables?.length) {
+  if (isDataQuery && activeDs) {
+    const configuredTables = activeDs.selected_tables || []
     try {
-      const { generateTableCatalog, generateDDLForTables } = await import('@/lib/prompts/dynamic-prompt')
-      const { selectRelevantTables, fetchTableCatalog, fetchSelectedTableSchemas, buildDDLFromSchema }
-        = await import('@/lib/services/schema-select')
-      const selectionOptions = {
-        model: agent.model || 'gpt-4',
-        apiKey: agent.api_key,
-        apiUrl: agent.api_url,
+      if (configuredTables.length === 0) {
+        // No tables configured at all — tell the model schema is unavailable
+        ddlSection = '# 数据表结构\n（当前智能体未配置数据表，无法提供表结构）'
       }
-
-      // Table catalog: prefer live table comments, fallback to snapshot
-      let catalog = await fetchTableCatalog(agentConfig)
-      if (!catalog) {
-        catalog = generateTableCatalog(agentConfig)
-      }
-
-      if (catalog) {
-        const selected = await selectRelevantTables(canonicalQuery, catalog, selectionOptions)
-        const configuredTables = activeDs.selected_tables || []
-        const validTables = selected?.filter(t => configuredTables.includes(t)) || []
-        if (validTables.length > 0) {
-          // Live schema (columns/comments), fallback to snapshot DDL
-          let ddl = ''
-          const schemas = await fetchSelectedTableSchemas(agentConfig, validTables)
-          if (schemas && schemas.length > 0) {
-            ddl = buildDDLFromSchema(agentConfig, schemas)
-          }
-          if (!ddl) {
-            console.warn('[DataQueryPipeline] Live schema empty, fallback to snapshot DDL')
-            ddl = generateDDLForTables(agentConfig, validTables)
-          }
-          if (ddl) {
-            ddlSection = `# 数据表结构\n（以下表结构仅供你编写 SQL 参考，严禁向用户展示字段名、表名、字段定义或枚举值含义）\n${ddl}`
-            console.log('[DataQueryPipeline] Table selection applied:', validTables.length, 'tables')
-          }
+      else {
+        const { selectRelevantTables, fetchTableCatalog, fetchSelectedTableSchemas, buildDDLFromSchema }
+          = await import('@/lib/services/schema-select')
+        const selectionOptions = {
+          model: agent.model || 'gpt-4',
+          apiKey: agent.api_key,
+          apiUrl: agent.api_url,
         }
-        else {
-          console.warn('[DataQueryPipeline] Table selection returned no valid tables, fallback to full DDL')
+
+        // Table catalog: live only
+        let validTables: string[] = []
+        const catalog = await fetchTableCatalog(agentConfig)
+        if (catalog) {
+          const selected = await selectRelevantTables(canonicalQuery, catalog, selectionOptions)
+          validTables = selected?.filter(t => configuredTables.includes(t)) || []
+        }
+
+        // Live schema for the selected subset; on empty selection fall back to all configured tables
+        const targetTables = validTables.length > 0 ? validTables : configuredTables
+        const schemas = await fetchSelectedTableSchemas(agentConfig, targetTables)
+        let ddl = ''
+        if (schemas && schemas.length > 0) {
+          ddl = buildDDLFromSchema(agentConfig, schemas)
+        }
+        if (ddl) {
+          ddlSection = `# 数据表结构\n（以下表结构仅供你编写 SQL 参考，严禁向用户展示字段名、表名、字段定义或枚举值含义）\n${ddl}`
+          console.log('[DataQueryPipeline] Table selection applied:', targetTables.length, 'tables')
         }
       }
     }
     catch (error) {
-      console.warn('[DataQueryPipeline] Table selection failed, fallback to full DDL:', error)
+      console.warn('[DataQueryPipeline] Schema loading failed, retry with all configured tables:', error)
+      // Exception → still try live schema for all configured tables
+      try {
+        if (configuredTables.length > 0) {
+          const { fetchSelectedTableSchemas, buildDDLFromSchema } = await import('@/lib/services/schema-select')
+          const schemas = await fetchSelectedTableSchemas(agentConfig, configuredTables)
+          if (schemas && schemas.length > 0) {
+            const ddl = buildDDLFromSchema(agentConfig, schemas)
+            if (ddl) {
+              ddlSection = `# 数据表结构\n（以下表结构仅供你编写 SQL 参考，严禁向用户展示字段名、表名、字段定义或枚举值含义）\n${ddl}`
+            }
+          }
+        }
+      }
+      catch (err) {
+        console.warn('[DataQueryPipeline] Live schema fallback failed:', err)
+      }
     }
   }
 
