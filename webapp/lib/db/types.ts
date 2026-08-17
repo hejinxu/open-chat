@@ -5,6 +5,7 @@ import type { ModelProvider, Model } from '@/types/model'
 import type { AgentTypeRecord } from '@/types/agent-type'
 import type { SystemPromptRecord } from '@/types/system-prompt'
 import type { SystemConfigRecord } from '@/types/system-config'
+import type { MCPServerRecord } from '@/types/mcp'
 
 export interface DatabaseProvider {
   // Conversations
@@ -85,4 +86,10 @@ export interface DatabaseProvider {
   getSystemConfig: () => Promise<SystemConfigRecord[]>
   getSystemConfigByKey: (key: string) => Promise<SystemConfigRecord | null>
   saveSystemConfig: (config: SystemConfigRecord) => Promise<void>
+
+  // MCP Servers
+  getMCPServers: () => Promise<MCPServerRecord[]>
+  getMCPServerById: (id: string) => Promise<MCPServerRecord | null>
+  saveMCPServer: (server: MCPServerRecord) => Promise<void>
+  deleteMCPServer: (id: string) => Promise<void>
 }

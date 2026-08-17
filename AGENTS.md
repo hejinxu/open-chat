@@ -265,7 +265,7 @@ webapp/lib/mcp/
 
 **Admin UI**：
 - `/admin/tools` — 工具管理页面
-- `/admin/mcp-servers` — MCP Server 管理页面
+- `/admin/mcp-servers` — MCP Server 管理页面（CRUD API：`/api/admin/mcp-servers`，GET/POST/PUT/DELETE，`DatabaseProvider` 提供 `getMCPServers`/`getMCPServerById`/`saveMCPServer`/`deleteMCPServer`）
 
 ### Theme System (CSS Custom Properties)
 - **方案**: CSS Custom Properties，每个主题一个 CSS 变量文件
@@ -469,6 +469,13 @@ SQLITE_DB_PATH=data/openchat.db
 - **Admin UI**: 后台管理新增"模型提供商"和"模型库"两个 tab
 - **预置数据**: 首次启动时自动插入 13 个供应商 + 45 个模型（OpenAI、Anthropic、DeepSeek、硅基流动、Google、阿里云百炼、智谱、Kimi、MiniMax、零一万物、百川、小米 MiMo、腾讯混元），仅在表为空时插入
 - **DB 迁移**: 旧 `agents.model` 文本字段已移除，迁移时自动匹配 `model_name` → `model_id`；`embed_tokens` 表及相关代码已清理
+
+### System Config
+- **系统配置页面**: `/admin/system-config`，单页表单式（非列表式），易于扩展新配置项
+- **系统模型**: `system_config` 表中 `system_model_id` 配置项，从 `models` 表选择一个模型用于系统级 AI 功能（如对话标题自动生成）。留空则不启用 AI 功能
+- **对话标题生成**: 新对话首条消息发送时立即设置临时标题（前 30 字截取）；AI 回复完成后异步调用 `/api/system/summarize-title`，若配置了系统模型则用模型生成语义化标题覆盖临时标题，未配置或失败则保留临时标题。无需手动开关，配置模型即生效
+- **配置迁移**: 旧配置 `title_summarization_model_id` 自动迁移为 `system_model_id`，旧 `title_summarization_enabled` 开关已废弃（不再读取）
+- **Admin UI**: 后台管理"系统管理"分组下"系统配置"tab（原"系统模型设置"页面已删除，合并至此）
 
 ### ws-server
 ```

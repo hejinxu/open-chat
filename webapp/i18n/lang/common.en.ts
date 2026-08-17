@@ -261,6 +261,11 @@ const translation = {
     copied: 'Copied',
     collapse: 'Collapse',
     expand: 'Expand',
+    systemModel: 'System Model',
+    systemModelDesc: 'Configure a system-level AI model to support system features such as automatic conversation title generation.',
+    systemModelHint: 'Recommended to choose a fast and cost-effective model.',
+    saveSuccess: 'Saved successfully',
+    saveFailed: 'Failed to save',
   },
   error: {
     noAgentsConfigured: 'No agents configured. Please add an agent via the admin UI.',

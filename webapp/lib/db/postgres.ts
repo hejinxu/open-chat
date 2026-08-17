@@ -5,6 +5,7 @@ import type { UserRecord, UserAccountRecord, AppIntegrationRecord, ApiKeyRecord 
 import type { AgentRecord } from '@/types/agent'
 import type { ModelProvider, Model } from '@/types/model'
 import type { SystemConfigRecord } from '@/types/system-config'
+import type { MCPServerRecord } from '@/types/mcp'
 
 export class PostgresProvider implements DatabaseProvider {
   private pool: Pool
@@ -1365,14 +1366,76 @@ export class PostgresProvider implements DatabaseProvider {
     }
   }
 
+  // ============ MCP Servers ============
+
+  async getMCPServers(): Promise<MCPServerRecord[]> {
+    await this.ensureReady()
+    const result = await this.pool.query('SELECT * FROM mcp_servers ORDER BY created_at DESC')
+    return result.rows.map(this.mapMCPServer)
+  }
+
+  async getMCPServerById(id: string): Promise<MCPServerRecord | null> {
+    await this.ensureReady()
+    const result = await this.pool.query('SELECT * FROM mcp_servers WHERE id = $1', [id])
+    return result.rows.length > 0 ? this.mapMCPServer(result.rows[0]) : null
+  }
+
+  async saveMCPServer(server: MCPServerRecord): Promise<void> {
+    await this.ensureReady()
+    await this.pool.query(
+      `INSERT INTO mcp_servers (id, name, display_name, description, transport, config, is_enabled, last_connected_at, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name,
+         display_name = EXCLUDED.display_name,
+         description = EXCLUDED.description,
+         transport = EXCLUDED.transport,
+         config = EXCLUDED.config,
+         is_enabled = EXCLUDED.is_enabled,
+         last_connected_at = EXCLUDED.last_connected_at,
+         updated_at = EXCLUDED.updated_at`,
+      [
+        server.id,
+        server.name,
+        server.display_name,
+        server.description,
+        server.transport,
+        server.config,
+        server.is_enabled,
+        server.last_connected_at,
+        server.created_at,
+        server.updated_at,
+      ],
+    )
+  }
+
+  async deleteMCPServer(id: string): Promise<void> {
+    await this.ensureReady()
+    await this.pool.query('DELETE FROM mcp_servers WHERE id = $1', [id])
+  }
+
+  private mapMCPServer(row: any): MCPServerRecord {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      display_name: row.display_name as string,
+      description: (row.description as string) || '',
+      transport: row.transport as MCPServerRecord['transport'],
+      config: typeof row.config === 'string' ? row.config : JSON.stringify(row.config || {}),
+      is_enabled: row.is_enabled === true || row.is_enabled === 1,
+      last_connected_at: row.last_connected_at != null ? Number(row.last_connected_at) : null,
+      created_at: Number(row.created_at),
+      updated_at: Number(row.updated_at),
+    }
+  }
+
   // ============ Seed Default System Config ============
 
   private async seedDefaultSystemConfig(client: any): Promise<void> {
     const now = Math.floor(Date.now() / 1000)
 
     const configs: { key: string, value: string, description: string }[] = [
-      { key: 'title_summarization_model_id', value: '', description: '对话标题总结使用的模型 ID（来自 models 表），为空则使用前 30 字截取' },
-      { key: 'title_summarization_enabled', value: 'false', description: '是否启用 AI 对话标题总结' },
+      { key: 'system_model_id', value: '', description: '系统模型 ID（来自 models 表），用于对话标题生成等系统级 AI 功能，为空则使用首条消息前 30 字截取' },
     ]
 
     for (const c of configs) {
@@ -1382,6 +1445,16 @@ export class PostgresProvider implements DatabaseProvider {
          ON CONFLICT (key) DO NOTHING`,
         [c.key, c.value, c.description, now],
       )
+    }
+
+    // 迁移旧配置 title_summarization_model_id -> system_model_id
+    const oldResult = await client.query('SELECT value FROM system_config WHERE key = $1', ['title_summarization_model_id'])
+    if (oldResult.rows.length > 0 && oldResult.rows[0].value) {
+      const newResult = await client.query('SELECT value FROM system_config WHERE key = $1', ['system_model_id'])
+      if (newResult.rows.length === 0 || !newResult.rows[0].value) {
+        await client.query('UPDATE system_config SET value = $1 WHERE key = $2', [oldResult.rows[0].value, 'system_model_id'])
+        console.log('[DB-PG] Migrated title_summarization_model_id to system_model_id')
+      }
     }
 
     console.log('[DB-PG] Seeded default system config')

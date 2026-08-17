@@ -95,7 +95,6 @@ export default function AdminLayout({
       title: t('common.auth.systemManagement', '系统管理'),
       items: [
         { name: t('common.auth.users'), href: '/admin/users', icon: '👥' },
-        { name: t('common.auth.systemModelSettings', '系统模型设置'), href: '/admin/system-models', icon: '⚙️' },
         { name: t('common.auth.systemConfig', '系统配置'), href: '/admin/system-config', icon: '🔧' },
       ],
     },
@@ -171,7 +170,7 @@ export default function AdminLayout({
             ))}
           </div>
           {/* Collapse toggle - fixed at bottom */}
-          <div className={`shrink-0 border-t border-border ${collapsed ? 'p-2 flex justify-center' : 'p-3 flex justify-end'}`}>
+          <div className={`shrink-0 ${collapsed ? 'p-2 flex justify-center' : 'p-3 flex justify-end'}`}>
             <button
               onClick={toggleSidebar}
               className="p-1.5 rounded-md text-content-secondary hover:text-content hover:bg-surface-hover transition-colors"

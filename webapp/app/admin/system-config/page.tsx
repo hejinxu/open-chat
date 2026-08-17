@@ -4,57 +4,62 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BASE_PATH } from '@/config'
 
-interface SystemConfig {
-  key: string
-  value: string
-  description: string
-  updated_at: number
+interface ModelItem {
+  id: string
+  display_name: string
+  model_name: string
+  provider_id: string
+  is_enabled: boolean
 }
 
 export default function SystemConfigPage() {
   const { t } = useTranslation()
-  const [configs, setConfigs] = useState<SystemConfig[]>([])
+  const [models, setModels] = useState<ModelItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [editingKey, setEditingKey] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState('')
   const [saving, setSaving] = useState(false)
+  const [systemModelId, setSystemModelId] = useState('')
+  const [message, setMessage] = useState('')
+  const [messageType, setMessageType] = useState<'success' | 'error'>('success')
 
-  const loadConfigs = async () => {
-    try {
-      const res = await fetch(`${BASE_PATH}/api/admin/system-config`)
-      const data = await res.json()
-      setConfigs(data.configs || [])
-    }
-    catch {
+  useEffect(() => {
+    Promise.all([
+      fetch(`${BASE_PATH}/api/admin/models`).then(r => r.json()),
+      fetch(`${BASE_PATH}/api/admin/system-config`).then(r => r.json()),
+    ]).then(([modelsData, configData]) => {
+      setModels((modelsData.models || []).filter((m: ModelItem) => m.is_enabled))
+
+      const modelConfig = (configData.configs || []).find((c: { key: string }) => c.key === 'system_model_id')
+      setSystemModelId(modelConfig?.value || '')
+    }).catch(() => {
       // ignore
-    }
-    finally {
+    }).finally(() => {
       setLoading(false)
-    }
-  }
+    })
+  }, [])
 
-  useEffect(() => { loadConfigs() }, [])
-
-  const handleEdit = (config: SystemConfig) => {
-    setEditingKey(config.key)
-    setEditValue(config.value)
-  }
-
-  const handleSave = async (key: string) => {
+  const handleSave = async () => {
     setSaving(true)
+    setMessage('')
     try {
       const res = await fetch(`${BASE_PATH}/api/admin/system-config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value: editValue }),
+        body: JSON.stringify({ key: 'system_model_id', value: systemModelId }),
       })
-      if (res.ok) {
-        setEditingKey(null)
-        loadConfigs()
+      if (!res.ok) {
+        const data = await res.json()
+        setMessage(data.error || t('common.auth.saveFailed', '保存失败'))
+        setMessageType('error')
+        return
       }
+
+      setMessage(t('common.auth.saveSuccess', '保存成功'))
+      setMessageType('success')
+      setTimeout(() => setMessage(''), 3000)
     }
     catch {
-      // ignore
+      setMessage(t('common.auth.networkError', '网络错误'))
+      setMessageType('error')
     }
     finally {
       setSaving(false)
@@ -69,70 +74,42 @@ export default function SystemConfigPage() {
     <div>
       <h2 className="text-lg font-medium text-content mb-4">{t('common.auth.systemConfig', '系统配置')}</h2>
 
-      <div className="bg-surface-elevated rounded-lg border border-border overflow-hidden max-w-3xl">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-content-secondary">
-              <th className="px-4 py-2">配置项</th>
-              <th className="px-4 py-2">值</th>
-              <th className="px-4 py-2">说明</th>
-              <th className="px-4 py-2 text-right">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {configs.map(config => (
-              <tr key={config.key} className="border-b border-border last:border-0">
-                <td className="px-4 py-2 text-content font-mono text-xs">{config.key}</td>
-                <td className="px-4 py-2 text-content">
-                  {editingKey === config.key
-                    ? (
-                      <input
-                        type="text"
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        className="w-full px-2 py-1 bg-surface border border-border rounded text-content text-sm"
-                      />
-                    )
-                    : (
-                      <span className="text-content-secondary">{config.value || '(空)'}</span>
-                    )}
-                </td>
-                <td className="px-4 py-2 text-content-tertiary text-xs">{config.description}</td>
-                <td className="px-4 py-2 text-right">
-                  {editingKey === config.key
-                    ? (
-                      <>
-                        <button
-                          onClick={() => handleSave(config.key)}
-                          disabled={saving}
-                          className="text-xs text-accent hover:opacity-80 mr-2"
-                        >
-                          保存
-                        </button>
-                        <button
-                          onClick={() => setEditingKey(null)}
-                          className="text-xs text-content-tertiary hover:text-content"
-                        >
-                          取消
-                        </button>
-                      </>
-                    )
-                    : (
-                      <button
-                        onClick={() => handleEdit(config)}
-                        className="text-xs text-content-secondary hover:text-content"
-                      >
-                        {t('common.operation.edit')}
-                      </button>
-                    )}
-                </td>
-              </tr>
+      <div className="bg-surface-elevated rounded-lg border border-border p-6">
+        {/* 系统模型 */}
+        <div>
+          <h3 className="text-sm font-medium text-content mb-1">{t('common.auth.systemModel', '系统模型')}</h3>
+          <p className="text-xs text-content-tertiary mb-4">
+            {t('common.auth.systemModelDesc', '配置系统级 AI 模型，用于支持对话标题自动生成等系统功能。')}
+          </p>
+          <select
+            value={systemModelId}
+            onChange={e => setSystemModelId(e.target.value)}
+            className="w-full px-3 py-2 bg-surface border border-border rounded text-content text-sm"
+          >
+            <option value="">{t('common.auth.selectModel', '请选择模型')}</option>
+            {models.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.display_name} ({m.model_name})
+              </option>
             ))}
-            {configs.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-4 text-center text-content-secondary">暂无配置项</td></tr>
-            )}
-          </tbody>
-        </table>
+          </select>
+          <p className="text-xs text-content-tertiary mt-1">
+            {t('common.auth.systemModelHint', '建议选择响应速度快、成本较低的模型。')}
+          </p>
+        </div>
+
+        <div className="mt-6 flex items-center gap-3">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 text-sm bg-accent text-white rounded-md hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? t('common.auth.saving', '保存中...') : t('common.operation.save', '保存')}
+          </button>
+          {message && (
+            <span className={`text-sm ${messageType === 'success' ? 'text-green-600' : 'text-red-500'}`}>{message}</span>
+          )}
+        </div>
       </div>
     </div>
   )

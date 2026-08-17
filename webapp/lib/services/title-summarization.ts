@@ -1,8 +1,8 @@
 import { getDatabaseProvider } from '@/lib/db'
 
 /**
- * 使用系统配置的模型总结对话标题
- * @returns 总结后的标题（不超过 30 字），若未配置或失败则返回 null
+ * 使用系统模型生成对话标题
+ * @returns 生成的标题（不超过 30 字），若未配置系统模型或失败则返回 null
  */
 export async function summarizeConversationTitle(
   userMessage: string,
@@ -11,26 +11,20 @@ export async function summarizeConversationTitle(
   try {
     const db = getDatabaseProvider()
 
-    // 1. 检查是否启用
-    const enabledConfig = await db.getSystemConfigByKey('title_summarization_enabled')
-    if (!enabledConfig || enabledConfig.value !== 'true') {
-      return null
-    }
-
-    // 2. 获取配置的模型 ID
-    const modelIdConfig = await db.getSystemConfigByKey('title_summarization_model_id')
+    // 1. 获取系统模型 ID
+    const modelIdConfig = await db.getSystemConfigByKey('system_model_id')
     if (!modelIdConfig || !modelIdConfig.value) {
       return null
     }
 
-    // 3. 从 models 表获取模型信息
+    // 2. 从 models 表获取模型信息
     const model = await db.getModelById(modelIdConfig.value)
     if (!model) {
       console.error('[TitleSummarization] Model not found:', modelIdConfig.value)
       return null
     }
 
-    // 4. 获取 provider 信息（API key, API URL）
+    // 3. 获取 provider 信息（API key, API URL）
     const provider = await db.getModelProviderById(model.provider_id)
     if (!provider) {
       console.error('[TitleSummarization] Provider not found:', model.provider_id)
@@ -42,7 +36,7 @@ export async function summarizeConversationTitle(
       return null
     }
 
-    // 5. 构造总结 prompt
+    // 4. 构造总结 prompt
     const prompt = `请根据以下对话内容，生成一个简短的对话标题（不超过20个字，不要包含引号、句号等标点符号）：
 
 用户：${userMessage.slice(0, 500)}
@@ -52,7 +46,7 @@ export async function summarizeConversationTitle(
 
     const apiUrl = provider.api_base_url.replace(/\/+$/, '')
 
-    // 6. 调用 LLM API（非流式）
+    // 5. 调用 LLM API（非流式）
     const res = await fetch(`${apiUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -81,7 +75,7 @@ export async function summarizeConversationTitle(
       return null
     }
 
-    // 7. 清理标题（去除引号、换行等）
+    // 6. 清理标题（去除引号、换行等）
     const cleanTitle = title
       .replace(/["""''「」『』]/g, '')
       .replace(/[。.\n\r]/g, '')

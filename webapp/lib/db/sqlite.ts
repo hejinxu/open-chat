@@ -6,6 +6,7 @@ import type { UserRecord, UserAccountRecord, AppIntegrationRecord, ApiKeyRecord 
 import type { AgentRecord } from '@/types/agent'
 import type { ModelProvider, Model } from '@/types/model'
 import type { SystemConfigRecord } from '@/types/system-config'
+import type { MCPServerRecord } from '@/types/mcp'
 
 export class SqliteProvider implements DatabaseProvider {
   private db: any = null
@@ -1296,13 +1297,64 @@ export class SqliteProvider implements DatabaseProvider {
     }
   }
 
+  // ============ MCP Servers ============
+
+  async getMCPServers(): Promise<MCPServerRecord[]> {
+    return this.queryAll('SELECT * FROM mcp_servers ORDER BY created_at DESC', [], this.mapMCPServer)
+  }
+
+  async getMCPServerById(id: string): Promise<MCPServerRecord | null> {
+    return this.queryOne('SELECT * FROM mcp_servers WHERE id = ?', [id], this.mapMCPServer)
+  }
+
+  async saveMCPServer(server: MCPServerRecord): Promise<void> {
+    await this.ensureReady()
+    this.db.run(
+      `INSERT OR REPLACE INTO mcp_servers (id, name, display_name, description, transport, config, is_enabled, last_connected_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        server.id,
+        server.name,
+        server.display_name,
+        server.description,
+        server.transport,
+        server.config,
+        server.is_enabled ? 1 : 0,
+        server.last_connected_at,
+        server.created_at,
+        server.updated_at,
+      ],
+    )
+    this.scheduleSave()
+  }
+
+  async deleteMCPServer(id: string): Promise<void> {
+    await this.ensureReady()
+    this.db.run('DELETE FROM mcp_servers WHERE id = ?', [id])
+    this.scheduleSave()
+  }
+
+  private mapMCPServer(row: any): MCPServerRecord {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      display_name: row.display_name as string,
+      description: (row.description as string) || '',
+      transport: row.transport as MCPServerRecord['transport'],
+      config: (row.config as string) || '{}',
+      is_enabled: (row.is_enabled as number) === 1,
+      last_connected_at: row.last_connected_at != null ? (row.last_connected_at as number) : null,
+      created_at: row.created_at as number,
+      updated_at: row.updated_at as number,
+    }
+  }
+
   // ============ Seed Default System Config ============
 
   private seedDefaultSystemConfig(): void {
     const now = Math.floor(Date.now() / 1000)
     const configs: { key: string, value: string, description: string }[] = [
-      { key: 'title_summarization_model_id', value: '', description: '对话标题总结使用的模型 ID（来自 models 表），为空则使用前 30 字截取' },
-      { key: 'title_summarization_enabled', value: 'false', description: '是否启用 AI 对话标题总结' },
+      { key: 'system_model_id', value: '', description: '系统模型 ID（来自 models 表），用于对话标题生成等系统级 AI 功能，为空则使用首条消息前 30 字截取' },
     ]
 
     const stmt = this.db.prepare(`
@@ -1312,6 +1364,17 @@ export class SqliteProvider implements DatabaseProvider {
     for (const c of configs) {
       stmt.run(c.key, c.value, c.description, now)
     }
+
+    // 迁移旧配置 title_summarization_model_id -> system_model_id
+    const oldConfig = this.db.prepare('SELECT value FROM system_config WHERE key = ?').get('title_summarization_model_id') as { value: string } | undefined
+    if (oldConfig && oldConfig.value) {
+      const newConfig = this.db.prepare('SELECT value FROM system_config WHERE key = ?').get('system_model_id') as { value: string } | undefined
+      if (!newConfig || !newConfig.value) {
+        this.db.run('UPDATE system_config SET value = ? WHERE key = ?', [oldConfig.value, 'system_model_id'])
+        console.log('[DB] Migrated title_summarization_model_id to system_model_id')
+      }
+    }
+
     console.log('[DB] Seeded default system config')
   }
 }
