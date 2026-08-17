@@ -5,7 +5,7 @@ import { ConversationNotFoundError } from '@/lib/adapters/dify'
 import { AgentNotFoundError, NoAgentsConfiguredError, UnauthorizedError, RiskAuthFailedError, PermissionDeniedError } from '@/lib/errors'
 import { AgentExecutor } from '@/lib/executors/agent-executor'
 import { verifyRiskToken, checkSmartQueryPermission } from '@/lib/services/risk-auth-verify'
-import { startRequest, endRequest, RequestLogger } from '@/lib/services/agent-logger'
+import { startRequest, endRequest, RequestLogger, subscribe } from '@/lib/services/agent-logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -80,6 +80,15 @@ export async function POST(request: NextRequest) {
             sessionId,
             requestId,
             controller,
+          })
+
+          const unsubscribe = subscribe((_event: string, data: any) => {
+            if (data.request_id !== requestId) { return }
+            try {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'agent_step', ...data })}\n\n`))
+            } catch {
+              // controller already closed
+            }
           })
 
           try {
@@ -177,6 +186,7 @@ export async function POST(request: NextRequest) {
             }
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorEvent)}\n\n`))
           } finally {
+            unsubscribe()
             controller.close()
           }
         },

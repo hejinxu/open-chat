@@ -1073,6 +1073,7 @@ const Main: FC<IMainProps> = (props) => {
       id: `${Date.now()}`,
       content: '',
       agent_thoughts: [],
+      agent_steps: [],
       message_files: [],
       isAnswer: true,
       agent_id: agentKey,
@@ -1151,6 +1152,7 @@ const Main: FC<IMainProps> = (props) => {
               agent_name: agentInfo?.name || null,
               message_files: [],
               agent_thoughts: [],
+              agent_steps: [],
             })
           }
           setRespondingFalse()
@@ -1177,6 +1179,7 @@ const Main: FC<IMainProps> = (props) => {
             agent_name: agentInfo?.name || null,
             message_files: responseItem.message_files || [],
             agent_thoughts: responseItem.agent_thoughts || [],
+            agent_steps: responseItem.agent_steps || [],
           })
         }
 
@@ -1404,6 +1407,10 @@ const Main: FC<IMainProps> = (props) => {
             })
           }
         }
+      },
+      onAgentStep: (step: any) => {
+        responseItem.agent_steps = [...(responseItem.agent_steps || []), step]
+        updateCurrentQA({ responseItem, questionId, placeholderAnswerId, questionItem })
       },
     })
   }

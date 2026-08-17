@@ -63,12 +63,24 @@ export class SqliteProvider implements DatabaseProvider {
         feedback TEXT,
         message_files TEXT NOT NULL DEFAULT '[]',
         agent_thoughts TEXT NOT NULL DEFAULT '[]',
+        agent_steps TEXT NOT NULL DEFAULT '[]',
         created_at INTEGER NOT NULL
       )
     `)
 
     this.db.run('CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)')
     this.db.run('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)')
+
+    // 迁移 messages 表：添加 agent_steps 列
+    try {
+      const msgCols = this.db.prepare('PRAGMA table_info(messages)').all() as any[]
+      if (!msgCols.some((c: any) => c.name === 'agent_steps')) {
+        this.db.run('ALTER TABLE messages ADD COLUMN agent_steps TEXT NOT NULL DEFAULT \'[]\'')
+        console.log('[DB] Migrated messages table: added agent_steps column')
+      }
+    } catch {
+      // ignore
+    }
 
     // Auth tables
     this.db.run(`
@@ -405,8 +417,8 @@ export class SqliteProvider implements DatabaseProvider {
   async saveMessage(msg: MessageRecord): Promise<void> {
     await this.ensureReady()
     this.db.run(
-      `INSERT OR REPLACE INTO messages (id, conversation_id, agent_id, agent_name, role, content, is_answer, feedback, message_files, agent_thoughts, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO messages (id, conversation_id, agent_id, agent_name, role, content, is_answer, feedback, message_files, agent_thoughts, agent_steps, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         msg.id,
         msg.conversation_id,
@@ -418,6 +430,7 @@ export class SqliteProvider implements DatabaseProvider {
         msg.feedback ? JSON.stringify(msg.feedback) : null,
         JSON.stringify(msg.message_files || []),
         JSON.stringify(msg.agent_thoughts || []),
+        JSON.stringify(msg.agent_steps || []),
         msg.created_at,
       ],
     )
@@ -495,6 +508,7 @@ export class SqliteProvider implements DatabaseProvider {
       feedback: row.feedback ? JSON.parse(row.feedback as string) : null,
       message_files: typeof row.message_files === 'string' ? JSON.parse(row.message_files as string) : (row.message_files as any[]) || [],
       agent_thoughts: typeof row.agent_thoughts === 'string' ? JSON.parse(row.agent_thoughts as string) : (row.agent_thoughts as any[]) || [],
+      agent_steps: typeof row.agent_steps === 'string' ? JSON.parse(row.agent_steps as string) : (row.agent_steps as any[]) || [],
       created_at: row.created_at as number,
     }
   }
@@ -1355,6 +1369,7 @@ export class SqliteProvider implements DatabaseProvider {
     const now = Math.floor(Date.now() / 1000)
     const configs: { key: string, value: string, description: string }[] = [
       { key: 'system_model_id', value: '', description: '系统模型 ID（来自 models 表），用于对话标题生成等系统级 AI 功能，为空则使用首条消息前 30 字截取' },
+      { key: 'max_tool_rounds', value: '12', description: 'ReAct 模式下工具调用的最大轮数上限，达到后强制总结回复' },
     ]
 
     const stmt = this.db.prepare(`

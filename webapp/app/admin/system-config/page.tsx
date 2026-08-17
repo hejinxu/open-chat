@@ -18,6 +18,7 @@ export default function SystemConfigPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [systemModelId, setSystemModelId] = useState('')
+  const [maxToolRounds, setMaxToolRounds] = useState('12')
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
 
@@ -30,6 +31,9 @@ export default function SystemConfigPage() {
 
       const modelConfig = (configData.configs || []).find((c: { key: string }) => c.key === 'system_model_id')
       setSystemModelId(modelConfig?.value || '')
+
+      const maxRoundsConfig = (configData.configs || []).find((c: { key: string }) => c.key === 'max_tool_rounds')
+      setMaxToolRounds(maxRoundsConfig?.value || '12')
     }).catch(() => {
       // ignore
     }).finally(() => {
@@ -41,16 +45,23 @@ export default function SystemConfigPage() {
     setSaving(true)
     setMessage('')
     try {
-      const res = await fetch(`${BASE_PATH}/api/admin/system-config`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'system_model_id', value: systemModelId }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        setMessage(data.error || t('common.auth.saveFailed', '保存失败'))
-        setMessageType('error')
-        return
+      const updates = [
+        { key: 'system_model_id', value: systemModelId },
+        { key: 'max_tool_rounds', value: maxToolRounds },
+      ]
+
+      for (const update of updates) {
+        const res = await fetch(`${BASE_PATH}/api/admin/system-config`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(update),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          setMessage(data.error || t('common.auth.saveFailed', '保存失败'))
+          setMessageType('error')
+          return
+        }
       }
 
       setMessage(t('common.auth.saveSuccess', '保存成功'))
@@ -95,6 +106,25 @@ export default function SystemConfigPage() {
           </select>
           <p className="text-xs text-content-tertiary mt-1">
             {t('common.auth.systemModelHint', '建议选择响应速度快、成本较低的模型。')}
+          </p>
+        </div>
+
+        {/* 工具调用限制 */}
+        <div className="mt-6 pt-6 border-t border-border">
+          <h3 className="text-sm font-medium text-content mb-1">工具调用轮数上限</h3>
+          <p className="text-xs text-content-tertiary mb-4">
+            配置 ReAct 模式下工具调用的最大轮数。达到上限后强制总结并回复用户。
+          </p>
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={maxToolRounds}
+            onChange={e => setMaxToolRounds(e.target.value)}
+            className="w-32 px-3 py-2 bg-surface border border-border rounded text-content text-sm"
+          />
+          <p className="text-xs text-content-tertiary mt-1">
+            建议保持默认值 12。设置过小可能导致复杂任务无法完成，设置过大可能导致无效重试消耗资源。
           </p>
         </div>
 

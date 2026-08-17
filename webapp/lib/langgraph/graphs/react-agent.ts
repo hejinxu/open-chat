@@ -143,10 +143,8 @@ function createToolNode(tools: ToolRegistry, context?: any) {
 
 // 搜索工具最大调用轮数
 const MAX_SEARCH_ROUNDS = 5
-// 总工具调用轮数上限（防止无限循环）
-const MAX_TOTAL_ROUNDS = 12
 
-function shouldContinue(state: { messages: BaseMessage[] }, logger?: RequestLogger): typeof END | 'tools' | 'summarize' {
+function shouldContinue(state: { messages: BaseMessage[] }, logger?: RequestLogger, maxTotalRounds: number = 12): typeof END | 'tools' | 'summarize' {
   const lastMessage = state.messages[state.messages.length - 1]
   const messageCount = state.messages.length
 
@@ -188,11 +186,11 @@ function shouldContinue(state: { messages: BaseMessage[] }, logger?: RequestLogg
   }
 
   // 总工具调用达到上限，强制总结
-  if (totalToolCount >= MAX_TOTAL_ROUNDS && hasToolCalls) {
+  if (totalToolCount >= maxTotalRounds && hasToolCalls) {
     console.log('[shouldContinue] Max total tool rounds reached, routing to summarize')
     logger?.info('shouldContinue', '工具调用总数达到上限，强制总结', {
       totalToolCount,
-      maxTotalRounds: MAX_TOTAL_ROUNDS,
+      maxTotalRounds,
       skippedToolCalls: pendingToolCalls,
     })
     return 'summarize'
@@ -224,6 +222,7 @@ export interface CreateReactAgentOptions {
   checkpointer?: MemorySaver
   context?: any
   logger?: RequestLogger
+  maxTotalRounds?: number
   /**
    * Tool names to exclude from binding to the model (e.g. web_search when network is disabled).
    */
@@ -242,6 +241,7 @@ export function createReactAgent(
     checkpointer = new MemorySaver(),
     context,
     logger,
+    maxTotalRounds = 12,
     excludeTools,
   } = options
 
@@ -298,7 +298,7 @@ ${toolResults.join('\n\n---\n\n')}
   console.log('[createReactAgent] Building graph with agent, tools, and summarize nodes')
 
   // Bind logger to shouldContinue via closure
-  const shouldContinueWithLogger = (state: { messages: BaseMessage[] }) => shouldContinue(state, logger)
+  const shouldContinueWithLogger = (state: { messages: BaseMessage[] }) => shouldContinue(state, logger, maxTotalRounds)
 
   const graph = new StateGraph(AgentState)
     .addNode('agent', agentNode)

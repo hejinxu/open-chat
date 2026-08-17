@@ -126,6 +126,19 @@ export class AgentExecutor {
       preloadTiktoken().catch(() => {})
     }
 
+    let maxTotalRounds = 12
+    try {
+      const { getDatabaseProvider } = await import('@/lib/db')
+      const db = getDatabaseProvider()
+      const config = await db.getSystemConfigByKey('max_tool_rounds')
+      if (config?.value) {
+        const parsed = parseInt(config.value)
+        if (!isNaN(parsed) && parsed > 0) { maxTotalRounds = parsed }
+      }
+    } catch {
+      // ignore
+    }
+
     const agent = createReactAgent(this.toolRegistry, {
       model: this.agent.model || 'gpt-4',
       apiKey: this.agent.api_key,
@@ -133,6 +146,7 @@ export class AgentExecutor {
       systemPrompt,
       excludeTools: this.getExcludedTools(),
       logger: this.logger,
+      maxTotalRounds,
       context: {
         controller: this.controller,
         agentConfig: this.agent.agent_config || {},

@@ -209,6 +209,7 @@ CREATE TABLE messages (
   feedback TEXT,
   message_files TEXT NOT NULL DEFAULT '[]',
   agent_thoughts TEXT NOT NULL DEFAULT '[]',
+  agent_steps TEXT NOT NULL DEFAULT '[]',
   created_at INTEGER NOT NULL
 );
 
@@ -484,7 +485,7 @@ open-chat/
 **关键细节**:
 - `request.nextUrl.pathname` 自动剥离 basePath，PUBLIC_PATHS 不含前缀
 - `AUTH_ENABLED=false` 时跳过所有认证（向后兼容）
-- Session Cookie（无 maxAge），关闭浏览器自动过期
+- 登录 cookie `maxAge` = 2h + middleware 滑动续期（剩余 < 1h 重签 JWT，活跃用户不掉线，闲置 2h 失效）
 
 #### 5.1.3 认证 API
 

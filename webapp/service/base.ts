@@ -136,6 +136,21 @@ export type IOnNodeStarted = (nodeStarted: NodeStartedResponse) => void
 export type IOnNodeFinished = (nodeFinished: NodeFinishedResponse) => void
 export type IOnToolCall = (toolCall: ToolCallEvent) => void
 
+export interface AgentStepEvent {
+  event: 'agent_step'
+  id: string
+  request_id: string
+  timestamp: number
+  level: string
+  node: string
+  message: string
+  data?: Record<string, any>
+  duration_ms?: number
+  step_id?: string
+  parent_step_id?: string
+}
+export type IOnAgentStep = (step: AgentStepEvent) => void
+
 export interface ToolCallEvent {
   event: 'tool_call'
   tool_call_id: string
@@ -162,6 +177,7 @@ interface IOtherOptions {
   onNodeStarted?: IOnNodeStarted
   onNodeFinished?: IOnNodeFinished
   onToolCall?: IOnToolCall
+  onAgentStep?: IOnAgentStep
 }
 
 function unicodeToChar(text: string) {
@@ -183,6 +199,7 @@ const handleStream = (
   onNodeStarted?: IOnNodeStarted,
   onNodeFinished?: IOnNodeFinished,
   onToolCall?: IOnToolCall,
+  onAgentStep?: IOnAgentStep,
 ) => {
   if (!response.ok) { throw new Error('Network response was not ok') }
 
@@ -260,6 +277,9 @@ const handleStream = (
             }
             else if (bufferObj.event === 'tool_call') {
               onToolCall?.(bufferObj as ToolCallEvent)
+            }
+            else if (bufferObj.event === 'agent_step') {
+              onAgentStep?.(bufferObj as AgentStepEvent)
             }
           }
         })
@@ -423,6 +443,7 @@ export const ssePost = (
     onError,
     getAbortController,
     onToolCall,
+    onAgentStep,
   }: IOtherOptions,
 ) => {
   const abortController = new AbortController()
@@ -478,7 +499,7 @@ export const ssePost = (
         onData?.(str, isFirstMessage, moreInfo)
       }, (hasError?: boolean, errorMessage?: string, errorCode?: string) => {
         onCompleted?.(hasError, errorMessage, errorCode)
-      }, onThought, onMessageEnd, onMessageReplace, onFile, onWorkflowStarted, onWorkflowFinished, onNodeStarted, onNodeFinished, onToolCall)
+      }, onThought, onMessageEnd, onMessageReplace, onFile, onWorkflowStarted, onWorkflowFinished, onNodeStarted, onNodeFinished, onToolCall, onAgentStep)
     })
     .catch((e) => {
       const msg = `${e}`

@@ -13,6 +13,7 @@ import { randomString } from '@/utils/string'
 import ImageGallery from '../../base/image-gallery'
 import LoadingAnim from '../loading-anim'
 import s from '../style.module.css'
+import AgentProcess from '../agent-process'
 import Thought from '../thought'
 import { TextToSpeech } from '../text-to-speech'
 import MessageActionsDropdown from './message-actions-dropdown'
@@ -84,7 +85,7 @@ const Answer: FC<IAnswerProps> = ({
   allToolIcons,
   suggestionClick = () => { },
 }) => {
-  const { id, content, agent_thoughts, workflowProcess, suggestedQuestions = [], agent_name } = item
+  const { id, content, agent_thoughts, agent_steps, workflowProcess, suggestedQuestions = [], agent_name } = item
   const isAgentMode = !!agent_thoughts && agent_thoughts.length > 0
 
   const { t } = useTranslation()
@@ -177,6 +178,9 @@ const Answer: FC<IAnswerProps> = ({
               )}
               {workflowProcess && (
                 <WorkflowProcess data={workflowProcess} hideInfo />
+              )}
+              {agent_steps && agent_steps.length > 0 && (
+                <AgentProcess steps={agent_steps} isResponding={isResponding} />
               )}
               {(isResponding && (isAgentMode ? (!content && (agent_thoughts || []).filter(item => !!item.thought || !!item.tool).length === 0) : !content))
                 ? (

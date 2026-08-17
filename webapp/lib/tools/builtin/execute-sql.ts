@@ -228,6 +228,21 @@ async function runSemanticCheck(
 }
 
 /**
+ * Detect whether an error is a connection-level failure (not a SQL syntax issue).
+ */
+function isConnectionError(error: any): boolean {
+  const code = error?.code || error?.errno || ''
+  const msg = (error?.message || '').toLowerCase()
+  const connectionCodes = [
+    'ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH',
+    'ECONNRESET', 'EPIPE', 'PROTOCOL_CONNECTION_LOST',
+  ]
+  if (connectionCodes.includes(code)) { return true }
+  if (msg.includes('connect') || msg.includes('timeout') || msg.includes('econn')) { return true }
+  return false
+}
+
+/**
  * Execute SQL query on MySQL database
  */
 async function executeMysqlQuery(
@@ -275,9 +290,11 @@ async function executeMysqlQuery(
     }
   }
   catch (error: any) {
+    const isConnError = isConnectionError(error)
     return {
       success: false,
-      error: `MySQL 查询失败: ${error.message}`,
+      error: isConnError ? `数据库连接失败: ${error.message}` : `SQL 执行失败: ${error.message}`,
+      metadata: { errorType: isConnError ? 'connection' : 'sql' },
     }
   }
 }
@@ -323,9 +340,11 @@ async function executePostgresQuery(
     }
   }
   catch (error: any) {
+    const isConnError = isConnectionError(error)
     return {
       success: false,
-      error: `PostgreSQL 查询失败: ${error.message}`,
+      error: isConnError ? `数据库连接失败: ${error.message}` : `SQL 执行失败: ${error.message}`,
+      metadata: { errorType: isConnError ? 'connection' : 'sql' },
     }
   }
 }
@@ -407,29 +426,46 @@ async function executeSqlHandler(
     }
   }
 
-  let result: ToolResult
-  if (dialect.family === 'mysql') {
-    result = await executeMysqlQuery(
-      activeDs.host,
-      activeDs.port,
-      activeDs.database,
-      activeDs.username,
-      activeDs.password,
-      finalSql,
-      dialect,
-    )
+  const MAX_CONNECTION_RETRIES = 3
+  let result: ToolResult = { success: false, error: 'Unknown error' }
+  for (let attempt = 1; attempt <= MAX_CONNECTION_RETRIES; attempt++) {
+    if (dialect.family === 'mysql') {
+      result = await executeMysqlQuery(
+        activeDs.host,
+        activeDs.port,
+        activeDs.database,
+        activeDs.username,
+        activeDs.password,
+        finalSql,
+        dialect,
+      )
+    }
+    else {
+      result = await executePostgresQuery(
+        activeDs.host,
+        activeDs.port,
+        activeDs.database,
+        activeDs.username,
+        activeDs.password,
+        finalSql,
+        dialect,
+        activeDs.schemas,
+      )
+    }
+
+    if (result.success || result.metadata?.errorType !== 'connection') { break }
+
+    if (attempt < MAX_CONNECTION_RETRIES) {
+      console.warn(`[execute_sql] Connection error (attempt ${attempt}/${MAX_CONNECTION_RETRIES}), retrying...`)
+      await new Promise(resolve => setTimeout(resolve, attempt * 1000))
+    }
   }
-  else {
-    result = await executePostgresQuery(
-      activeDs.host,
-      activeDs.port,
-      activeDs.database,
-      activeDs.username,
-      activeDs.password,
-      finalSql,
-      dialect,
-      activeDs.schemas,
-    )
+
+  if (!result.success && result.metadata?.errorType === 'connection') {
+    result = {
+      ...result,
+      error: `${result.error}（已重试${MAX_CONNECTION_RETRIES}次）。这是数据库连接问题，不是 SQL 语句错误，请停止重试并告知用户数据库连接异常，建议稍后重试或联系管理员。`,
+    }
   }
 
   // Cache successful results within this request, and guide the model to stop re-querying

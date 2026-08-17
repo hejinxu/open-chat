@@ -22,6 +22,7 @@ export interface MessageRecord {
   feedback: { rating: string } | null
   message_files: any[]
   agent_thoughts: any[]
+  agent_steps?: any[]
   created_at: number
 }
 

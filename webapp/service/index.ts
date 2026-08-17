@@ -1,4 +1,4 @@
-import type { IOnCompleted, IOnData, IOnError, IOnFile, IOnMessageEnd, IOnMessageReplace, IOnNodeFinished, IOnNodeStarted, IOnThought, IOnToolCall, IOnWorkflowFinished, IOnWorkflowStarted } from './base'
+import type { IOnAgentStep, IOnCompleted, IOnData, IOnError, IOnFile, IOnMessageEnd, IOnMessageReplace, IOnNodeFinished, IOnNodeStarted, IOnThought, IOnToolCall, IOnWorkflowFinished, IOnWorkflowStarted } from './base'
 import { get, post, ssePost } from './base'
 import type { Feedbacktype } from '@/types/app'
 import { getConversationService } from '@/lib/services/conversation'
@@ -21,6 +21,7 @@ export const sendChatMessage = async (
     onNodeFinished,
     onWorkflowFinished,
     onToolCall,
+    onAgentStep,
   }: {
     onData: IOnData
     onCompleted: IOnCompleted
@@ -35,6 +36,7 @@ export const sendChatMessage = async (
     onNodeFinished: IOnNodeFinished
     onWorkflowFinished: IOnWorkflowFinished
     onToolCall?: IOnToolCall
+    onAgentStep?: IOnAgentStep
   },
 ) => {
   const { agent_id, apiKey, ...rest } = body
@@ -47,7 +49,7 @@ export const sendChatMessage = async (
       response_mode: 'streaming',
     },
     headers,
-  }, { onData, onCompleted, onThought, onFile, onError, getAbortController, onMessageEnd, onMessageReplace, onNodeStarted, onWorkflowStarted, onWorkflowFinished, onNodeFinished, onToolCall })
+  }, { onData, onCompleted, onThought, onFile, onError, getAbortController, onMessageEnd, onMessageReplace, onNodeStarted, onWorkflowStarted, onWorkflowFinished, onNodeFinished, onToolCall, onAgentStep })
 }
 
 export const fetchConversations = async () => {
@@ -75,6 +77,7 @@ function messageRecordsToResponse(messages: MessageRecord[]) {
         answer: msg.content,
         message_files: [...(pendingUser.message_files || []), ...(msg.message_files || [])],
         agent_thoughts: msg.agent_thoughts || [],
+        agent_steps: msg.agent_steps || [],
         feedback: msg.feedback,
         agent_id: msg.agent_id,
         agent_name: msg.agent_name,
@@ -130,6 +133,7 @@ export const saveAssistantMessage = async (params: {
   agent_name?: string | null
   message_files?: any[]
   agent_thoughts?: any[]
+  agent_steps?: any[]
 }) => {
   const service = getMessageService()
   return service.saveAssistantMessage(params)

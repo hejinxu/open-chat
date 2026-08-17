@@ -44,6 +44,7 @@ export class MessageService {
     agent_name?: string | null
     message_files?: any[]
     agent_thoughts?: any[]
+    agent_steps?: any[]
   }): Promise<MessageRecord> {
     const now = Math.floor(Date.now() / 1000)
     const msg: MessageRecord = {
@@ -57,6 +58,7 @@ export class MessageService {
       feedback: null,
       message_files: params.message_files || [],
       agent_thoughts: params.agent_thoughts || [],
+      agent_steps: params.agent_steps || [],
       created_at: now,
     }
     await this.storage.saveMessage(msg)

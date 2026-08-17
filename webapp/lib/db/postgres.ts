@@ -44,12 +44,20 @@ export class PostgresProvider implements DatabaseProvider {
           feedback JSONB,
           message_files JSONB NOT NULL DEFAULT '[]'::jsonb,
           agent_thoughts JSONB NOT NULL DEFAULT '[]'::jsonb,
+          agent_steps JSONB NOT NULL DEFAULT '[]'::jsonb,
           created_at BIGINT NOT NULL
         )
       `)
 
       await client.query('CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)')
       await client.query('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)')
+
+      // 迁移 messages 表：添加 agent_steps 列
+      const msgCols = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'messages' AND column_name = 'agent_steps'")
+      if (msgCols.rows.length === 0) {
+        await client.query('ALTER TABLE messages ADD COLUMN agent_steps JSONB NOT NULL DEFAULT \'[]\'::jsonb')
+        console.log('[DB-PG] Migrated messages table: added agent_steps column')
+      }
 
       // Auth tables
       await client.query(`
@@ -375,8 +383,8 @@ export class PostgresProvider implements DatabaseProvider {
     const client = await this.pool.connect()
     try {
       await client.query(
-        `INSERT INTO messages (id, conversation_id, agent_id, agent_name, role, content, is_answer, feedback, message_files, agent_thoughts, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `INSERT INTO messages (id, conversation_id, agent_id, agent_name, role, content, is_answer, feedback, message_files, agent_thoughts, agent_steps, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (id) DO UPDATE SET
            conversation_id = EXCLUDED.conversation_id,
            agent_id = EXCLUDED.agent_id,
@@ -387,6 +395,7 @@ export class PostgresProvider implements DatabaseProvider {
            feedback = EXCLUDED.feedback,
            message_files = EXCLUDED.message_files,
            agent_thoughts = EXCLUDED.agent_thoughts,
+           agent_steps = EXCLUDED.agent_steps,
            created_at = EXCLUDED.created_at`,
         [
           msg.id,
@@ -399,6 +408,7 @@ export class PostgresProvider implements DatabaseProvider {
           msg.feedback ? JSON.stringify(msg.feedback) : null,
           JSON.stringify(msg.message_files || []),
           JSON.stringify(msg.agent_thoughts || []),
+          JSON.stringify(msg.agent_steps || []),
           msg.created_at,
         ],
       )
@@ -442,6 +452,7 @@ export class PostgresProvider implements DatabaseProvider {
       feedback: row.feedback ? (typeof row.feedback === 'string' ? JSON.parse(row.feedback) : row.feedback) : null,
       message_files: typeof row.message_files === 'string' ? JSON.parse(row.message_files) : (row.message_files as any[]) || [],
       agent_thoughts: typeof row.agent_thoughts === 'string' ? JSON.parse(row.agent_thoughts) : (row.agent_thoughts as any[]) || [],
+      agent_steps: typeof row.agent_steps === 'string' ? JSON.parse(row.agent_steps) : (row.agent_steps as any[]) || [],
       created_at: Number(row.created_at),
     }
   }
@@ -1436,6 +1447,7 @@ export class PostgresProvider implements DatabaseProvider {
 
     const configs: { key: string, value: string, description: string }[] = [
       { key: 'system_model_id', value: '', description: '系统模型 ID（来自 models 表），用于对话标题生成等系统级 AI 功能，为空则使用首条消息前 30 字截取' },
+      { key: 'max_tool_rounds', value: '12', description: 'ReAct 模式下工具调用的最大轮数上限，达到后强制总结回复' },
     ]
 
     for (const c of configs) {

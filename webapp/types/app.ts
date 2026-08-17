@@ -72,6 +72,7 @@ export interface IChatItem {
   suggestedQuestions?: string[]
   log?: { role: string, text: string }[]
   agent_thoughts?: ThoughtItem[]
+  agent_steps?: any[]
   message_files?: VisionFile[]
   agent_id?: string | null
   agent_name?: string | null

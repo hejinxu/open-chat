@@ -125,7 +125,7 @@ interface ConversationRecord {
 - `lib/services/schema-select.ts` — 实时 Schema 拉取（information_schema，TTL 缓存 60s）+ 渐进式表选择 + DDL 构建（注释优先级：用户自定义 > 实时 > 快照）
 - `lib/services/datasource.ts` — 数据源工具：`parseSchemas`（逗号分隔 schema 解析，默认 `public`）+ `postgresSearchPathOption`（生成 `-c search_path=...` 连接参数，等价 JDBC `currentSchema`）
 - `lib/services/dialects.ts` — 数据库方言层：`DatabaseDialect` 接口（`type`/`displayName`/`family`/`dialectPrompt`/`setupReadOnly`）+ 注册表 `getDialect()` + `isPostgresFamily()`。PG 族基类 `PostgresDialect` 承载默认实现，`VastbaseDialect` / `KingbaseDialect` 继承并覆写 `dialectPrompt()` 强制 PG 风格分页（禁用 Oracle ROWNUM 伪列），未来新增 PG 系库建独立方言类覆写特有差异即可，无需改散落分派点
-- `lib/tools/builtin/execute-sql.ts` — SQL 执行前做**代码级结构校验**（零 LLM）：解析 SQL 引用的表/列，与实时 schema 比对，拦截不存在的表或列（如 YEAR），返回友好错误让模型修正；同请求内相同 SQL 命中缓存直接返回结果，成功结果附带引导避免模型重复查询。执行按 `dialect.family` 分派，只读保护用 `dialect.setupReadOnly()`
+- `lib/tools/builtin/execute-sql.ts` — SQL 执行前做**代码级结构校验**（零 LLM）：解析 SQL 引用的表/列，与实时 schema 比对，拦截不存在的表或列（如 YEAR），返回友好错误让模型修正；同请求内相同 SQL 命中缓存直接返回结果，成功结果附带引导避免模型重复查询。执行按 `dialect.family` 分派，只读保护用 `dialect.setupReadOnly()`。**错误分类**：连接错误（ETIMEDOUT/ECONNREFUSED 等）与 SQL 语法错误分开返回（`metadata.errorType: 'connection' | 'sql'`），连接错误自动重试 3 次（间隔递增），3 次后返回明确提示让模型停止重试
 
 **数据库类型**：`DatasourceConfig.type = 'mysql' | 'postgresql' | 'vastbase' | 'kingbase'`。所有分派点（schema 拉取、SQL 执行、Admin 连接测试/表/字段、动态提示词、语义审计方言名）统一走方言层 `getDialect()` / `isPostgresFamily()`，PG 系（postgresql/vastbase/kingbase）复用 `pg` 驱动与 PG 查询逻辑。Admin UI 切换类型时端口自动联动（mysql→3306，postgresql/vastbase→5432，kingbase→54321，仅当端口为任一默认端口时替换）。
 
@@ -473,6 +473,7 @@ SQLITE_DB_PATH=data/openchat.db
 ### System Config
 - **系统配置页面**: `/admin/system-config`，单页表单式（非列表式），易于扩展新配置项
 - **系统模型**: `system_config` 表中 `system_model_id` 配置项，从 `models` 表选择一个模型用于系统级 AI 功能（如对话标题自动生成）。留空则不启用 AI 功能
+- **工具调用轮数上限**: `system_config` 表中 `max_tool_rounds` 配置项（默认 12），控制 ReAct 模式下工具调用的最大轮数，达到上限后强制总结回复。通过后台系统配置页面调整
 - **对话标题生成**: 新对话首条消息发送时立即设置临时标题（前 30 字截取）；AI 回复完成后异步调用 `/api/system/summarize-title`，若配置了系统模型则用模型生成语义化标题覆盖临时标题，未配置或失败则保留临时标题。无需手动开关，配置模型即生效
 - **配置迁移**: 旧配置 `title_summarization_model_id` 自动迁移为 `system_model_id`，旧 `title_summarization_enabled` 开关已废弃（不再读取）
 - **Admin UI**: 后台管理"系统管理"分组下"系统配置"tab（原"系统模型设置"页面已删除，合并至此）
