@@ -96,6 +96,7 @@ export default function AdminLayout({
       items: [
         { name: t('common.auth.users'), href: '/admin/users', icon: '👥' },
         { name: t('common.auth.systemConfig', '系统配置'), href: '/admin/system-config', icon: '🔧' },
+        { name: t('common.auth.agentLogs', '智能体日志'), href: '/admin/agent-logs', icon: '📊' },
       ],
     },
     {

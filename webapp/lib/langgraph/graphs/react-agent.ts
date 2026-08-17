@@ -4,8 +4,10 @@ import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/
 import type { BaseMessage } from '@langchain/core/messages'
 import { AgentState } from '../state'
 import type { ToolRegistry } from '@/lib/tools/registry'
+import type { RequestLogger } from '@/lib/services/agent-logger'
+import { truncateMessages, truncateToolResult, generateStepId } from '@/lib/services/agent-logger'
 
-function createAgentNode(model: ChatOpenAI, tools: ToolRegistry, excludeTools?: string[]) {
+function createAgentNode(model: ChatOpenAI, tools: ToolRegistry, excludeTools?: string[], logger?: RequestLogger) {
   const langchainTools = tools.toLangChainTools(undefined, excludeTools)
   const modelWithTools = langchainTools.length > 0 ? model.bindTools(langchainTools) : model
 
@@ -22,19 +24,37 @@ function createAgentNode(model: ChatOpenAI, tools: ToolRegistry, excludeTools?: 
       return new HumanMessage(String(msg.content))
     })
 
+    const agentStepId = generateStepId()
+
+    logger?.info('agent', '调用模型', {
+      messages: truncateMessages(messages),
+      messageCount: messages.length,
+      hasTools: langchainTools.length > 0,
+    }, { stepId: agentStepId })
+
     console.log('[agentNode] Calling model...')
     const response = await modelWithTools.invoke(messages)
     console.log('[agentNode] Response type:', response.constructor.name)
     console.log('[agentNode] Response content length:', typeof response.content === 'string' ? response.content.length : 'not string')
     console.log('[agentNode] Has tool_calls:', !!(response as AIMessage).tool_calls?.length)
 
-    return { messages: [response] }
+    const toolCalls = (response as AIMessage).tool_calls
+    logger?.info('agent', '模型返回', {
+      content: typeof response.content === 'string'
+        ? (response.content.length > 2000 ? `${response.content.slice(0, 2000)}...(已截断)` : response.content)
+        : JSON.stringify(response.content).slice(0, 2000),
+      toolCalls: toolCalls?.map(tc => ({ name: tc.name, args: tc.args })),
+    }, { stepId: agentStepId })
+
+    return { messages: [response], current_step_id: agentStepId }
   }
 }
 
 function createToolNode(tools: ToolRegistry, context?: any) {
-  return async (state: { messages: BaseMessage[] }) => {
+  return async (state: { messages: BaseMessage[], current_step_id?: string }) => {
     const lastMessage = state.messages[state.messages.length - 1]
+    const logger: RequestLogger | undefined = context?.logger
+    const parentStepId = state.current_step_id
 
     console.log('[toolNode] Called, last message type:', lastMessage.constructor.name)
     console.log('[toolNode] Has tool_calls:', !!(lastMessage as any).tool_calls?.length)
@@ -66,6 +86,8 @@ function createToolNode(tools: ToolRegistry, context?: any) {
         continue
       }
 
+      const toolContext = { ...context, parentStepId }
+
       let result: any
 
       if (tool.execution === 'client') {
@@ -75,7 +97,7 @@ function createToolNode(tools: ToolRegistry, context?: any) {
           result = await tools.executeClientTool(
             toolCall.name,
             toolCall.args as Record<string, any>,
-            context || {},
+            toolContext,
           )
         } catch (error: any) {
           console.log('[toolNode] Error executing client tool:', error.message)
@@ -87,7 +109,7 @@ function createToolNode(tools: ToolRegistry, context?: any) {
           result = await tools.execute(
             toolCall.name,
             toolCall.args as Record<string, any>,
-            context || {},
+            toolContext,
           )
         } catch (error: any) {
           console.log('[toolNode] Error executing tool:', error.message)
@@ -124,7 +146,7 @@ const MAX_SEARCH_ROUNDS = 5
 // 总工具调用轮数上限（防止无限循环）
 const MAX_TOTAL_ROUNDS = 12
 
-function shouldContinue(state: { messages: BaseMessage[] }): typeof END | 'tools' | 'summarize' {
+function shouldContinue(state: { messages: BaseMessage[] }, logger?: RequestLogger): typeof END | 'tools' | 'summarize' {
   const lastMessage = state.messages[state.messages.length - 1]
   const messageCount = state.messages.length
 
@@ -149,26 +171,47 @@ function shouldContinue(state: { messages: BaseMessage[] }): typeof END | 'tools
   const hasToolCalls = (lastMessage instanceof AIMessage || lastMessage.constructor.name === 'AIMessageChunk')
     && !!(lastMessage as any).tool_calls?.length
 
+  // 提取待执行的工具调用信息
+  const pendingToolCalls = hasToolCalls
+    ? (lastMessage as any).tool_calls?.map((tc: any) => ({ name: tc.name, args: tc.args })) || []
+    : []
+
   // 搜索工具达到上限，强制总结
   if (searchToolCount >= MAX_SEARCH_ROUNDS && hasToolCalls) {
     console.log('[shouldContinue] Max search tool rounds reached, routing to summarize')
+    logger?.info('shouldContinue', '搜索工具达到上限，强制总结', {
+      searchToolCount,
+      maxSearchRounds: MAX_SEARCH_ROUNDS,
+      skippedToolCalls: pendingToolCalls,
+    })
     return 'summarize'
   }
 
   // 总工具调用达到上限，强制总结
   if (totalToolCount >= MAX_TOTAL_ROUNDS && hasToolCalls) {
     console.log('[shouldContinue] Max total tool rounds reached, routing to summarize')
+    logger?.info('shouldContinue', '工具调用总数达到上限，强制总结', {
+      totalToolCount,
+      maxTotalRounds: MAX_TOTAL_ROUNDS,
+      skippedToolCalls: pendingToolCalls,
+    })
     return 'summarize'
   }
 
   // 正常工具调用
   if (hasToolCalls) {
     console.log('[shouldContinue] Routing to tools')
+    logger?.info('shouldContinue', '继续调用工具', {
+      totalToolCount,
+      searchToolCount,
+      toolCalls: pendingToolCalls,
+    })
     return 'tools'
   }
 
   // 没有 tool_calls，正常结束
   console.log('[shouldContinue] Routing to END')
+  logger?.info('shouldContinue', '无工具调用，执行结束')
   return END
 }
 
@@ -180,6 +223,7 @@ export interface CreateReactAgentOptions {
   maxIterations?: number
   checkpointer?: MemorySaver
   context?: any
+  logger?: RequestLogger
   /**
    * Tool names to exclude from binding to the model (e.g. web_search when network is disabled).
    */
@@ -197,6 +241,7 @@ export function createReactAgent(
     systemPrompt,
     checkpointer = new MemorySaver(),
     context,
+    logger,
     excludeTools,
   } = options
 
@@ -209,12 +254,13 @@ export function createReactAgent(
     maxTokens: 4096,
   })
 
-  const agentNode = createAgentNode(chatModel, tools, excludeTools)
+  const agentNode = createAgentNode(chatModel, tools, excludeTools, logger)
   const toolNode = createToolNode(tools, context)
 
   // 创建总结节点 - 当工具调用达到上限时强制总结
   const summarizeNode = async (state: { messages: BaseMessage[] }) => {
     console.log('[summarizeNode] Forcing summary after max tool rounds')
+    logger?.info('summarize', '工具调用达到上限，强制总结')
 
     // 获取用户原始问题
     const userMessages = state.messages.filter(m => m instanceof HumanMessage)
@@ -243,17 +289,23 @@ ${toolResults.join('\n\n---\n\n')}
 - 不要总结工具调用过程，只关注回答用户的问题`
 
     const response = await chatModel.invoke([new HumanMessage(summaryPrompt)])
+    logger?.info('summarize', '总结完成', {
+      responseLength: typeof response.content === 'string' ? response.content.length : 0,
+    })
     return { messages: [response] }
   }
 
   console.log('[createReactAgent] Building graph with agent, tools, and summarize nodes')
+
+  // Bind logger to shouldContinue via closure
+  const shouldContinueWithLogger = (state: { messages: BaseMessage[] }) => shouldContinue(state, logger)
 
   const graph = new StateGraph(AgentState)
     .addNode('agent', agentNode)
     .addNode('tools', toolNode)
     .addNode('summarize', summarizeNode)
     .addEdge(START, 'agent')
-    .addConditionalEdges('agent', shouldContinue)
+    .addConditionalEdges('agent', shouldContinueWithLogger)
     .addEdge('tools', 'agent')
     .addEdge('summarize', END)
 

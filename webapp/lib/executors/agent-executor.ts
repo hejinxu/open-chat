@@ -8,6 +8,7 @@ import { allBuiltinTools } from '@/lib/tools/builtin'
 import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages'
 import type { AgentConfig } from '@/types/agent'
 import type { ToolResult } from '@/lib/tools/types'
+import { RequestLogger, truncateMessages } from '@/lib/services/agent-logger'
 
 let tiktokenPreloaded = false
 
@@ -26,6 +27,7 @@ export class AgentExecutor {
   private sessionId?: string
   private requestId?: string
   private controller?: ReadableStreamDefaultController
+  private logger: RequestLogger
 
   constructor(options: AgentExecutorOptions) {
     this.agent = options.agent
@@ -33,6 +35,7 @@ export class AgentExecutor {
     this.sessionId = options.sessionId
     this.requestId = options.requestId
     this.controller = options.controller
+    this.logger = new RequestLogger(this.requestId || `req_${Date.now()}`)
     // Use global registry to share pendingToolCalls with tool-result route
     this.toolRegistry = getToolRegistry()
     this.initializeTools()
@@ -67,6 +70,13 @@ export class AgentExecutor {
   }> {
     const { query, messages = [], conversationId, systemPrompt, toolContext } = params
     const executionMode = this.agent.execution_mode || 'chat'
+
+    this.logger.info('request', '开始执行', {
+      agent: this.agent.name,
+      mode: executionMode,
+      query: query.slice(0, 200),
+      messageCount: messages.length,
+    })
 
     const allMessages = [
       ...messages,
@@ -122,10 +132,12 @@ export class AgentExecutor {
       apiUrl: this.agent.api_url,
       systemPrompt,
       excludeTools: this.getExcludedTools(),
+      logger: this.logger,
       context: {
         controller: this.controller,
         agentConfig: this.agent.agent_config || {},
         queryContext: toolContext || {},
+        logger: this.logger,
       },
     })
 
@@ -190,11 +202,17 @@ export class AgentExecutor {
 
       console.log('[AgentExecutor] Response length:', response.length)
 
+      this.logger.info('agent', '执行完成', {
+        responseLength: response.length,
+        totalMessages: resultAny.messages.length,
+      })
+
       return {
         response,
         conversationId: threadId,
       }
     } catch (error: any) {
+      this.logger.error('agent', '执行失败', { error: error.message })
       console.error('[AgentExecutor] Error during agent invocation:', error)
       throw error
     }
@@ -219,10 +237,12 @@ export class AgentExecutor {
       apiKey: this.agent.api_key,
       apiUrl: this.agent.api_url,
       excludeTools: this.getExcludedTools(),
+      logger: this.logger,
       context: {
         controller: this.controller,
         agentConfig: this.agent.agent_config || {},
         queryContext: toolContext || {},
+        logger: this.logger,
       },
     })
 

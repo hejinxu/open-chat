@@ -14,6 +14,10 @@ export const AgentState = Annotation.Root({
     reducer: (_, update) => update,
     default: () => undefined,
   }),
+  current_step_id: Annotation<string | undefined>({
+    reducer: (_, update) => update,
+    default: () => undefined,
+  }),
 })
 
 export type AgentStateType = typeof AgentState.State

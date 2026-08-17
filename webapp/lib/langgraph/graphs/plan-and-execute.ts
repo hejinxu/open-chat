@@ -5,6 +5,8 @@ import type { BaseMessage } from '@langchain/core/messages'
 import { Annotation } from '@langchain/langgraph'
 import type { ToolRegistry } from '@/lib/tools/registry'
 import { getStepExecutionPrompt } from '../prompts'
+import type { RequestLogger } from '@/lib/services/agent-logger'
+import { truncateToolResult, generateStepId } from '@/lib/services/agent-logger'
 
 const PlannerState = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
@@ -38,6 +40,10 @@ const PlannerState = Annotation.Root({
     reducer: (_, update) => update,
     default: () => 'planning' as const,
   }),
+  current_step_id: Annotation<string | undefined>({
+    reducer: (_, update) => update,
+    default: () => undefined,
+  }),
 })
 
 type PlannerStateType = typeof PlannerState.State
@@ -50,16 +56,19 @@ interface CreatePlanAndExecuteAgentOptions {
   maxRetries?: number
   checkpointer?: MemorySaver
   context?: any
+  logger?: RequestLogger
   /**
    * Tool names to exclude from binding to the model (e.g. web_search when network is disabled).
    */
   excludeTools?: string[]
 }
 
-function createPlannerNode(model: ChatOpenAI) {
+function createPlannerNode(model: ChatOpenAI, logger?: RequestLogger) {
   return async (state: PlannerStateType) => {
     const lastMessage = state.messages[state.messages.length - 1]
     const userQuery = typeof lastMessage.content === 'string' ? lastMessage.content : ''
+
+    logger?.info('planner', '生成执行计划', { userQuery: userQuery.slice(0, 200) })
 
     const planningPrompt = `你是一个任务规划专家。请将用户的任务分解为可执行的步骤。
 
@@ -99,6 +108,10 @@ function createPlannerNode(model: ChatOpenAI) {
       status: 'pending' as const,
     }))
 
+    logger?.info('planner', '计划生成完成', {
+      steps: plan.map(s => ({ step: s.step, description: s.description })),
+    })
+
     return {
       plan,
       currentStep: 1,
@@ -107,7 +120,7 @@ function createPlannerNode(model: ChatOpenAI) {
   }
 }
 
-function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: any, excludeTools?: string[]) {
+function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: any, excludeTools?: string[], logger?: RequestLogger) {
   return async (state: PlannerStateType) => {
     const currentPlan = state.plan
     const currentStepIdx = state.currentStep
@@ -115,10 +128,16 @@ function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: an
     const currentStepItem = currentPlan.find(s => s.step === currentStepIdx)
     if (!currentStepItem) {
       console.log('[PlanExecute] No step found for index:', currentStepIdx)
+      logger?.warn('executor', `未找到步骤: ${currentStepIdx}`)
       return { status: 'completed' as const }
     }
 
     console.log('[PlanExecute] Executing step:', currentStepItem.step, '-', currentStepItem.description)
+    const executorStepId = generateStepId()
+    logger?.info('executor', `执行步骤 ${currentStepItem.step}`, {
+      step: currentStepItem.step,
+      description: currentStepItem.description,
+    }, { stepId: executorStepId })
 
     const langchainTools = tools.toLangChainTools(undefined, excludeTools)
     const userQuery = typeof state.messages[0]?.content === 'string' ? state.messages[0].content : ''
@@ -131,6 +150,7 @@ function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: an
     )
 
     let result: string
+    const startTime = Date.now()
 
     if (langchainTools.length > 0) {
       console.log('[PlanExecute] Tools available:', langchainTools.length)
@@ -139,6 +159,11 @@ function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: an
 
       if (response.tool_calls && response.tool_calls.length > 0) {
         console.log('[PlanExecute] Tool calls:', response.tool_calls.length)
+        logger?.info('executor', `步骤 ${currentStepItem.step} 调用工具`, {
+          toolCalls: response.tool_calls.map(tc => ({ name: tc.name, args: tc.args })),
+        })
+
+        const toolContext = { ...context, parentStepId: executorStepId }
         const toolResults = []
         for (const toolCall of response.tool_calls) {
           console.log('[PlanExecute] Executing tool:', toolCall.name)
@@ -150,7 +175,7 @@ function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: an
               const toolResult = await tools.executeClientTool(
                 toolCall.name,
                 toolCall.args as Record<string, any>,
-                context || {},
+                toolContext,
               )
               toolResults.push(
                 `[工具结果] ${toolCall.name}:\n${toolResult.success ? (typeof toolResult.data === 'string' ? toolResult.data : JSON.stringify(toolResult.data, null, 2)) : `错误: ${toolResult.error}`}`,
@@ -160,7 +185,7 @@ function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: an
               const toolResult = await tools.execute(
                 toolCall.name,
                 toolCall.args as Record<string, any>,
-                context || {},
+                toolContext,
               )
               console.log('[PlanExecute] Tool result:', toolResult.success ? 'success' : 'error')
               toolResults.push(
@@ -175,6 +200,9 @@ function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: an
         result = toolResults.join('\n\n')
       } else {
         console.log('[PlanExecute] No tool calls, using direct response')
+        logger?.info('executor', `步骤 ${currentStepItem.step} 直接响应`, {
+          responseLength: typeof response.content === 'string' ? response.content.length : 0,
+        })
         result = typeof response.content === 'string' ? response.content : ''
       }
     } else {
@@ -183,7 +211,13 @@ function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: an
       result = typeof response.content === 'string' ? response.content : ''
     }
 
+    const durationMs = Date.now() - startTime
     console.log('[PlanExecute] Step result length:', result.length)
+
+    logger?.info('executor', `步骤 ${currentStepItem.step} 完成`, {
+      resultLength: result.length,
+      resultPreview: result.slice(0, 500),
+    }, { stepId: executorStepId, durationMs })
 
     const updatedPlan = currentPlan.map(s =>
       s.step === currentStepIdx
@@ -203,7 +237,7 @@ function createExecutorNode(model: ChatOpenAI, tools: ToolRegistry, context?: an
   }
 }
 
-function createReplannerNode(model: ChatOpenAI) {
+function createReplannerNode(model: ChatOpenAI, logger?: RequestLogger) {
   return async (state: PlannerStateType) => {
     const completedSteps = state.plan.filter(s => s.status === 'completed')
     const failedSteps = state.plan.filter(s => s.status === 'failed')
@@ -211,6 +245,10 @@ function createReplannerNode(model: ChatOpenAI) {
     if (failedSteps.length === 0) {
       return { status: 'completed' as const }
     }
+
+    logger?.info('replanner', '重新规划', {
+      failedSteps: failedSteps.map(s => ({ step: s.step, description: s.description })),
+    })
 
     const replanningPrompt = `任务执行遇到了问题，请重新规划剩余步骤。
 
@@ -261,10 +299,14 @@ ${failedSteps.map(s => `步骤 ${s.step}: ${s.description}`).join('\n')}
   }
 }
 
-function createSummarizerNode(model: ChatOpenAI) {
+function createSummarizerNode(model: ChatOpenAI, logger?: RequestLogger) {
   return async (state: PlannerStateType) => {
     const completedSteps = state.plan.filter(s => s.status === 'completed')
     const userQuery = state.messages[0]?.content || ''
+
+    logger?.info('summarizer', '生成最终回答', {
+      completedSteps: completedSteps.length,
+    })
 
     const summaryPrompt = `请根据以下执行结果，为用户生成一个完整的回答。
 
@@ -330,6 +372,7 @@ export function createPlanAndExecuteAgent(
     maxRetries = 2,
     checkpointer = new MemorySaver(),
     context,
+    logger,
     excludeTools,
   } = options
 
@@ -341,10 +384,10 @@ export function createPlanAndExecuteAgent(
     temperature: 0.7,
   })
 
-  const plannerNode = createPlannerNode(chatModel)
-  const executorNode = createExecutorNode(chatModel, tools, context, excludeTools)
-  const replannerNode = createReplannerNode(chatModel)
-  const summarizerNode = createSummarizerNode(chatModel)
+  const plannerNode = createPlannerNode(chatModel, logger)
+  const executorNode = createExecutorNode(chatModel, tools, context, excludeTools, logger)
+  const replannerNode = createReplannerNode(chatModel, logger)
+  const summarizerNode = createSummarizerNode(chatModel, logger)
 
   const graph = new StateGraph(PlannerState)
     .addNode('planner', plannerNode)

@@ -1,6 +1,8 @@
 import { DynamicStructuredTool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import type { ToolDefinition, ToolContext, ToolResult } from './types'
+import type { RequestLogger } from '@/lib/services/agent-logger'
+import { truncateToolResult, generateStepId } from '@/lib/services/agent-logger'
 
 const g = globalThis as any
 if (!g.__openchat_pendingToolCalls) {
@@ -95,32 +97,52 @@ export class ToolRegistry {
     context: Partial<ToolContext>,
   ): Promise<ToolResult> {
     const tool = this.get(name)
+    const logger: RequestLogger | undefined = (context as any)?.logger
+    const parentStepId: string | undefined = (context as any)?.parentStepId
+    const stepId = generateStepId()
+
     if (!tool) {
       console.error(`[ToolRegistry] Tool "${name}" not found`)
+      logger?.error('tools', `工具不存在: ${name}`, {}, { stepId, parentStepId })
       return { success: false, error: `Tool "${name}" not found` }
     }
 
     if (tool.isEnabled === false) {
       console.error(`[ToolRegistry] Tool "${name}" is disabled`)
+      logger?.error('tools', `工具已禁用: ${name}`, {}, { stepId, parentStepId })
       return { success: false, error: `Tool "${name}" is disabled` }
     }
 
     if (!tool.handler) {
       console.error(`[ToolRegistry] Tool "${name}" has no handler`)
+      logger?.error('tools', `工具无处理器: ${name}`, {}, { stepId, parentStepId })
       return { success: false, error: `Tool "${name}" has no handler` }
     }
 
     console.log(`[ToolRegistry] Executing tool: ${name}`, { input, execution: tool.execution })
+    logger?.info('tools', `执行工具: ${name}`, { toolName: name, args: input }, { stepId, parentStepId })
+
+    const startTime = Date.now()
     try {
       const fullContext: ToolContext = {
         ...context,
         pendingToolCalls,
       }
       const result = await tool.handler(input, fullContext)
+      const durationMs = Date.now() - startTime
       console.log(`[ToolRegistry] Tool "${name}" completed:`, result.success ? 'success' : 'error')
+      logger?.info('tools', `工具结果: ${name}`, {
+        toolName: name,
+        success: result.success,
+        result: truncateToolResult(result),
+      }, { stepId, parentStepId, durationMs })
       return result
     } catch (error) {
+      const durationMs = Date.now() - startTime
       console.error(`[ToolRegistry] Tool "${name}" error:`, error)
+      logger?.error('tools', `工具错误: ${name}`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }, { stepId, parentStepId })
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -134,7 +156,12 @@ export class ToolRegistry {
     context: Partial<ToolContext>,
   ): Promise<ToolResult> {
     const tool = this.get(name)
+    const logger: RequestLogger | undefined = (context as any)?.logger
+    const parentStepId: string | undefined = (context as any)?.parentStepId
+    const stepId = generateStepId()
+
     if (!tool) {
+      logger?.error('tools', `工具不存在: ${name}`, {}, { stepId, parentStepId })
       return { success: false, error: `Tool "${name}" not found` }
     }
 
@@ -143,6 +170,10 @@ export class ToolRegistry {
     }
 
     const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).slice(2)}`
+
+    logger?.info('tools', `执行客户端工具: ${name}`, { toolName: name, args: input, toolCallId }, { stepId, parentStepId })
+
+    const startTime = Date.now()
 
     if (context.controller) {
       const encoder = new TextEncoder()
@@ -157,20 +188,37 @@ export class ToolRegistry {
       context.controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
     } else {
       console.log('[executeClientTool] No controller available for sending SSE event')
+      logger?.error('tools', `无控制器可用: ${name}`, {}, { stepId, parentStepId })
       return { success: false, error: 'No controller available for client tool execution' }
     }
 
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        pendingToolCalls.delete(toolCallId)
-        reject(new Error(`Client tool "${name}" execution timeout`))
-      }, 30000)
+    try {
+      const result = await new Promise<ToolResult>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          pendingToolCalls.delete(toolCallId)
+          reject(new Error(`Client tool "${name}" execution timeout`))
+        }, 30000)
 
-      pendingToolCalls.set(toolCallId, (result) => {
-        clearTimeout(timeout)
-        resolve(result)
+        pendingToolCalls.set(toolCallId, (result) => {
+          clearTimeout(timeout)
+          resolve(result)
+        })
       })
-    })
+
+      const durationMs = Date.now() - startTime
+      logger?.info('tools', `客户端工具结果: ${name}`, {
+        toolName: name,
+        success: result.success,
+        result: truncateToolResult(result),
+      }, { stepId, parentStepId, durationMs })
+      return result
+    } catch (error: any) {
+      const durationMs = Date.now() - startTime
+      logger?.error('tools', `客户端工具超时: ${name}`, {
+        error: error.message,
+      }, { stepId, parentStepId })
+      throw error
+    }
   }
 
   resolveClientToolResult(toolCallId: string, result: ToolResult): boolean {

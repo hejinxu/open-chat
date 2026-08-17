@@ -5,6 +5,7 @@ import { ConversationNotFoundError } from '@/lib/adapters/dify'
 import { AgentNotFoundError, NoAgentsConfiguredError, UnauthorizedError, RiskAuthFailedError, PermissionDeniedError } from '@/lib/errors'
 import { AgentExecutor } from '@/lib/executors/agent-executor'
 import { verifyRiskToken, checkSmartQueryPermission } from '@/lib/services/risk-auth-verify'
+import { startRequest, endRequest, RequestLogger } from '@/lib/services/agent-logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,6 +49,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (agent.backend_type === 'direct_llm' && executionMode !== 'chat') {
+      const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const logger = new RequestLogger(requestId)
+
+      startRequest({
+        requestId,
+        agentId: agent.id,
+        agentName: agent.name,
+        userId: user,
+        query: query || '',
+        executionMode,
+      })
+
       console.log('[chat-messages] Agent config:', {
         id: agent.id,
         name: agent.name,
@@ -65,6 +78,7 @@ export async function POST(request: NextRequest) {
             agent,
             userId: user,
             sessionId,
+            requestId,
             controller,
           })
 
@@ -149,7 +163,12 @@ export async function POST(request: NextRequest) {
             }
             console.log('[chat-messages] Sending message_end event')
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(endEvent)}\n\n`))
+
+            logger.info('request', '执行完成', { responseLength: result.response?.length })
+            endRequest(requestId, 'completed')
           } catch (error: any) {
+            logger.error('request', '执行失败', { error: error.message })
+            endRequest(requestId, 'error')
             const errorEvent = {
               event: 'error',
               status: 500,
