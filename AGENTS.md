@@ -591,6 +591,12 @@ export class ToolRegistry {
 ```
 **注意**：`tool_call_id` 格式为 `tc_${Date.now()}_${Math.random()}`，唯一性保证不同浏览器不会互相干扰，无需担心跨用户串扰。
 
+### 数据库查询前确认存储后端
+**问题**：需要查数据库排查问题时，直接去读 SQLite 文件（`webapp/data/openchat.db`），但项目实际可能配置为 PostgreSQL（`NEXT_PUBLIC_STORAGE_BACKEND=postgres`），导致查不到最新数据。
+**解决方案**：查数据库前，先读取 `webapp/.env.local` 中的 `NEXT_PUBLIC_STORAGE_BACKEND` 确认实际使用的数据库类型：
+- `sqlite` → 用 SQLite 工具查询 `webapp/data/openchat.db`
+- `postgres` → 用 `psql` 或 Node.js `pg` 模块查询 `POSTGRES_URL` 指定的 PostgreSQL 数据库
+
 ## Docs
 - **README.md**: 根目录，用户面向的项目文档
 - **webapp/README.md**: webapp 详细文档
